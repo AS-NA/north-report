@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AIR SPACE 倉儲物流工作回報</title>
+<style>
+  :root{
+    --bg:#14161A; --panel:#1E2126; --panel-2:#252932; --line:#333844;
+    --accent:#F2994A; --teal:#4FBDBA; --green:#3FBF7F; --red:#E0654F; --grey:#6B7280;
+    --text:#F3F1EA; --text-mute:#9A9CA3;
+    --font-display:'Space Grotesk','Noto Sans TC',sans-serif;
+    --font-body:'Inter','Noto Sans TC',sans-serif;
+    --font-mono:'JetBrains Mono','Courier New',monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--bg); color:var(--text); font-family:var(--font-body); min-height:100vh; display:flex; justify-content:center; }
+  .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); }
+  .view{display:none;} .view.active{display:block;}
+
+  .topbar{ background:linear-gradient(135deg,#1B3A5C,#12283F); padding:22px 20px; border-bottom:1px solid var(--line); }
+  .topbar .eyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:0.1em; color:#9FC2E0; text-transform:uppercase; }
+  .topbar h1{ font-family:var(--font-display); font-size:22px; margin:6px 0 4px; }
+  .topbar .date{ font-size:12.5px; color:#B9CFE3; font-family:var(--font-mono); }
+  .topbar.small{ padding:16px 20px; display:flex; align-items:center; gap:10px; }
+  .backbtn{ background:none; border:none; color:#fff; font-size:20px; cursor:pointer; padding:0 4px 0 0; }
+  .topbar.small .who{flex:1;}
+  .topbar.small .who .n{font-family:var(--font-display); font-weight:700; font-size:16px;}
+  .topbar.small .who .m{font-size:11.5px; color:#B9CFE3; font-family:var(--font-mono);}
+  .badge{ font-size:11px; padding:3px 9px; border-radius:20px; font-family:var(--font-mono); }
+  .badge.synced{ background:rgba(63,191,127,0.18); color:var(--green); }
+  .switchbtn{ background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); color:#fff; font-size:12px; padding:6px 10px; border-radius:8px; cursor:pointer; }
+
+  main{padding:18px 20px 40px;}
+  .section-label{ font-family:var(--font-mono); font-size:11.5px; color:var(--text-mute); text-transform:uppercase; letter-spacing:0.06em; margin:20px 0 10px; }
+  .section-label:first-child{margin-top:0;}
+
+  .quickcard{ background:var(--panel); border:1px solid var(--accent); border-radius:14px; padding:16px; margin-bottom:6px; cursor:pointer; }
+  .quickcard .n{font-weight:700; font-size:15px;}
+  .quickcard .m{font-size:12.5px; color:var(--text-mute); margin:4px 0 8px; font-family:var(--font-mono);}
+  .quickcard .go{font-size:13px; color:var(--accent); font-weight:600;}
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .regioncard{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 14px; text-align:center; cursor:pointer; }
+  .regioncard .rn{font-family:var(--font-display); font-weight:700; font-size:16px;}
+  .regioncard .rc{font-size:11.5px; color:var(--text-mute); margin-top:4px; font-family:var(--font-mono);}
+
+  .adminbtn{ margin-top:22px; width:100%; padding:14px; border-radius:12px; background:var(--panel-2); border:1px solid var(--line); color:var(--text); font-weight:700; font-family:var(--font-display); cursor:pointer; text-align:center; }
+
+  .drivercard{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:10px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .drivercard .n{font-weight:700; font-size:15px;}
+  .drivercard .c{font-size:11.5px; color:var(--text-mute); font-family:var(--font-mono); margin-top:3px;}
+  .drivercard .arrow{color:var(--text-mute); font-size:18px;}
+
+  /* driver progress header */
+  .progresswrap{ background:var(--panel); padding:16px 20px; border-bottom:1px solid var(--line); }
+  .pct{font-family:var(--font-display); font-size:34px; font-weight:700;}
+  .pctlabel{font-size:11px; color:var(--text-mute); font-family:var(--font-mono);}
+  .prow{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px;}
+  .pstats{text-align:right; font-size:12px; color:var(--text-mute); font-family:var(--font-mono); line-height:1.6;}
+  .barbg{ height:8px; background:var(--panel-2); border-radius:6px; overflow:hidden; }
+  .barfg{ height:100%; background:var(--accent); border-radius:6px; transition:width .3s; }
+  .metrics3{ display:flex; gap:10px; margin-top:12px; }
+  .metric{ flex:1; background:var(--panel-2); border-radius:10px; padding:8px 10px; text-align:center; }
+  .metric .v{font-family:var(--font-mono); font-weight:700; font-size:15px;}
+  .metric .l{font-size:10.5px; color:var(--text-mute); margin-top:2px;}
+
+  .stoplist{padding:16px 20px;}
+  .stopcard{ background:var(--panel); border:1px solid var(--line); border-radius:14px; margin-bottom:12px; padding:14px 16px; cursor:pointer; }
+  .stopcard.locked{ opacity:0.45; cursor:not-allowed; }
+  .stopcard.done{ border-color:var(--green); }
+  .stopcard .srow{display:flex; justify-content:space-between; align-items:flex-start;}
+  .stopcard .idx{ font-family:var(--font-mono); font-size:12px; color:var(--text-mute); margin-bottom:3px; }
+  .stopcard .site{font-weight:700; font-size:15.5px;}
+  .stopcard .time{font-family:var(--font-mono); font-size:12px; color:var(--text-mute); margin-top:2px;}
+  .stopcard .status{font-size:11px; padding:3px 9px; border-radius:20px; font-family:var(--font-mono);}
+  .stopcard .status.wait{background:var(--panel-2); color:var(--text-mute);}
+  .stopcard .status.inprogress{background:rgba(242,153,74,0.18); color:var(--accent);}
+  .stopcard .status.done{background:rgba(63,191,127,0.18); color:var(--green);}
+  .stopcard .locknote{font-size:12px; color:var(--text-mute); margin-top:8px; text-align:center;}
+  .stopcard .itemcount{font-size:12px; color:var(--text-mute); margin-top:6px;}
+
+  /* stop detail */
+  .infobox{ margin:16px 20px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; font-size:13px; }
+  .infobox .row1{ display:flex; justify-content:space-between; align-items:center; }
+  .infobox .arrived{font-family:var(--font-mono); color:var(--teal);}
+  .infobox .diff{font-family:var(--font-mono); font-size:12px;}
+  .infobox .diff.late{color:var(--red);} .infobox .diff.ontime{color:var(--green);}
+  .infobox .gpsmeta{font-size:11.5px; color:var(--text-mute); margin-top:6px; font-family:var(--font-mono);}
+
+  .taskcount{ margin:0 20px 10px; font-size:13px; color:var(--text-mute); }
+  .taskcount b{color:var(--text);}
+  .alldone{ margin:0 20px 14px; background:rgba(63,191,127,0.12); border:1px solid var(--green); color:var(--green); text-align:center; padding:10px; border-radius:10px; font-size:13.5px; font-weight:600; }
+
+  .taskrow{ margin:0 20px 10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:10px; }
+  .taskrow.na{ opacity:0.4; }
+  .taskname{flex:1; font-size:14.5px; font-weight:600;}
+  .taskbtns{display:flex; gap:6px;}
+  .tbtn{ font-size:11.5px; padding:6px 9px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text-mute); cursor:pointer; font-family:var(--font-body); }
+  .tbtn.done.active{ background:var(--green); border-color:var(--green); color:#0C1F14; }
+  .tbtn.notdone.active{ background:var(--red); border-color:var(--red); color:#2A0E09; }
+  .tbtn.na.active{ background:var(--grey); border-color:var(--grey); color:#fff; }
+  .naword{font-size:12px; color:var(--text-mute); font-family:var(--font-mono);}
+
+  .field{margin:16px 20px;}
+  .field label{ display:block; font-size:12px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--text-mute); margin-bottom:7px; font-family:var(--font-mono);}
+  textarea, select, input[type=text]{ width:100%; background:var(--panel); border:1px solid var(--line); color:var(--text); padding:11px 13px; border-radius:10px; font-size:14.5px; font-family:var(--font-body); resize:none; }
+  textarea{min-height:80px;}
+  .photo-box{ border:1.5px dashed var(--line); border-radius:12px; padding:12px; text-align:center; background:var(--panel); cursor:pointer; }
+  .photo-box img{width:100%; max-height:180px; object-fit:cover; border-radius:8px; display:block;}
+  .photo-box .hint{color:var(--text-mute); font-size:12.5px; padding:14px 0;}
+
+  .bigbtn{ display:block; width:calc(100% - 40px); margin:20px 20px 30px; padding:15px; border-radius:12px; border:none; font-size:15px; font-weight:700; font-family:var(--font-display); cursor:pointer; text-align:center; }
+  .bigbtn.arrive{ background:var(--teal); color:#0C2422; }
+  .bigbtn.depart{ background:var(--accent); color:#1B1300; }
+  .bigbtn:disabled{ opacity:0.4; }
+  .statusline{text-align:center; font-size:12.5px; font-family:var(--font-mono); margin-top:-14px; margin-bottom:14px; min-height:14px;}
+  .statusline.err{color:var(--red);} .statusline.ok{color:var(--green);}
+
+  /* admin */
+  .admintabs{ display:flex; overflow-x:auto; border-bottom:1px solid var(--line); padding:0 12px; gap:4px; }
+  .admintab{ padding:12px 12px; font-size:13px; color:var(--text-mute); white-space:nowrap; cursor:pointer; border-bottom:2px solid transparent; }
+  .admintab.active{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+  .cards4{ display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:16px 20px; }
+  .kpi{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .kpi .v{font-family:var(--font-display); font-size:24px; font-weight:700;}
+  .kpi .l{font-size:11px; color:var(--text-mute); margin-top:3px;}
+  .datepicker{ margin:0 20px 12px; display:flex; gap:8px; align-items:center; }
+  .datepicker input[type=date]{ flex:1; }
+  .refreshsmall{ padding:10px 12px; border-radius:8px; background:var(--panel-2); border:1px solid var(--line); color:var(--text); font-size:12.5px; cursor:pointer; }
+
+  .drow{ margin:0 20px 10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .drow .top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .drow .dn{font-weight:700; font-size:14px;}
+  .drow .dc{font-size:11px; color:var(--text-mute); font-family:var(--font-mono);}
+  .drow .st{font-size:10.5px; padding:3px 8px; border-radius:20px; font-family:var(--font-mono);}
+  .drow .st.on{background:rgba(63,191,127,0.18); color:var(--green);}
+  .drow .st.off{background:var(--panel-2); color:var(--text-mute);}
+  .drow .barbg{margin:6px 0 4px;}
+  .drow .bottom{ display:flex; justify-content:space-between; font-size:11px; color:var(--text-mute); font-family:var(--font-mono); }
+  .placeholder{ margin:40px 20px; text-align:center; color:var(--text-mute); font-size:13.5px; line-height:1.8; }
+
+  .loading{text-align:center; padding:50px 20px; color:var(--text-mute); font-family:var(--font-mono); font-size:13px;}
+  .modal-bg{ position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:100; display:none; align-items:center; justify-content:center; padding:24px; }
+  .modal-bg.active{display:flex;}
+  .modal{ background:var(--panel-2); border:1px solid var(--line); border-radius:14px; padding:20px; max-width:92vw; max-height:86vh; }
+  .modal img{max-width:100%; max-height:78vh; border-radius:8px; display:block;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HOME -->
+  <div class="view active" id="view-home">
+    <div class="topbar">
+      <div class="eyebrow">AIR SPACE</div>
+      <h1>倉儲物流工作回報</h1>
+      <div class="date" id="homeDate"></div>
+    </div>
+    <main>
+      <div id="quickcardWrap"></div>
+      <div class="section-label">請選擇你的區域</div>
+      <div class="grid2" id="regionGrid"></div>
+      <button class="adminbtn" id="adminBtn">管理端 ／ 總部看板</button>
+    </main>
+  </div>
+
+  <!-- DRIVER LIST for a region -->
+  <div class="view" id="view-region">
+    <div class="topbar small">
+      <button class="backbtn" data-back="home">←</button>
+      <div class="who"><div class="n" id="regionTitle"></div><div class="m">選擇司機</div></div>
+    </div>
+    <main id="regionDriverList"></main>
+  </div>
+
+  <!-- DRIVER stop list -->
+  <div class="view" id="view-driver">
+    <div class="topbar small">
+      <button class="backbtn" data-back="home">←</button>
+      <div class="who"><div class="n" id="drvName"></div><div class="m" id="drvMeta"></div></div>
+      <span class="badge synced">已同步</span>
+    </div>
+    <div class="progresswrap">
+      <div class="prow">
+        <div><div class="pct" id="drvPct">0%</div><div class="pctlabel">今日完成度</div></div>
+        <div class="pstats" id="drvStats"></div>
+      </div>
+      <div class="barbg"><div class="barfg" id="drvBar" style="width:0%"></div></div>
+      <div class="metrics3">
+        <div class="metric"><div class="v" id="mArrived">0/0</div><div class="l">到站</div></div>
+        <div class="metric"><div class="v" id="mLate">0</div><div class="l">遲到</div></div>
+        <div class="metric"><div class="v" id="mDone">0/0</div><div class="l">項目完成</div></div>
+      </div>
+    </div>
+    <div class="stoplist" id="stopList"></div>
+  </div>
+
+  <!-- STOP detail -->
+  <div class="view" id="view-stop">
+    <div class="topbar small">
+      <button class="backbtn" data-back="driver">←</button>
+      <div class="who"><div class="n" id="stopSite"></div><div class="m" id="stopTime"></div></div>
+    </div>
+    <div class="infobox" id="stopInfoBox"></div>
+    <div class="taskcount" id="taskCountLine"></div>
+    <div id="allDoneMsg"></div>
+    <div id="taskRows"></div>
+    <div class="field">
+      <label>照片（選填）</label>
+      <div class="photo-box" id="photoBox"><div class="hint" id="photoHint">＋ 拍照 / 選擇照片</div><img id="photoPreview" style="display:none;"></div>
+      <input type="file" accept="image/*" capture="environment" id="fPhoto" style="display:none;">
+    </div>
+    <div class="field">
+      <label>備註（選填）</label>
+      <textarea id="stopNote" placeholder="有狀況可以在這裡說明..."></textarea>
+    </div>
+    <div class="statusline" id="stopStatus"></div>
+    <button class="bigbtn arrive" id="arriveBtn">到店打卡</button>
+    <button class="bigbtn depart" id="departBtn" style="display:none;">離店打卡</button>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="view" id="view-admin">
+    <div class="topbar small">
+      <button class="backbtn" data-back="home">←</button>
+      <div class="who"><div class="n">管理端</div><div class="m">倉儲部即時看板／總部完成度儀表</div></div>
+    </div>
+    <div class="admintabs">
+      <div class="admintab active" data-atab="live">即時看板</div>
+      <div class="admintab" data-atab="rate">完成度</div>
+      <div class="admintab" data-atab="reason">原因分析</div>
+      <div class="admintab" data-atab="export">匯出</div>
+      <div class="admintab" data-atab="people">排程與人員</div>
+    </div>
+    <div id="adminBody"></div>
+  </div>
+
+  <div class="modal-bg" id="imgModalBg"><div class="modal"><img id="imgModalSrc"></div></div>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const WEEKDAY_NAMES = ['日','一','二','三','四','五','六'];
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQQJ9AhaaKEFkzBpn9JSY7-sYsvOQu0e-U-hz1ssnoZFMjjMxNHc0lpdJpdj9wXO_c/exec';
+  const LATE_TOLERANCE_MIN = 10;
+
+  // ============ DRIVER DATA ============
+  function T(name, days){ return {name, days}; }
+  const DRIVERS = [
+    { region:'高雄', code:'南高1', name:'朱家宏', hours:'09:00-18:00',
+      tables:{ A:[T('勻貨歸倉',[2,3,4,5]),T('補貨歸倉',[3,4,5]),T('追加歸倉',[3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('集貨寄貨',[1,2,3,4,5])] },
+      dailyStops:[ {site:'岡山秀泰',time:'09:00-11:00',table:'A'}, {site:'左營新光',time:'11:40-13:30',table:'A'}, {site:'漢神',time:'15:00-16:30',table:'A'}, {site:'岡山門市',time:'17:30-18:00',table:'A'} ]
+    },
+    { region:'高雄', code:'南高2', name:'李尚鴻', hours:'07:00-16:00',
+      tables:{ A:[T('勻貨歸倉',[2,4,5]),T('補貨歸倉',[3,4,5]),T('追加歸倉',[3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('集貨寄貨',[1,2,3,4,5])] },
+      dailyStops:[ {site:'夢時代(收貨)',time:'07:00-08:00',table:'A'}, {site:'岡山秀泰',time:'09:00-09:30',table:'A'}, {site:'三多',time:'10:30-11:00',table:'A'}, {site:'夢時代',time:'12:30-15:00',table:'A'} ]
+    },
+    { region:'台南', code:'南台1', name:'陳琮斌', hours:'12:00-21:00',
+      tables:{ A:[T('勻貨歸倉',[2,3,4,5]),T('補貨歸倉',[4,5]),T('追加歸倉',[4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('集貨寄貨',[1,2,3,4,5])] },
+      dailyStops:[ {site:'南紡CA',time:'12:00-14:00',table:'A'}, {site:'南紡OL',time:'14:00-16:00',table:'A'}, {site:'新台南',time:'16:30-18:00',table:'A'}, {site:'新台南(晚班)',time:'19:00-21:00',table:'A'} ]
+    },
+    { region:'嘉義', code:'南嘉1', name:'侯昱廷', hours:'09:00-18:00',
+      tables:{ A:[T('勻貨歸倉',[2,3,4,5]),T('補貨歸倉',[2]),T('追加歸倉',[4]),T('撤貨抓貨(只抓倉庫)',[1]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('集貨寄貨',[1,2,3,4,5])] },
+      weeklyStops:{
+        1:[{site:'嘉義秀泰',time:'09:00-09:35',table:'A'},{site:'嘉義文化',time:'09:40-09:55',table:'A'},{site:'南紡',time:'11:20-12:00',table:'A'},{site:'新台南',time:'12:30-12:50',table:'A'},{site:'嘉義文化',time:'15:00-15:50',table:'A'},{site:'嘉義秀泰',time:'16:00-16:30',table:'A'},{site:'嘉義文化',time:'17:00-18:00',table:'A'}],
+        2:[{site:'嘉義秀泰',time:'09:00-13:00',free:['執行當周撤貨','追加進貨歸倉']},{site:'秀泰大碼',time:'14:00-14:30',free:['寄貨包貨']},{site:'嘉義文化',time:'14:45-18:00',free:['執行當周撤貨','執行跨區轉調','處理追加進貨歸倉']}],
+        3:[{site:'嘉義秀泰',time:'09:00-09:35',table:'A'},{site:'嘉義文化',time:'09:40-09:55',table:'A'},{site:'南紡',time:'11:20-12:00',table:'A'},{site:'新台南',time:'12:30-12:50',table:'A'},{site:'嘉義文化',time:'15:00-15:50',table:'A'},{site:'嘉義秀泰',time:'16:00-16:30',table:'A'},{site:'嘉義文化',time:'17:00-18:00',table:'A'}],
+        4:[{site:'嘉義秀泰',time:'09:00-09:35',table:'A'},{site:'嘉義文化',time:'09:40-09:55',table:'A'},{site:'南紡',time:'11:20-12:00',table:'A'},{site:'新台南',time:'12:30-12:50',table:'A'},{site:'嘉義文化',time:'15:00-15:50',table:'A'},{site:'嘉義秀泰',time:'16:00-16:30',table:'A'},{site:'嘉義文化',time:'17:00-18:00',table:'A'}],
+        5:[{site:'嘉義秀泰',time:'09:00-09:35',table:'A'},{site:'嘉義文化',time:'09:40-09:55',table:'A'},{site:'南紡',time:'11:20-12:00',table:'A'},{site:'新台南',time:'12:30-12:50',table:'A'},{site:'嘉義文化',time:'15:00-15:50',table:'A'},{site:'嘉義秀泰',time:'16:00-16:30',table:'A'},{site:'嘉義文化',time:'17:00-18:00',table:'A'}]
+      }
+    },
+    { region:'桃園', code:'北桃1', name:'陳兆晏', hours:'11:00-20:00',
+      tables:{ A:[T('勻貨歸倉',[3,4,5]),T('補貨歸倉',[1,4,5]),T('追加歸倉',[1,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3,5]),T('新品整理',[3,5]),T('集貨寄貨',[1,3,4,5])] },
+      weeklyStops:{
+        1:[{site:'大江',time:'11:00-17:45',table:'A'},{site:'台茂',time:'18:20-18:45',table:'A'},{site:'統領',time:'19:15-20:00',table:'A'}],
+        2:[{site:'大江',time:'11:00-11:40',table:'A'},{site:'巨城',time:'12:50-13:30',table:'A'},{site:'台茂',time:'15:00-19:00',table:'A'},{site:'統領',time:'19:00-20:00',table:'A'}],
+        3:[{site:'大江',time:'11:00-12:00',table:'A'},{site:'台茂',time:'12:30-14:10',table:'A'},{site:'巨城',time:'14:40-15:20',table:'A'},{site:'統領',time:'16:30-20:00',table:'A'}],
+        4:[{site:'大江',time:'11:00-20:00',table:'A'}],
+        5:[{site:'大江',time:'11:00-12:30',table:'A'},{site:'巨城',time:'13:40-15:00',table:'A'},{site:'台茂',time:'15:50-16:50',table:'A'},{site:'統領',time:'17:30-20:00',table:'A'}]
+      }
+    },
+    { region:'台中', code:'中1', name:'王昱文', hours:'10:30-19:30',
+      tables:{ A:[T('勻貨歸倉',[3,5]),T('補貨歸倉',[3,4]),T('追加歸倉',[2,3,4,5]),T('撤貨抓貨',[1]),T('區內勻貨',[1,2,4]),T('跨區勻貨',[1]),T('新品入倉',[4]),T('新品整理',[4]),T('集貨寄貨',[1,2,3,4,5])] },
+      dailyStops:[ {site:'一中大碼/OL',time:'10:30-11:00',table:'A'}, {site:'文心',time:'11:20-11:30',table:'A'}, {site:'遠百',time:'11:50-12:00',table:'A'}, {site:'新光',time:'12:05-12:30',table:'A'}, {site:'一中OL(寄貨)',time:'13:00-14:00',table:'A'}, {site:'一中(門市作業)',time:'15:00-16:00',table:'A'}, {site:'新光/遠百(支援)',time:'16:20-19:30',table:'A'} ]
+    },
+    { region:'台中', code:'中2', name:'陳易成', hours:'10:30-19:30',
+      tables:{ A:[T('勻貨歸倉',[3,5]),T('補貨歸倉',[3,4]),T('追加歸倉',[2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('集貨寄貨',[1,2,3,4,5])] },
+      dailyStops:[ {site:'一中/OL',time:'10:30-11:00',table:'A'}, {site:'漢神',time:'11:20-11:40',table:'A'}, {site:'逢甲',time:'12:00-12:10',table:'A'}, {site:'新光',time:'12:20-12:30',table:'A'}, {site:'一中門市(支援)',time:'14:00-16:00',table:'A'}, {site:'漢神洲際(支援)',time:'16:20-19:30',table:'A'} ]
+    },
+    { region:'台北', code:'北1', name:'林柏均', hours:'09:00-18:00', route:'南西區',
+      tables:{}, weeklyStops:{1:[],2:[],3:[],4:[],5:[]}, noSchedule:true
+    },
+    { region:'台北', code:'北2', name:'朱銘澤', hours:'依當日排程',
+      tables:{ A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('濾網清潔',[2,3])] },
+      weeklyStops:{
+        1:[{site:'大安',time:'10:30-12:00',table:'A'},{site:'敦南AS',time:'15:40-17:40',table:'A'},{site:'敦南OL',time:'17:40-19:30',table:'A'}],
+        2:[{site:'大安',time:'10:30-12:00',table:'A'},{site:'敦南AS',time:'15:40-17:40',table:'A'},{site:'敦南OL',time:'17:40-19:30',table:'A'}],
+        3:[{site:'大安',time:'09:30-12:30',table:'A'},{site:'敦南AS',time:'13:40-15:30',table:'A'},{site:'敦南OL',time:'15:30-17:00',table:'A'},{site:'敦南大碼',time:'17:00-18:30',table:'A'}],
+        4:[{site:'敦南AS',time:'09:30-13:30',table:'A'},{site:'敦南OL',time:'09:30-13:30',table:'A'},{site:'支援門市',time:'14:30-18:30',table:'A'}],
+        5:[{site:'延平倉',time:'09:30-18:30',table:'A'}]
+      }
+    },
+    { region:'台北', code:'北3', name:'賴昱誠', hours:'依當日排程',
+      tables:{
+        A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3,4,5]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3])],
+        B:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[4]),T('新品整理',[4]),T('濾網清潔',[2,3])]
+      },
+      weeklyStops:{
+        1:[{site:'新莊宏匯',time:'10:30-19:30',table:'A'}],
+        2:[{site:'西門AS',time:'10:30-19:30',table:'B'},{site:'西門大碼',time:'10:30-19:30',table:'B'}],
+        3:[{site:'新莊宏匯',time:'09:30-18:30',table:'A'}],
+        4:[{site:'西門AS',time:'09:30-18:30',table:'B'},{site:'西門三店(IP)',time:'09:30-18:30',table:'B'}],
+        5:[{site:'延平倉',time:'09:30-18:30',table:'A'}]
+      }
+    },
+    { region:'台北', code:'北4', name:'路線3(尚未命名)', hours:'09:00-18:00', route:'新莊宏匯➔西門區',
+      tables:{}, weeklyStops:{1:[],2:[],3:[],4:[],5:[]}, noSchedule:true
+    }
+  ];
+
+  function driverKey(d){ return d.region+'|'+d.name; }
+  function findDriver(region, name){ return DRIVERS.find(d=>d.region===region && d.name===name); }
+  function getStopsFor(driver, weekday){
+    if(driver.noSchedule) return [];
+    if(driver.weeklyStops) return driver.weeklyStops[weekday] || [];
+    return driver.dailyStops || [];
+  }
+  function getStopTasks(driver, stop, weekday){
+    if(stop.free) return stop.free.map(n=>({name:n, active:true}));
+    const table = driver.tables[stop.table] || [];
+    return table.map(t=>({name:t.name, active:t.days.includes(weekday)}));
+  }
+  function todayDateStr(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function fmtDateDisplay(){
+    const d = new Date();
+    return `${todayDateStr()}　星期${WEEKDAY_NAMES[d.getDay()]}`;
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // ============ NAV ============
+  let currentRegion = null, currentDriver = null, currentStopIdx = null;
+  let currentState = null; // {stops:[{arrivedAt,departedAt,gps,photo,note,tasks:{}}]}
+  let allCheckins = []; // fetched from backend
+
+  function showView(id){
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    $(id).classList.add('active');
+  }
+  document.querySelectorAll('[data-back]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const to = btn.dataset.back;
+      if(to==='home') renderHome();
+      if(to==='driver') renderDriverView();
+    });
+  });
+
+  // ============ HOME ============
+  function renderHome(){
+    $('homeDate').textContent = fmtDateDisplay();
+    const regions = [...new Set(DRIVERS.map(d=>d.region))];
+    $('regionGrid').innerHTML = regions.map(r=>{
+      const count = DRIVERS.filter(d=>d.region===r).length;
+      return `<div class="regioncard" data-region="${r}"><div class="rn">${r}</div><div class="rc">${count} 位司機</div></div>`;
+    }).join('');
+    document.querySelectorAll('.regioncard').forEach(c=>{
+      c.addEventListener('click', ()=>openRegion(c.dataset.region));
+    });
+
+    let last = null;
+    try{ last = JSON.parse(localStorage.getItem('lastDriver')||'null'); }catch(e){}
+    if(last){
+      const d = findDriver(last.region, last.name);
+      if(d){
+        $('quickcardWrap').innerHTML = `<div class="section-label">上次使用</div>
+          <div class="quickcard" id="quickcardBtn">
+            <div class="n">${escapeHtml(d.name)}</div>
+            <div class="m">${d.region}區 · ${d.code} · ${escapeHtml(d.name)} · ${d.hours}</div>
+            <div class="go">點此直接開始今日行程 →</div>
+          </div>`;
+        $('quickcardBtn').addEventListener('click', ()=>openDriver(d.region, d.name));
+      }else{ $('quickcardWrap').innerHTML=''; }
+    }else{ $('quickcardWrap').innerHTML=''; }
+
+    $('adminBtn').onclick = openAdmin;
+    showView('view-home');
+  }
+
+  function openRegion(region){
+    currentRegion = region;
+    $('regionTitle').textContent = region+'區';
+    const list = DRIVERS.filter(d=>d.region===region);
+    $('regionDriverList').innerHTML = list.map(d=>`
+      <div class="drivercard" data-name="${escapeHtml(d.name)}">
+        <div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.code} · ${d.hours}</div></div>
+        <div class="arrow">›</div>
+      </div>`).join('');
+    document.querySelectorAll('#regionDriverList .drivercard').forEach(c=>{
+      c.addEventListener('click', ()=>openDriver(region, c.dataset.name));
+    });
+    showView('view-region');
+  }
+
+  // ============ DRIVER ============
+  async function openDriver(region, name){
+    currentDriver = findDriver(region, name);
+    if(!currentDriver) return;
+    localStorage.setItem('lastDriver', JSON.stringify({region, name}));
+    $('drvName').textContent = currentDriver.name;
+    $('drvMeta').textContent = `${currentDriver.region}${currentDriver.code} · ${currentDriver.name} · ${todayDateStr()}`;
+    showView('view-driver');
+    $('stopList').innerHTML = '<div class="loading">載入中...</div>';
+    await refreshCheckins();
+    loadCurrentState();
+    renderDriverView();
+  }
+
+  async function refreshCheckins(){
+    try{
+      const res = await fetch(APPS_SCRIPT_URL);
+      const data = await res.json();
+      allCheckins = Array.isArray(data) ? data.filter(r=>r && r.key) : [];
+    }catch(e){ allCheckins = allCheckins || []; console.error(e); }
+  }
+
+  function loadCurrentState(){
+    const key = driverKey(currentDriver)+'|'+todayDateStr();
+    const rec = allCheckins.find(r=>r.key===key);
+    const weekday = new Date().getDay();
+    const stops = getStopsFor(currentDriver, weekday);
+    if(rec && rec.state){
+      let parsed = null;
+      try{ parsed = typeof rec.state==='string' ? JSON.parse(rec.state) : rec.state; }catch(e){}
+      if(parsed && parsed.stops){ currentState = parsed; return; }
+    }
+    currentState = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})) };
+  }
+
+  async function saveCurrentState(){
+    const key = driverKey(currentDriver)+'|'+todayDateStr();
+    const payload = { action:'checkin', key, region:currentDriver.region, name:currentDriver.name, date:todayDateStr(), state: JSON.stringify(currentState) };
+    try{
+      await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+      const idx = allCheckins.findIndex(r=>r.key===key);
+      if(idx>=0) allCheckins[idx].state = payload.state; else allCheckins.push({key, region:payload.region, name:payload.name, date:payload.date, state:payload.state});
+      return true;
+    }catch(e){ console.error(e); return false; }
+  }
+
+  function computeProgress(driver, weekday, state){
+    const stops = getStopsFor(driver, weekday);
+    let totalTasks=0, doneTasks=0, arrivedCount=0, lateCount=0;
+    stops.forEach((stop,i)=>{
+      const tasks = getStopTasks(driver, stop, weekday).filter(t=>t.active);
+      totalTasks += tasks.length;
+      const st = state.stops[i] || {};
+      tasks.forEach(t=>{ if(st.tasks && st.tasks[t.name]==='done') doneTasks++; });
+      if(st.arrivedAt){
+        arrivedCount++;
+        const sched = parseSchedStart(stop.time);
+        if(sched){
+          const diff = (new Date(st.arrivedAt) - sched)/60000;
+          if(diff > LATE_TOLERANCE_MIN) lateCount++;
+        }
+      }
+    });
+    return { totalTasks, doneTasks, arrivedCount, totalStops:stops.length, lateCount,
+      pct: totalTasks ? Math.round(doneTasks/totalTasks*100) : 0 };
+  }
+  function parseSchedStart(timeStr){
+    if(!timeStr) return null;
+    const m = timeStr.match(/(\d{2}):(\d{2})/);
+    if(!m) return null;
+    const d = new Date();
+    d.setHours(+m[1], +m[2], 0, 0);
+    return d;
+  }
+
+  function renderDriverView(){
+    const weekday = new Date().getDay();
+    const stops = getStopsFor(currentDriver, weekday);
+    const prog = computeProgress(currentDriver, weekday, currentState);
+    $('drvPct').textContent = prog.pct+'%';
+    $('drvStats').innerHTML = `已完成 ${prog.doneTasks} / 應做 ${prog.totalTasks}<br>到站 ${prog.arrivedCount}/${prog.totalStops}`;
+    $('drvBar').style.width = prog.pct+'%';
+    $('mArrived').textContent = `${prog.arrivedCount}/${prog.totalStops}`;
+    $('mLate').textContent = prog.lateCount;
+    $('mDone').textContent = `${prog.doneTasks}/${prog.totalTasks}`;
+
+    if(currentDriver.noSchedule || stops.length===0){
+      $('stopList').innerHTML = `<div class="placeholder">目前還沒有這位司機的詳細排程資料。<br>等主管更新排程檔案後就會自動出現在這裡。</div>`;
+      return;
+    }
+
+    let prevDeparted = true;
+    $('stopList').innerHTML = stops.map((stop,i)=>{
+      const st = currentState.stops[i] || {};
+      const tasks = getStopTasks(currentDriver, stop, weekday);
+      const activeCount = tasks.filter(t=>t.active).length;
+      const locked = !prevDeparted;
+      let statusHtml, cardClass='';
+      if(st.departedAt){ statusHtml = '<span class="status done">已完成</span>'; cardClass='done'; prevDeparted=true; }
+      else if(st.arrivedAt){ statusHtml = '<span class="status inprogress">作業中</span>'; prevDeparted=false; }
+      else{ statusHtml = locked ? '<span class="status wait">等待中</span>' : '<span class="status wait">未開始</span>'; prevDeparted=false; }
+      return `<div class="stopcard ${cardClass} ${locked && !st.arrivedAt ? 'locked':''}" data-idx="${i}">
+        <div class="srow">
+          <div><div class="idx">STOP ${i+1}</div><div class="site">${escapeHtml(stop.site)}</div><div class="time">${stop.time}</div></div>
+          ${statusHtml}
+        </div>
+        <div class="itemcount">${activeCount} 項工作項目</div>
+        ${locked && !st.arrivedAt ? '<div class="locknote">前一站尚未離店</div>' : ''}
+      </div>`;
+    }).join('');
+
+    document.querySelectorAll('#stopList .stopcard').forEach(card=>{
+      if(card.classList.contains('locked')) return;
+      card.addEventListener('click', ()=> openStop(+card.dataset.idx));
+    });
+  }
+
+  // ============ STOP DETAIL ============
+  let stopPhotoData = null;
+  function openStop(idx){
+    currentStopIdx = idx;
+    const weekday = new Date().getDay();
+    const stops = getStopsFor(currentDriver, weekday);
+    const stop = stops[idx];
+    const st = currentState.stops[idx];
+    stopPhotoData = null;
+
+    $('stopSite').textContent = `① ${stop.site}`;
+    $('stopTime').textContent = stop.time;
+    $('stopNote').value = st.note || '';
+    $('photoPreview').style.display='none'; $('photoPreview').src='';
+    $('photoHint').style.display='block';
+    if(st.photo){ $('photoPreview').src = st.photo; $('photoPreview').style.display='block'; $('photoHint').style.display='none'; }
+    $('stopStatus').textContent=''; $('stopStatus').className='statusline';
+
+    renderStopInfoBox(stop, st);
+    renderTaskRows(stop, st, weekday);
+
+    $('arriveBtn').style.display = st.arrivedAt ? 'none' : 'block';
+    $('departBtn').style.display = st.arrivedAt && !st.departedAt ? 'block' : 'none';
+    if(st.departedAt){ $('arriveBtn').style.display='none'; $('departBtn').style.display='none'; }
+
+    showView('view-stop');
+  }
+
+  function renderStopInfoBox(stop, st){
+    if(!st.arrivedAt){
+      $('stopInfoBox').innerHTML = `<div class="row1"><span>尚未到店</span><span style="color:var(--text-mute); font-family:var(--font-mono); font-size:12px;">預定 ${stop.time.split('-')[0]}</span></div>`;
+      return;
+    }
+    const arrivedD = new Date(st.arrivedAt);
+    const sched = parseSchedStart(stop.time);
+    let diffHtml = '';
+    if(sched){
+      const diff = Math.round((arrivedD - sched)/60000);
+      if(diff > LATE_TOLERANCE_MIN) diffHtml = `<span class="diff late">晚 ${diff} 分</span>`;
+      else if(diff < -LATE_TOLERANCE_MIN) diffHtml = `<span class="diff ontime">提早 ${Math.abs(diff)} 分</span>`;
+      else diffHtml = `<span class="diff ontime">準時</span>`;
+    }
+    const gpsHtml = st.gps ? `<div class="gpsmeta">定位已記錄・<a href="https://maps.google.com/?q=${st.gps}" target="_blank" style="color:var(--teal);">在地圖上開啟</a></div>` : `<div class="gpsmeta">未附加定位</div>`;
+    $('stopInfoBox').innerHTML = `<div class="row1"><span class="arrived">到店 ${arrivedD.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}（預定 ${stop.time.split('-')[0]}）</span>${diffHtml}</div>${gpsHtml}`;
+  }
+
+  function renderTaskRows(stop, st, weekday){
+    const tasks = getStopTasks(currentDriver, stop, weekday);
+    const activeTasks = tasks.filter(t=>t.active);
+    const inactiveCount = tasks.length - activeTasks.length;
+    const doneCount = activeTasks.filter(t=> st.tasks && st.tasks[t.name]==='done').length;
+    $('taskCountLine').innerHTML = `工作項目 <b>${doneCount}/${activeTasks.length}</b>　·　本日未排程 ${inactiveCount} 項`;
+    $('allDoneMsg').innerHTML = (activeTasks.length>0 && doneCount===activeTasks.length) ? `<div class="alldone">✓ 本站全部完成</div>` : '';
+
+    $('taskRows').innerHTML = tasks.map(t=>{
+      if(!t.active){
+        return `<div class="taskrow na"><div class="taskname">— ${escapeHtml(t.name)}</div><div class="naword">本日未排程</div></div>`;
+      }
+      const cur = (st.tasks && st.tasks[t.name]) || '';
+      return `<div class="taskrow" data-task="${escapeHtml(t.name)}">
+        <div class="taskname">${escapeHtml(t.name)}</div>
+        <div class="taskbtns">
+          <button class="tbtn done ${cur==='done'?'active':''}" data-val="done">完成</button>
+          <button class="tbtn notdone ${cur==='notdone'?'active':''}" data-val="notdone">未完成</button>
+          <button class="tbtn na ${cur==='na'?'active':''}" data-val="na">不適用</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    document.querySelectorAll('#taskRows .taskrow[data-task] .tbtn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const row = btn.closest('.taskrow');
+        const taskName = row.dataset.task;
+        const val = btn.dataset.val;
+        if(!st.tasks) st.tasks = {};
+        st.tasks[taskName] = st.tasks[taskName]===val ? '' : val;
+        renderTaskRows(stop, st, weekday);
+        await saveCurrentState();
+      });
+    });
+  }
+
+  $('photoBox').addEventListener('click', ()=> $('fPhoto').click());
+  $('fPhoto').addEventListener('change', (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const scale = Math.min(1, 900/img.width);
+        const c = document.createElement('canvas'); c.width=img.width*scale; c.height=img.height*scale;
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        stopPhotoData = c.toDataURL('image/jpeg',0.6);
+        $('photoPreview').src = stopPhotoData; $('photoPreview').style.display='block'; $('photoHint').style.display='none';
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $('arriveBtn').addEventListener('click', ()=>{
+    const st = currentState.stops[currentStopIdx];
+    $('arriveBtn').disabled = true; $('arriveBtn').textContent='定位中...';
+    const finish = async (gpsStr)=>{
+      st.arrivedAt = new Date().toISOString();
+      st.gps = gpsStr;
+      const weekday = new Date().getDay();
+      const stops = getStopsFor(currentDriver, weekday);
+      renderStopInfoBox(stops[currentStopIdx], st);
+      $('arriveBtn').style.display='none'; $('departBtn').style.display='block';
+      $('arriveBtn').disabled=false; $('arriveBtn').textContent='到店打卡';
+      const ok = await saveCurrentState();
+      setStopStatus(ok ? '✓ 已記錄到店' : '打卡失敗，請檢查網路', !ok);
+    };
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(
+        pos=> finish(pos.coords.latitude.toFixed(5)+','+pos.coords.longitude.toFixed(5)),
+        ()=> finish(null),
+        {timeout:8000}
+      );
+    }else{ finish(null); }
+  });
+
+  $('departBtn').addEventListener('click', async ()=>{
+    const st = currentState.stops[currentStopIdx];
+    st.departedAt = new Date().toISOString();
+    st.note = $('stopNote').value.trim();
+    if(stopPhotoData) st.photo = stopPhotoData;
+    $('departBtn').disabled = true; $('departBtn').textContent = '送出中...';
+    const ok = await saveCurrentState();
+    $('departBtn').disabled = false; $('departBtn').textContent = '離店打卡';
+    setStopStatus(ok ? '✓ 已離店，本站完成' : '送出失敗，請檢查網路', !ok);
+    if(ok){
+      $('departBtn').style.display='none';
+      renderDriverView();
+      setTimeout(()=> showView('view-driver'), 700);
+    }
+  });
+  function setStopStatus(msg, isErr){ $('stopStatus').textContent = msg; $('stopStatus').className = 'statusline '+(isErr?'err':'ok'); }
+
+  // ============ ADMIN ============
+  let adminTab = 'live';
+  let adminDate = todayDateStr();
+  async function openAdmin(){
+    showView('view-admin');
+    $('adminBody').innerHTML = '<div class="loading">載入中...</div>';
+    await refreshCheckins();
+    renderAdmin();
+  }
+  document.querySelectorAll('.admintab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      document.querySelectorAll('.admintab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      adminTab = t.dataset.atab;
+      renderAdmin();
+    });
+  });
+
+  function weekdayOfDateStr(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d).getDay(); }
+
+  function renderAdmin(){
+    if(adminTab==='reason' || adminTab==='export' || adminTab==='people'){
+      const labels = {reason:'原因分析', export:'匯出', people:'排程與人員'};
+      $('adminBody').innerHTML = `<div class="placeholder">「${labels[adminTab]}」功能開發中，下一輪會加進來。</div>`;
+      return;
+    }
+    const weekday = weekdayOfDateStr(adminDate);
+    let totalTasks=0, totalDone=0, onlineCount=0, lateTotal=0, notStartedCount=0;
+    const rows = DRIVERS.map(d=>{
+      const stops = getStopsFor(d, weekday);
+      const key = driverKey(d)+'|'+adminDate;
+      const rec = allCheckins.find(r=>r.key===key);
+      let state = { stops: stops.map(()=>({tasks:{}})) };
+      if(rec && rec.state){ try{ const p = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; if(p&&p.stops) state=p; }catch(e){} }
+      const prog = computeProgress(d, weekday, state);
+      totalTasks += prog.totalTasks; totalDone += prog.doneTasks; lateTotal += prog.lateCount;
+      const started = state.stops.some(s=>s.arrivedAt);
+      const finished = stops.length>0 && state.stops.every((s,i)=> stops[i] ? !!s.departedAt : true) && started;
+      if(started && !finished) onlineCount++;
+      if(!started) notStartedCount++;
+      return { d, stops, prog, started, finished };
+    });
+
+    const overallPct = totalTasks ? Math.round(totalDone/totalTasks*100) : 0;
+
+    let body = `
+      <div class="datepicker">
+        <input type="date" id="adminDateInput" value="${adminDate}">
+        <button class="refreshsmall" id="adminRefreshBtn">重新載入</button>
+      </div>
+      <div class="cards4">
+        <div class="kpi"><div class="v">${overallPct}%</div><div class="l">全台完成度 · ${totalDone}/${totalTasks} 項</div></div>
+        <div class="kpi"><div class="v">${onlineCount}</div><div class="l">在線司機（作業中）</div></div>
+        <div class="kpi"><div class="v">${lateTotal}</div><div class="l">遲到次數（容差 ±${LATE_TOLERANCE_MIN}分）</div></div>
+        <div class="kpi"><div class="v">${notStartedCount}</div><div class="l">未開始／未回報</div></div>
+      </div>
+    `;
+
+    if(adminTab==='live' || adminTab==='rate'){
+      body += rows.map(({d,stops,prog,started,finished})=>{
+        const statusLabel = d.noSchedule ? '尚未開始' : (finished ? '已完成' : started ? '在店中' : '尚未開始');
+        const statusClass = (!d.noSchedule && (started && !finished)) ? 'on' : 'off';
+        return `<div class="drow">
+          <div class="top">
+            <div><div class="dn">${escapeHtml(d.name)}</div><div class="dc">${d.region} · ${d.code} · ${escapeHtml(d.name)}</div></div>
+            <span class="st ${statusClass}">${statusLabel}</span>
+          </div>
+          <div class="barbg"><div class="barfg" style="width:${prog.pct}%"></div></div>
+          <div class="bottom"><span>${prog.doneTasks}/${prog.totalTasks} 項</span><span>到站 ${prog.arrivedCount}/${prog.totalStops}</span><span>遲到 ${prog.lateCount}</span></div>
+        </div>`;
+      }).join('');
+    }
+
+    $('adminBody').innerHTML = body;
+    $('adminDateInput').addEventListener('change', (e)=>{ adminDate = e.target.value; renderAdmin(); });
+    $('adminRefreshBtn').addEventListener('click', async ()=>{ $('adminBody').innerHTML='<div class="loading">載入中...</div>'; await refreshCheckins(); renderAdmin(); });
+  }
+
+  $('imgModalBg').addEventListener('click', ()=> $('imgModalBg').classList.remove('active'));
+
+  // init
+  renderHome();
+})();
+</script>
+</body>
+</html>
