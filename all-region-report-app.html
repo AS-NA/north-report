@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AIR SPACE 工作回報系統</title>
+<style>
+  :root{
+    --bg:#17181C;
+    --panel:#212328;
+    --panel-2:#26282E;
+    --line:#34363D;
+    --accent:#F2994A;
+    --teal:#4FBDBA;
+    --text:#F3F1EA;
+    --text-mute:#9A9CA3;
+    --danger:#E0654F;
+    --font-display:'Space Grotesk', 'Noto Sans TC', sans-serif;
+    --font-body:'Inter', 'Noto Sans TC', sans-serif;
+    --font-mono:'JetBrains Mono', 'Courier New', monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: radial-gradient(circle at 20% 0%, rgba(242,153,74,0.06), transparent 40%), var(--bg);
+    color:var(--text); font-family:var(--font-body); min-height:100vh; display:flex; justify-content:center;
+  }
+  @media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important;} }
+  .app{ width:100%; max-width:460px; min-height:100vh; display:flex; flex-direction:column; background:var(--bg); position:relative; }
+
+  header{ padding:22px 20px 14px; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:20; background:var(--bg); }
+  .brand-row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .brand{ font-family:var(--font-display); font-weight:700; font-size:17px; letter-spacing:0.01em; display:flex; align-items:center; gap:8px; }
+  .brand .dot{ width:9px;height:9px;border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px rgba(242,153,74,0.18); flex-shrink:0;}
+  .whoami{ font-family:var(--font-mono); font-size:12px; color:var(--text-mute); border:1px solid var(--line); padding:6px 10px; border-radius:20px; background:var(--panel); cursor:pointer; display:flex; align-items:center; gap:6px; max-width:160px; flex-shrink:0;}
+  .whoami span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .tabs{ display:flex; margin-top:16px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:3px; gap:3px; }
+  .tab{ flex:1; text-align:center; padding:9px 0; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--text-mute); cursor:pointer; user-select:none; transition:background .15s, color .15s; }
+  .tab.active{ background:var(--accent); color:#1B1300; }
+
+  main{flex:1; padding:18px 20px 100px;}
+  .view{display:none;}
+  .view.active{display:block; animation:fade .2s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+
+  .sched-card{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:18px; }
+  .sched-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .sched-title{ font-family:var(--font-mono); font-size:11.5px; letter-spacing:0.06em; color:var(--accent); text-transform:uppercase;}
+  .sched-day{ font-family:var(--font-display); font-weight:700; font-size:15px;}
+  .sched-summary{ font-size:13.5px; line-height:1.6; color:var(--text); margin-bottom:10px;}
+  .sched-tasks{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;}
+  .sched-tag{ font-size:11.5px; font-family:var(--font-mono); background:var(--panel-2); border:1px solid var(--line); color:var(--teal); padding:3px 8px; border-radius:20px;}
+  .sched-empty{ color:var(--text-mute); font-size:13px; text-align:center; padding:6px 0;}
+
+  .field{margin-bottom:16px;}
+  .field label{ display:block; font-size:12px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--text-mute); margin-bottom:7px; font-family:var(--font-mono);}
+  input[type=text], textarea, select{
+    width:100%; background:var(--panel); border:1px solid var(--line); color:var(--text);
+    padding:12px 13px; border-radius:10px; font-size:15px; font-family:var(--font-body); resize:none;
+  }
+  select{ appearance:none; -webkit-appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239A9CA3' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat:no-repeat; background-position:right 13px center; background-size:16px; }
+  input[type=text]:focus, textarea:focus, select:focus{ outline:none; border-color:var(--accent); }
+  textarea{min-height:110px; line-height:1.5;}
+
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 16px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-size:14px; font-weight:600; cursor:pointer; font-family:var(--font-body); width:100%;}
+  .btn:active{transform:scale(0.98);}
+  .btn.ghost{background:transparent;}
+  .btn.accent{ background:var(--accent); color:#1B1300; border-color:var(--accent);}
+  .btn.accent:disabled{opacity:0.5;}
+  .btn.small{width:auto; padding:8px 12px; font-size:12.5px;}
+
+  .gps-row{ display:flex; gap:10px; align-items:center; margin-top:8px; font-family:var(--font-mono); font-size:12px; color:var(--teal);}
+  .photo-box{ border:1.5px dashed var(--line); border-radius:12px; padding:14px; text-align:center; background:var(--panel); cursor:pointer; position:relative; overflow:hidden;}
+  .photo-box img{ width:100%; max-height:220px; object-fit:cover; border-radius:8px; display:block;}
+  .photo-box .hint{color:var(--text-mute); font-size:13px; padding:20px 0;}
+  .photo-box .hint b{color:var(--accent); display:block; font-size:22px; margin-bottom:4px; font-weight:400;}
+
+  .submit-bar{ position:fixed; bottom:0; left:0; right:0; display:flex; justify-content:center; padding:14px 20px calc(14px + env(safe-area-inset-bottom)); background:linear-gradient(to top, var(--bg) 60%, transparent); z-index:30; pointer-events:none;}
+  .submit-bar .btn{max-width:420px; pointer-events:auto; box-shadow:0 8px 24px rgba(242,153,74,0.25);}
+
+  .status-msg{ text-align:center; font-size:12.5px; color:var(--teal); font-family:var(--font-mono); margin-top:10px; min-height:16px;}
+
+  .log-toolbar{display:flex; gap:8px; margin-bottom:14px;}
+  .log-toolbar input{flex:1;}
+  .empty{ text-align:center; color:var(--text-mute); padding:60px 20px; font-size:14px;}
+  .stub{ position:relative; background:var(--panel); border:1px solid var(--line); border-radius:14px; margin-bottom:16px; overflow:hidden;}
+  .stub::before, .stub::after{ content:''; position:absolute; top:38px; width:16px; height:16px; border-radius:50%; background:var(--bg);}
+  .stub::before{left:-8px;}
+  .stub::after{right:-8px;}
+  .stub-top{ display:flex; align-items:center; justify-content:space-between; padding:12px 16px 10px; border-bottom:1px dashed var(--line);}
+  .stub-name{font-weight:700; font-size:14.5px;}
+  .stub-region{font-size:11px; color:var(--accent); font-family:var(--font-mono); margin-left:6px;}
+  .stub-time{font-family:var(--font-mono); font-size:11.5px; color:var(--text-mute);}
+  .stub-photo img{width:100%; display:block; max-height:260px; object-fit:cover;}
+  .stub-body{padding:14px 16px 16px;}
+  .stub-site{ display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono); font-size:12px; color:var(--accent); margin-bottom:8px;}
+  .stub-note{font-size:14px; line-height:1.6; color:var(--text); white-space:pre-wrap;}
+  .stub-map{font-size:11.5px; color:var(--teal); text-decoration:none; font-family:var(--font-mono); display:inline-block; margin-top:8px;}
+
+  .loading{text-align:center; padding:40px; color:var(--text-mute); font-family:var(--font-mono); font-size:13px;}
+
+  .modal-bg{ position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; display:none; align-items:center; justify-content:center; padding:24px;}
+  .modal-bg.active{display:flex;}
+  .modal{ background:var(--panel-2); border:1px solid var(--line); border-radius:14px; padding:20px; width:100%; max-width:340px;}
+  .modal h3{margin:0 0 14px; font-family:var(--font-display); font-size:16px;}
+  .modal .btn{margin-top:10px;}
+  .note{font-size:11.5px; color:var(--text-mute); margin-top:10px; line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand-row">
+      <div class="brand"><span class="dot"></span>AIR SPACE 工作回報系統</div>
+      <div class="whoami" id="whoamiBtn"><span id="whoamiLabel">設定身份</span></div>
+    </div>
+    <div class="tabs">
+      <div class="tab active" data-tab="new">新增回報</div>
+      <div class="tab" data-tab="log">回報紀錄</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="view active" id="view-new">
+      <div class="sched-card" id="schedCard"></div>
+
+      <div class="field">
+        <label>站點 / 地點</label>
+        <select id="fSite"><option value="">請選擇</option></select>
+        <input type="text" id="fSiteOther" placeholder="輸入站點名稱" style="display:none; margin-top:8px;">
+        <div class="gps-row">
+          <button class="btn small ghost" id="gpsBtn" type="button">📍 附加 GPS 定位</button>
+          <span id="gpsStatus"></span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>照片</label>
+        <div class="photo-box" id="photoBox">
+          <div class="hint" id="photoHint"><b>+</b>拍照 / 選擇照片</div>
+          <img id="photoPreview" style="display:none;">
+        </div>
+        <input type="file" accept="image/*" capture="environment" id="fPhoto" style="display:none;">
+      </div>
+
+      <div class="field">
+        <label>回報內容</label>
+        <textarea id="fNote" placeholder="說明工作內容、狀況..."></textarea>
+      </div>
+
+      <div class="status-msg" id="submitStatus"></div>
+    </section>
+
+    <section class="view" id="view-log">
+      <div class="log-toolbar">
+        <input type="text" id="logSearch" placeholder="搜尋姓名 / 區域 / 站點 / 內容">
+        <button class="btn small ghost" id="refreshBtn" type="button">重新整理</button>
+      </div>
+      <div id="logList"><div class="loading">載入中...</div></div>
+    </section>
+  </main>
+
+  <div class="submit-bar" id="submitBarWrap">
+    <button class="btn accent" id="submitBtn">送出回報</button>
+  </div>
+
+  <div class="modal-bg" id="nameModalBg">
+    <div class="modal">
+      <h3>設定你的身份</h3>
+      <div class="field" style="margin-bottom:12px;">
+        <label>區域</label>
+        <select id="modalRegion"><option value="">請選擇</option></select>
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>姓名</label>
+        <select id="modalDriver"><option value="">請先選區域</option></select>
+      </div>
+      <button class="btn accent" id="modalNameSave" style="margin-top:16px;">儲存</button>
+      <div class="note">身份設定只存在你自己的手機瀏覽器裡，方便下次不用重選。回報內容則是共用的，同事與主管都看得到。</div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="imgModalBg">
+    <div style="max-width:92vw; max-height:86vh;">
+      <img id="imgModalSrc" style="max-width:92vw; max-height:86vh; border-radius:10px; display:block;">
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  let currentPhoto = null;
+  let gpsData = null;
+
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQQJ9AhaaKEFkzBpn9JSY7-sYsvOQu0e-U-hz1ssnoZFMjjMxNHc0lpdJpdj9wXO_c/exec';
+
+  // ==== full driver dataset, derived from 各區司機排程時間_0811.xlsx ====
+  const DRIVERS = [
+    { region:'高雄區', name:'朱家宏', hours:'09:00-18:00', route:'岡山秀泰➔左營新光➔漢神➔岡山',
+      sites:['岡山秀泰','左營新光','漢神','岡山門市'],
+      weekly:{
+        1:{summary:'09:00 岡山秀泰 → 11:40 左營新光 → 15:00 漢神 → 17:30 岡山門市(歸倉/包貨) → 18:00 下班', tasks:['撤貨抓貨(只抓倉庫)','區內勻貨','集貨寄貨']},
+        2:{summary:'09:00 岡山秀泰 → 11:40 左營新光 → 15:00 漢神 → 17:30 岡山門市(歸倉/包貨) → 18:00 下班', tasks:['勻貨歸倉','撤貨抓貨(只抓倉庫)','跨區勻貨','集貨寄貨']},
+        3:{summary:'09:00 岡山秀泰 → 11:40 左營新光 → 15:00 漢神 → 17:30 岡山門市(歸倉/包貨) → 18:00 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','撤貨抓貨(只抓倉庫)','新品入倉','新品整理','集貨寄貨']},
+        4:{summary:'09:00 岡山秀泰 → 11:40 左營新光 → 15:00 漢神 → 17:30 岡山門市(歸倉/包貨) → 18:00 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','集貨寄貨']},
+        5:{summary:'09:00 岡山秀泰 → 11:40 左營新光 → 15:00 漢神 → 17:30 岡山門市(歸倉/包貨) → 18:00 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','集貨寄貨']}
+      }
+    },
+    { region:'高雄區', name:'李尚鴻', hours:'07:00-16:00', route:'夢時代➔岡山秀泰➔三多➔夢時代',
+      sites:['夢時代','岡山秀泰','三多'],
+      weekly:{
+        1:{summary:'07:00 夢時代(收貨) → 09:00 岡山秀泰(交接) → 10:30 三多(交接) → 12:30 夢時代(門市作業) → 15:00 寄貨 → 16:00 下班', tasks:['撤貨抓貨(只抓倉庫)','區內勻貨','集貨寄貨']},
+        2:{summary:'07:00 夢時代(收貨) → 09:00 岡山秀泰(交接) → 10:30 三多(交接) → 12:30 夢時代(門市作業) → 15:00 寄貨 → 16:00 下班', tasks:['勻貨歸倉','撤貨抓貨(只抓倉庫)','跨區勻貨','集貨寄貨']},
+        3:{summary:'07:00 夢時代(收貨) → 09:00 岡山秀泰(交接) → 10:30 三多(交接) → 12:30 夢時代(門市作業) → 15:00 寄貨 → 16:00 下班', tasks:['補貨歸倉','追加歸倉','新品入倉','新品整理','集貨寄貨']},
+        4:{summary:'07:00 夢時代(收貨) → 09:00 岡山秀泰(交接) → 10:30 三多(交接) → 12:30 夢時代(門市作業) → 15:00 寄貨 → 16:00 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','集貨寄貨']},
+        5:{summary:'07:00 夢時代(收貨) → 09:00 岡山秀泰(交接) → 10:30 三多(交接) → 12:30 夢時代(門市作業) → 15:00 寄貨 → 16:00 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','集貨寄貨']}
+      }
+    },
+    { region:'台南區', name:'陳琮斌', hours:'12:00-21:00', route:'南紡CA➔南紡OL➔新台南',
+      sites:['南紡CA','南紡OL','新台南'],
+      weekly:{
+        1:{summary:'12:00 南紡CA → 14:00 南紡OL → 16:30 新台南 → 18:00 休息 → 19:00 新台南 → 21:00 下班', tasks:['撤貨抓貨(只抓倉庫)','區內勻貨','集貨寄貨']},
+        2:{summary:'12:00 南紡CA → 14:00 南紡OL → 16:30 新台南 → 18:00 休息 → 19:00 新台南 → 21:00 下班', tasks:['勻貨歸倉','撤貨抓貨(只抓倉庫)','跨區勻貨','集貨寄貨']},
+        3:{summary:'12:00 南紡CA → 14:00 南紡OL → 16:30 新台南 → 18:00 休息 → 19:00 新台南 → 21:00 下班', tasks:['勻貨歸倉','新品入倉','新品整理','集貨寄貨']},
+        4:{summary:'12:00 南紡CA → 14:00 南紡OL → 16:30 新台南 → 18:00 休息 → 19:00 新台南 → 21:00 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','集貨寄貨']},
+        5:{summary:'12:00 南紡CA → 14:00 南紡OL → 16:30 新台南 → 18:00 休息 → 19:00 新台南 → 21:00 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','集貨寄貨']}
+      }
+    },
+    { region:'嘉義區', name:'侯昱廷', hours:'09:00-18:00', route:'嘉義秀泰➔文化➔南紡➔新台南➔文化➔秀泰➔84倉➔文化',
+      sites:['嘉義秀泰','嘉義文化','南紡','新台南','84倉','秀泰大碼'],
+      weekly:{
+        1:{summary:'09:00 嘉義秀泰 → 09:40 嘉義文化 → 11:20 南紡 → 12:30 新台南 → 13:00 休息 → 15:00 嘉義文化 → 16:00 嘉義秀泰(寄貨/門市) → 17:00 嘉義文化 → 18:00 下班', tasks:['撤貨抓貨(只抓倉庫)','區內勻貨','集貨寄貨']},
+        2:{summary:'09:00 嘉義秀泰(執行當周撤貨、追加進貨歸倉) → 12:00 執行跨區轉調 → 13:00 休息 → 14:00 秀泰大碼(寄貨包貨) → 14:30 嘉義文化(執行當周撤貨) → 15:45 執行跨區轉調 → 17:00 處理追加進貨歸倉 → 18:00 下班', tasks:['執行當周撤貨','追加進貨歸倉','執行跨區轉調','寄貨包貨']},
+        3:{summary:'09:00 嘉義秀泰 → 09:40 嘉義文化 → 11:20 南紡 → 12:30 新台南 → 13:00 休息 → 15:00 嘉義文化 → 16:00 嘉義秀泰(寄貨/門市) → 17:00 嘉義文化 → 18:00 下班', tasks:['勻貨歸倉','新品入倉','新品整理','集貨寄貨']},
+        4:{summary:'09:00 嘉義秀泰 → 09:40 嘉義文化 → 11:20 南紡 → 12:30 新台南 → 13:00 休息 → 15:00 嘉義文化 → 16:00 嘉義秀泰(寄貨/門市) → 17:00 嘉義文化 → 18:00 下班', tasks:['勻貨歸倉','追加歸倉','集貨寄貨']},
+        5:{summary:'09:00 嘉義秀泰 → 09:40 嘉義文化 → 11:20 南紡 → 12:30 新台南 → 13:00 休息 → 15:00 嘉義文化 → 16:00 嘉義秀泰(寄貨/門市) → 17:00 嘉義文化 → 18:00 下班', tasks:['勻貨歸倉','集貨寄貨']}
+      }
+    },
+    { region:'桃園區', name:'陳兆晏', hours:'11:00-20:00', route:'統領➔大江➔巨城➔台茂➔統領(按每日排程變動)',
+      sites:['大江','巨城','台茂','統領'],
+      weekly:{
+        1:{summary:'11:00 大江(接貨/支援門市) → 18:20 台茂 → 19:15 統領 → 20:00 下班', tasks:['補貨歸倉','追加歸倉','撤貨抓貨(只抓倉庫)','區內勻貨','集貨寄貨']},
+        2:{summary:'11:00 大江 → 12:50 巨城 → 15:00 台茂(支援門市,休息) → 19:00 統領(新品送貨) → 20:00 下班', tasks:['撤貨抓貨(只抓倉庫)','跨區勻貨']},
+        3:{summary:'11:00 大江 → 12:30 台茂 → 15:30 巨城 → 16:30 統領(支援門市) → 20:00 下班', tasks:['勻貨歸倉','撤貨抓貨(只抓倉庫)','新品入倉','新品整理','集貨寄貨']},
+        4:{summary:'11:00 大江(接新品,支援門市全天) → 20:00 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','集貨寄貨']},
+        5:{summary:'11:00 大江 → 12:20 巨城 → 15:30 台茂 → 16:50 統領(支援門市) → 20:00 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','新品入倉','新品整理','集貨寄貨']}
+      }
+    },
+    { region:'台中區', name:'王昱文', hours:'10:30-19:30', route:'一中OL➔一中➔文心➔遠百➔新光➔一中OL',
+      sites:['一中OL','一中','文心','遠百','新光'],
+      weekly:{
+        1:{summary:'10:30 一中大碼/OL → 11:20 文心 → 11:50 遠百 → 12:05 新光 → 13:00 一中OL(寄貨) → 14:00 休息 → 15:00 一中(門市作業) → 16:20 新光/遠百(支援) → 19:30 下班', tasks:['撤貨抓貨(只抓倉庫)','區內勻貨','跨區勻貨','整倉(補貨歸倉)','集貨寄貨']},
+        2:{summary:'10:30 一中大碼/OL → 11:20 文心 → 11:50 遠百 → 12:05 新光 → 13:00 一中OL(寄貨) → 14:00 休息 → 15:00 一中(門市作業) → 16:20 新光/遠百(支援) → 19:30 下班', tasks:['追加歸倉','區內勻貨','(追加/勻貨)歸倉','跨區勻貨','集貨寄貨']},
+        3:{summary:'10:30 一中大碼/OL → 11:20 文心 → 11:50 遠百 → 12:05 新光 → 13:00 一中OL(寄貨) → 14:00 休息 → 15:00 一中(門市作業) → 16:20 新光/遠百(支援) → 19:30 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','(追加/勻貨)歸倉','整倉(補貨歸倉)','集貨寄貨']},
+        4:{summary:'10:30 一中大碼/OL → 11:20 文心 → 11:50 遠百 → 12:05 新光 → 13:00 一中OL(寄貨) → 14:00 休息 → 15:00 一中(門市作業) → 16:20 新光/遠百(支援) → 19:30 下班', tasks:['補貨歸倉','追加歸倉','區內勻貨','新品入倉','新品整理','(追加/勻貨)歸倉','集貨寄貨']},
+        5:{summary:'10:30 一中大碼/OL → 11:20 文心 → 11:50 遠百 → 12:05 新光 → 13:00 一中OL(寄貨) → 14:00 休息 → 15:00 一中(門市作業) → 16:20 新光/遠百(支援) → 19:30 下班', tasks:['勻貨歸倉','追加歸倉','(追加/勻貨)歸倉','集貨寄貨','濾網清潔']}
+      }
+    },
+    { region:'台中區', name:'陳易成', hours:'10:30-19:30', route:'一中OL➔一中➔漢神➔逢甲➔新光➔一中OL',
+      sites:['一中OL','一中','漢神洲際','逢甲','新光'],
+      weekly:{
+        1:{summary:'10:30 一中/OL → 11:20 漢神 → 12:00 逢甲 → 12:20 新光 → 13:00 休息 → 14:00 一中門市(支援) → 16:20 漢神洲際(支援) → 19:30 下班', tasks:['撤貨抓貨(只抓倉庫)','區內勻貨','集貨寄貨']},
+        2:{summary:'10:30 一中/OL → 11:20 漢神 → 12:00 逢甲 → 12:20 新光 → 13:00 休息 → 14:00 一中門市(支援) → 16:20 漢神洲際(支援) → 19:30 下班', tasks:['追加歸倉','跨區勻貨','集貨寄貨']},
+        3:{summary:'10:30 一中/OL → 11:20 漢神 → 12:00 逢甲 → 12:20 新光 → 13:00 休息 → 14:00 一中門市(支援) → 16:20 漢神洲際(支援) → 19:30 下班', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','新品入倉','新品整理','集貨寄貨']},
+        4:{summary:'10:30 一中/OL → 11:20 漢神 → 12:00 逢甲 → 12:20 新光 → 13:00 休息 → 14:00 一中門市(支援) → 16:20 漢神洲際(支援) → 19:30 下班', tasks:['補貨歸倉','追加歸倉','集貨寄貨']},
+        5:{summary:'10:30 一中/OL → 11:20 漢神 → 12:00 逢甲 → 12:20 新光 → 13:00 休息 → 14:00 一中門市(支援) → 16:20 漢神洲際(支援) → 19:30 下班', tasks:['勻貨歸倉','追加歸倉','集貨寄貨']}
+      }
+    },
+    { region:'台北區', name:'賴昱誠', hours:'依當日排程', route:'新莊宏匯 / 西門區',
+      sites:['新莊宏匯','西門二店','西門大碼','西門IP','延平倉'],
+      weekly:{
+        1:{summary:'10:30-19:30 新莊宏匯｜追加整理跟入倉+撤貨+區內抓貨', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','撤貨抓貨(只抓倉庫)','區內勻貨']},
+        2:{summary:'10:30-19:30 西門｜撤貨+跨區內抓貨；西門大碼｜撤貨+跨區內抓貨', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','撤貨抓貨(只抓倉庫)','跨區勻貨','濾網清潔']},
+        3:{summary:'09:30-18:30 新莊宏匯｜整倉+清出新品區、新品整理+入倉、支援EC', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','撤貨抓貨(只抓倉庫)','新品入倉','新品整理','濾網清潔']},
+        4:{summary:'09:30-18:30 西門｜整倉+清出新品區、新品整理+入倉；西門IP｜整倉+清出新品區、新品整理+入倉', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','新品入倉','新品整理']},
+        5:{summary:'09:30-18:30 延平倉｜駐倉作業（或有追加也可至門市處理）', tasks:['勻貨歸倉','補貨歸倉','追加歸倉']}
+      }
+    },
+    { region:'台北區', name:'朱銘澤', hours:'依當日排程', route:'大安 / 敦南區',
+      sites:['大安','敦南AS','敦南OL','敦南大碼','延平倉'],
+      weekly:{
+        1:{summary:'10:30-19:30 大安(有追加用追加,無則撤貨) → 區內抓貨 → 敦南AS/OL(區內抓貨)', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','撤貨抓貨(只抓倉庫)','區內勻貨']},
+        2:{summary:'10:30-19:30 大安(有追加用追加,無則撤貨) → 跨區抓貨 → 敦南AS/OL(跨區抓貨)', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','撤貨抓貨(只抓倉庫)','跨區勻貨','濾網清潔']},
+        3:{summary:'09:30-18:30 大安(新品整理+入倉) → 敦南AS/OL/大碼(撤貨)', tasks:['勻貨歸倉','補貨歸倉','追加歸倉','撤貨抓貨(只抓倉庫)','新品入倉','新品整理','濾網清潔']},
+        4:{summary:'09:30-18:30 敦南AS+OL(新品整理+入倉) → 下午支援需求門市(EC支援/整倉/歸貨/濾網清潔)', tasks:['勻貨歸倉','補貨歸倉','追加歸倉']},
+        5:{summary:'09:30-18:30 延平倉駐倉作業（或有追加至門市處理）', tasks:['勻貨歸倉','補貨歸倉','追加歸倉']}
+      }
+    },
+    { region:'台北區', name:'路線3(尚未命名)', hours:'09:00-18:00', route:'新莊宏匯➔西門區',
+      sites:['新莊宏匯','西門區'],
+      weekly:{
+        1:{summary:'尚無詳細排程資料，請等主管更新後再參考', tasks:[]},
+        2:{summary:'尚無詳細排程資料，請等主管更新後再參考', tasks:[]},
+        3:{summary:'尚無詳細排程資料，請等主管更新後再參考', tasks:[]},
+        4:{summary:'尚無詳細排程資料，請等主管更新後再參考', tasks:[]},
+        5:{summary:'尚無詳細排程資料，請等主管更新後再參考', tasks:[]}
+      }
+    }
+  ];
+
+  function getIdentity(){
+    try{ const v = localStorage.getItem('identity'); return v ? JSON.parse(v) : null; }catch(e){ return null; }
+  }
+  function setIdentity(region, name){
+    try{ localStorage.setItem('identity', JSON.stringify({region, name})); }catch(e){}
+  }
+  function findDriver(region, name){
+    return DRIVERS.find(d=>d.region===region && d.name===name);
+  }
+
+  function populateRegionSelect(){
+    const regions = [...new Set(DRIVERS.map(d=>d.region))];
+    $('modalRegion').innerHTML = '<option value="">請選擇</option>' + regions.map(r=>`<option value="${r}">${r}</option>`).join('');
+  }
+  function populateDriverSelect(region){
+    const list = DRIVERS.filter(d=>d.region===region);
+    $('modalDriver').innerHTML = list.length
+      ? '<option value="">請選擇</option>' + list.map(d=>`<option value="${d.name}">${d.name}</option>`).join('')
+      : '<option value="">請先選區域</option>';
+  }
+  $('modalRegion').addEventListener('change', ()=> populateDriverSelect($('modalRegion').value));
+
+  function applyIdentityToUI(identity){
+    if(!identity){ $('whoamiLabel').textContent = '設定身份'; renderSchedule(null); populateSiteSelect(null); return; }
+    $('whoamiLabel').textContent = `${identity.name}`;
+    const driver = findDriver(identity.region, identity.name);
+    renderSchedule(driver);
+    populateSiteSelect(driver);
+  }
+
+  function populateSiteSelect(driver){
+    const sel = $('fSite');
+    if(!driver){ sel.innerHTML = '<option value="">請先設定身份</option>'; return; }
+    sel.innerHTML = '<option value="">請選擇</option>' + driver.sites.map(s=>`<option value="${s}">${s}</option>`).join('') + '<option value="__other__">其他（手動輸入）</option>';
+  }
+
+  function renderSchedule(driver){
+    const card = $('schedCard');
+    if(!driver){
+      card.innerHTML = `<div class="sched-head"><span class="sched-title">今日排程</span></div><div class="sched-empty">請先點右上角設定你的身份</div>`;
+      return;
+    }
+    const dayNames = ['','週一','週二','週三','週四','週五'];
+    const day = new Date().getDay();
+    const today = driver.weekly[day];
+    if(!today){
+      card.innerHTML = `<div class="sched-head"><span class="sched-title">今日排程</span><span class="sched-day">${driver.region} · ${driver.name}</span></div><div class="sched-empty">今天沒有固定排程</div>`;
+      return;
+    }
+    const tagsHtml = today.tasks.map(t=>`<span class="sched-tag">${escapeHtml(t)}</span>`).join('');
+    card.innerHTML = `
+      <div class="sched-head"><span class="sched-title">今日排程 · ${dayNames[day]||''}</span><span class="sched-day">${driver.region} · ${driver.name}</span></div>
+      <div class="sched-summary">${escapeHtml(today.summary)}</div>
+      ${tagsHtml ? `<div class="sched-tasks">${tagsHtml}</div>` : ''}
+      <button class="btn small accent" id="schedUseBtn" type="button">帶入今日工作項目</button>
+    `;
+    const btn = $('schedUseBtn');
+    if(btn){
+      btn.addEventListener('click', ()=>{
+        const checklist = today.tasks.length ? today.tasks.map(t=>`☐ ${t}`).join('\n') : '（今日尚無固定工作項目，請自行描述）';
+        $('fNote').value = checklist;
+        window.scrollTo({top:0, behavior:'smooth'});
+      });
+    }
+  }
+
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      $('view-'+t.dataset.tab).classList.add('active');
+      $('submitBarWrap').style.display = t.dataset.tab==='new' ? 'flex':'none';
+      if(t.dataset.tab==='log') loadLog();
+    });
+  });
+
+  $('fSite').addEventListener('change', ()=>{ $('fSiteOther').style.display = $('fSite').value==='__other__' ? 'block':'none'; });
+
+  $('whoamiBtn').addEventListener('click', ()=>{
+    populateRegionSelect();
+    const identity = getIdentity();
+    if(identity){
+      $('modalRegion').value = identity.region;
+      populateDriverSelect(identity.region);
+      $('modalDriver').value = identity.name;
+    }else{
+      populateDriverSelect('');
+    }
+    $('nameModalBg').classList.add('active');
+  });
+  $('modalNameSave').addEventListener('click', ()=>{
+    const region = $('modalRegion').value;
+    const name = $('modalDriver').value;
+    if(!region || !name) return;
+    setIdentity(region, name);
+    applyIdentityToUI({region, name});
+    $('nameModalBg').classList.remove('active');
+  });
+  $('nameModalBg').addEventListener('click', (e)=>{ if(e.target===$('nameModalBg')) $('nameModalBg').classList.remove('active'); });
+
+  function getSelectedSite(){ return $('fSite').value==='__other__' ? $('fSiteOther').value.trim() : $('fSite').value; }
+
+  $('gpsBtn').addEventListener('click', ()=>{
+    if(!navigator.geolocation){ $('gpsStatus').textContent='此裝置不支援定位'; return; }
+    $('gpsStatus').textContent = '定位中...';
+    navigator.geolocation.getCurrentPosition(
+      (pos)=>{ gpsData = { lat: pos.coords.latitude, lng: pos.coords.longitude }; $('gpsStatus').textContent = `已附加 (${gpsData.lat.toFixed(4)}, ${gpsData.lng.toFixed(4)})`; },
+      ()=>{ $('gpsStatus').textContent = '定位失敗，可略過'; },
+      { timeout:10000 }
+    );
+  });
+
+  $('photoBox').addEventListener('click', ()=> $('fPhoto').click());
+  $('fPhoto').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const maxW = 900;
+        const scale = Math.min(1, maxW/img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width*scale; canvas.height = img.height*scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        currentPhoto = canvas.toDataURL('image/jpeg', 0.6);
+        $('photoPreview').src = currentPhoto; $('photoPreview').style.display = 'block'; $('photoHint').style.display = 'none';
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $('submitBtn').addEventListener('click', async ()=>{
+    const identity = getIdentity();
+    if(!identity){ setStatus('請先點右上角設定你的身份', true); return; }
+    const site = getSelectedSite();
+    const note = $('fNote').value.trim();
+    if(!site){ setStatus('請選擇或輸入站點', true); return; }
+    if(!note && !currentPhoto){ setStatus('請至少填寫內容或附上照片', true); return; }
+
+    $('submitBtn').disabled = true; $('submitBtn').textContent = '送出中...'; setStatus('', false);
+
+    const id = Date.now()+'-'+Math.random().toString(36).slice(2,8);
+    const entry = { id, region: identity.region, name: identity.name, site, note, photo: currentPhoto, gps: gpsData, ts: new Date().toISOString() };
+
+    try{
+      const res = await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify(entry) });
+      const json = await res.json();
+      if(!json || !json.success) throw new Error('儲存失敗');
+      setStatus('✓ 已送出回報', false);
+      $('fNote').value=''; currentPhoto=null; gpsData=null;
+      $('photoPreview').style.display='none'; $('photoPreview').src=''; $('photoHint').style.display='block'; $('gpsStatus').textContent='';
+    }catch(err){
+      setStatus('送出失敗，請檢查網路連線後再試一次', true);
+      console.error(err);
+    }finally{
+      $('submitBtn').disabled=false; $('submitBtn').textContent='送出回報';
+    }
+  });
+  function setStatus(msg, isErr){ $('submitStatus').textContent = msg; $('submitStatus').style.color = isErr ? 'var(--danger)' : 'var(--teal)'; }
+
+  let allEntries = [];
+  async function loadLog(){
+    $('logList').innerHTML = '<div class="loading">載入中...</div>';
+    try{
+      const res = await fetch(APPS_SCRIPT_URL);
+      const data = await res.json();
+      const entries = (Array.isArray(data) ? data : []).filter(e=>e && e.id);
+      entries.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
+      allEntries = entries;
+      renderLog(entries);
+    }catch(e){
+      $('logList').innerHTML = '<div class="empty">載入失敗，請確認網路連線，或點「重新整理」再試一次</div>';
+      console.error(e);
+    }
+  }
+  function renderLog(entries){
+    if(entries.length===0){ $('logList').innerHTML = '<div class="empty">還沒有任何回報紀錄</div>'; return; }
+    $('logList').innerHTML = entries.map(e=>{
+      const d = new Date(e.ts);
+      const timeStr = isNaN(d) ? String(e.ts) : d.toLocaleString('zh-TW', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+      const mapLink = e.gps ? `<a class="stub-map" href="https://maps.google.com/?q=${e.gps}" target="_blank" rel="noopener">在地圖上開啟 →</a>` : '';
+      const photoHtml = e.photo ? `<div class="stub-photo"><img src="${e.photo}" data-full="${e.photo}" class="stub-img"></div>` : '';
+      const siteHtml = e.site ? `<div class="stub-site">📍 ${escapeHtml(e.site)}</div><br>` : '';
+      const regionHtml = e.region ? `<span class="stub-region">${escapeHtml(e.region)}</span>` : '';
+      return `<div class="stub">
+        <div class="stub-top"><div class="stub-name">${escapeHtml(e.name)}${regionHtml}</div><div class="stub-time">${timeStr}</div></div>
+        ${photoHtml}
+        <div class="stub-body">${siteHtml}<div class="stub-note">${escapeHtml(e.note||'（無文字內容）')}</div>${mapLink}</div>
+      </div>`;
+    }).join('');
+    document.querySelectorAll('.stub-img').forEach(img=>{
+      img.addEventListener('click', ()=>{ $('imgModalSrc').src = img.dataset.full; $('imgModalBg').classList.add('active'); });
+    });
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  $('imgModalBg').addEventListener('click', ()=> $('imgModalBg').classList.remove('active'));
+  $('refreshBtn').addEventListener('click', loadLog);
+  $('logSearch').addEventListener('input', (e)=>{
+    const q = e.target.value.trim().toLowerCase();
+    if(!q){ renderLog(allEntries); return; }
+    renderLog(allEntries.filter(en=> (en.name||'').toLowerCase().includes(q) || (en.region||'').toLowerCase().includes(q) || (en.site||'').toLowerCase().includes(q) || (en.note||'').toLowerCase().includes(q)));
+  });
+
+  // init
+  populateRegionSelect();
+  const identity = getIdentity();
+  if(identity){ applyIdentityToUI(identity); }
+  else{ renderSchedule(null); populateSiteSelect(null); }
+})();
+</script>
+</body>
+</html>
