@@ -182,7 +182,7 @@
     <div class="topbar small">
       <button class="backbtn" data-back="home">←</button>
       <div class="who"><div class="n" id="drvName"></div><div class="m" id="drvMeta"></div></div>
-      <span class="badge synced">已同步</span>
+      <span class="badge synced" id="syncBadge">同步中...</span>
     </div>
     <div class="progresswrap">
       <div class="prow">
@@ -246,7 +246,7 @@
 (function(){
   const $ = id => document.getElementById(id);
   const WEEKDAY_NAMES = ['日','一','二','三','四','五','六'];
-  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQQJ9AhaaKEFkzBpn9JSY7-sYsvOQu0e-U-hz1ssnoZFMjjMxNHc0lpdJpdj9wXO_c/exec';
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMXk_qG9JwL6MrajNpFDbHk79mx6h4VZ_OEY8OI318aB2HIw1LA-WXlE8ZuX59BjfK/exec';
   const LATE_TOLERANCE_MIN = 10;
 
   // ============ DRIVER DATA ============
@@ -416,10 +416,12 @@
     $('drvName').textContent = currentDriver.name;
     $('drvMeta').textContent = `${currentDriver.region}${currentDriver.code} · ${currentDriver.name} · ${todayDateStr()}`;
     showView('view-driver');
+    setSyncBadge('saving');
     $('stopList').innerHTML = '<div class="loading">載入中...</div>';
     await refreshCheckins();
     loadCurrentState();
     renderDriverView();
+    setSyncBadge('ok');
   }
 
   async function refreshCheckins(){
@@ -443,15 +445,27 @@
     currentState = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})) };
   }
 
+  function setSyncBadge(state){
+    const b = $('syncBadge');
+    if(!b) return;
+    if(state==='ok'){ b.textContent='已同步'; b.style.background='rgba(63,191,127,0.18)'; b.style.color='var(--green)'; }
+    else if(state==='err'){ b.textContent='同步失敗'; b.style.background='rgba(224,101,79,0.18)'; b.style.color='var(--red)'; }
+    else{ b.textContent='同步中...'; b.style.background='rgba(154,156,163,0.18)'; b.style.color='var(--text-mute)'; }
+  }
+
   async function saveCurrentState(){
+    setSyncBadge('saving');
     const key = driverKey(currentDriver)+'|'+todayDateStr();
     const payload = { action:'checkin', key, region:currentDriver.region, name:currentDriver.name, date:todayDateStr(), state: JSON.stringify(currentState) };
     try{
-      await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+      const res = await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+      const json = await res.json();
+      if(!json || !json.success) throw new Error('save failed');
       const idx = allCheckins.findIndex(r=>r.key===key);
       if(idx>=0) allCheckins[idx].state = payload.state; else allCheckins.push({key, region:payload.region, name:payload.name, date:payload.date, state:payload.state});
+      setSyncBadge('ok');
       return true;
-    }catch(e){ console.error(e); return false; }
+    }catch(e){ console.error(e); setSyncBadge('err'); return false; }
   }
 
   function computeProgress(driver, weekday, state){
