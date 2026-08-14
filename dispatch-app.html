@@ -189,6 +189,9 @@
   .wflag{ display:inline-block; min-width:20px; padding:2px 6px; border-radius:10px; font-family:var(--font-mono); font-weight:700; }
   .wflag.warn{ background:rgba(217,96,75,0.16); color:var(--red); }
   .weekfoot{ margin:0 20px 20px; font-size:11.5px; color:var(--text-mute); line-height:1.6; }
+  .reasontable .reasonlabel{ text-align:left; font-weight:600; font-size:12px; }
+  .reasontable .reasondist{ text-align:left; font-size:11px; color:var(--text-mute); white-space:normal; max-width:200px; }
+  .barfg.warnbar{ background:var(--accent-2); }
   .placeholder{ margin:40px 20px; text-align:center; color:var(--text-mute); font-size:13.5px; line-height:1.8; }
   .appfooter{ margin:30px 20px 10px; padding-top:14px; border-top:1px solid var(--line); text-align:center; font-size:11px; color:var(--text-mute); font-family:var(--font-mono); line-height:1.8; }
   .clearlocal{ color:var(--accent); text-decoration:underline; cursor:pointer; }
@@ -688,15 +691,16 @@
   }
 
   const NA_REASONS = [
-    {code:'3-1', label:'現場沒有這項工作可執行'},
-    {code:'3-2', label:'門市已做完'},
-    {code:'3-3', label:'商品貨品未到現場'},
-    {code:'3-4', label:'上一站延誤'},
-    {code:'3-5', label:'時間不夠'},
-    {code:'3-6', label:'系統設備與網路問題'},
-    {code:'3-7', label:'及時調整業務項目'},
-    {code:'3-8', label:'其他'}
+    {code:'3-1', label:'現場沒有這項工作可執行', category:'不適用'},
+    {code:'3-2', label:'門市已做完', category:'門市因素'},
+    {code:'3-3', label:'商品貨品未到現場', category:'門市因素'},
+    {code:'3-4', label:'上一站延誤', category:'排程因素'},
+    {code:'3-5', label:'時間不夠', category:'排程因素'},
+    {code:'3-6', label:'系統設備與網路問題', category:'系統因素'},
+    {code:'3-7', label:'及時調整業務項目', category:'調度因素'},
+    {code:'3-8', label:'其他', category:'其他'}
   ];
+  const NA_REASON_MAP = {}; NA_REASONS.forEach(r=> NA_REASON_MAP[r.code]=r);
 
   function renderTaskRows(stop, st, weekday){
     const tasks = getStopTasks(currentDriver, stop, weekday);
@@ -978,12 +982,82 @@
     rows.sort((a,b)=> b.weekPct - a.weekPct);
     return rows;
   }
+  function buildReasonAnalysis(weekDates){
+    const counts = {}; // code ('' for unfilled) -> {count, drivers:{name:count}}
+    let total = 0;
+    DRIVERS.forEach(d=>{
+      if(d.noSchedule) return;
+      weekDates.forEach((dateStr, idx)=>{
+        const weekday = idx+1;
+        const stops = getStopsFor(d, weekday);
+        if(stops.length===0) return;
+        const key = driverKey(d)+'|'+dateStr;
+        const rec = allCheckins.find(r=>r.key===key);
+        if(!rec || !rec.state) return;
+        let state; try{ state = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; }catch(e){ return; }
+        if(!state || !state.stops) return;
+        stops.forEach((stop,i)=>{
+          const st = state.stops[i] || {};
+          const tasks = getStopTasks(d, stop, weekday).filter(t=>t.active);
+          tasks.forEach(t=>{
+            const rec2 = st.tasks && st.tasks[t.name];
+            if(rec2 && rec2.status==='na'){
+              const code = rec2.reason || '';
+              if(!counts[code]) counts[code] = {count:0, drivers:{}};
+              counts[code].count++;
+              counts[code].drivers[d.name] = (counts[code].drivers[d.name]||0)+1;
+              total++;
+            }
+          });
+        });
+      });
+    });
+    const rows = Object.keys(counts).map(code=>{
+      const meta = NA_REASON_MAP[code];
+      const label = meta ? meta.label : '（未填原因）';
+      const category = meta ? meta.category : '—';
+      const distribution = Object.keys(counts[code].drivers).map(n=>`${n}${counts[code].drivers[n]}`).join('、');
+      return { code, label, category, count:counts[code].count,
+        pct: total ? Math.round(counts[code].count/total*1000)/10 : 0, distribution };
+    }).sort((a,b)=> b.count-a.count);
+    return { rows, total };
+  }
+
   let liveDrill = null; // null | 'completion' | 'online' | 'offline' | 'anomaly'
 
   function renderAdmin(){
-    if(adminTab==='reason' || adminTab==='export' || adminTab==='people'){
-      const labels = {reason:'原因分析', export:'匯出', people:'排程與人員'};
+    if(adminTab==='export' || adminTab==='people'){
+      const labels = {export:'匯出', people:'排程與人員'};
       $('adminBody').innerHTML = `<div class="placeholder">「${labels[adminTab]}」功能開發中，下一輪會加進來。</div>`;
+      return;
+    }
+
+    if(adminTab==='reason'){
+      const weekDates = buildWeekDates(adminDate);
+      const ra = buildReasonAnalysis(weekDates);
+      let rbody = `<div class="weekhead">本週 ${weekDates[0]} ～ ${weekDates[4]}　·　共 ${ra.total} 筆</div>`;
+      if(ra.rows.length===0){
+        rbody += `<div class="placeholder">本週還沒有任何「不適用」的原因紀錄</div>`;
+      }else{
+        rbody += `<div class="weektablewrap"><table class="weektable reasontable">
+          <thead><tr><th>原因</th><th>類別</th><th>次數</th><th>佔比</th><th>分佈</th></tr></thead>
+          <tbody>
+          ${ra.rows.map(r=>`
+            <tr>
+              <td class="reasonlabel">${r.code?escapeHtml(r.code+' '+r.label):escapeHtml(r.label)}</td>
+              <td>${escapeHtml(r.category)}</td>
+              <td>${r.count}</td>
+              <td><div class="wpct">${r.pct}%</div><div class="barbg" style="width:80px;"><div class="barfg ${r.category==='排程因素'?'warnbar':''}" style="width:${Math.min(r.pct,100)}%"></div></div></td>
+              <td class="reasondist">${escapeHtml(r.distribution)}</td>
+            </tr>
+          `).join('')}
+          </tbody>
+        </table></div>
+        <div class="weekfoot">怎麼讀這張表：「排程因素」佔比偏高，代表排程本身太緊或不合理，該修的是排程，不是要求司機加快——這是這套系統最有價值的產出。</div>`;
+      }
+      rbody += footerInfoHtml();
+      $('adminBody').innerHTML = rbody;
+      wireFooterInfo();
       return;
     }
 
