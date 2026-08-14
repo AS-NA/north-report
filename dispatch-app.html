@@ -18,7 +18,9 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
   body{ background:var(--bg); color:var(--text); font-family:var(--font-body); min-height:100vh; display:flex; justify-content:center; }
-  .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); position:relative; z-index:2; }
+  .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); position:relative; z-index:2; transition:max-width .2s ease; }
+  .app.wide{ max-width:1180px; }
+  @media (max-width: 860px){ .app.wide{ max-width:480px; } }
   .watermark{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); z-index:1; pointer-events:none; font-family:var(--font-display); font-weight:800; font-size:15vw; letter-spacing:0.06em; color:var(--accent); opacity:0.08; text-transform:uppercase; white-space:nowrap; }
   .watermark span{ color:var(--accent-2); }
   .view{display:none; position:relative; z-index:2;} .view.active{display:block;}
@@ -414,6 +416,7 @@
   document.querySelectorAll('[data-back]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       stopAdminAutoRefresh();
+      document.querySelector('.app').classList.remove('wide');
       const to = btn.dataset.back;
       if(to==='home') renderHome();
       if(to==='driver') renderDriverView();
@@ -844,6 +847,7 @@
   let adminDate = todayDateStr();
   async function openAdmin(){
     liveDrill = null;
+    document.querySelector('.app').classList.add('wide');
     showView('view-admin');
     await ensureCheckinsThen(renderAdmin, $('adminBody'));
     startAdminAutoRefresh();
