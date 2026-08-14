@@ -419,7 +419,7 @@
       document.querySelector('.app').classList.remove('wide');
       const to = btn.dataset.back;
       if(to==='home') renderHome();
-      if(to==='driver') renderDriverView();
+      if(to==='driver'){ showView('view-driver'); renderDriverView(); }
     });
   });
 
