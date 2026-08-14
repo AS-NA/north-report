@@ -141,6 +141,21 @@
   .drow .st.off{background:var(--panel-2); color:var(--text-mute);}
   .drow .barbg{margin:6px 0 4px;}
   .drow .bottom{ display:flex; justify-content:space-between; font-size:11px; color:var(--text-mute); font-family:var(--font-mono); }
+  .anomaly{ margin:0 20px 8px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; gap:10px; align-items:flex-start; }
+  .anomaly .abadge{ font-size:10.5px; padding:3px 8px; border-radius:20px; font-family:var(--font-mono); white-space:nowrap; flex-shrink:0; }
+  .anomaly .abadge.late{ background:rgba(224,101,79,0.18); color:var(--red); }
+  .anomaly .abadge.notdone{ background:rgba(242,153,74,0.18); color:var(--accent); }
+  .anomaly .abadge.na{ background:rgba(107,114,128,0.25); color:var(--grey); }
+  .anomaly .abadge.note{ background:rgba(79,189,186,0.18); color:var(--teal); }
+  .anomaly .atext{ font-size:12.5px; line-height:1.5; }
+  .anomaly .atext b{ font-weight:700; }
+  .anomaly .atext .sub{ color:var(--text-mute); font-size:11.5px; }
+  .heroCard{ margin:0 20px 18px; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px; text-align:center; }
+  .heroCard .v{ font-family:var(--font-display); font-size:44px; font-weight:700; }
+  .heroCard .l{ font-size:12px; color:var(--text-mute); margin-top:4px; font-family:var(--font-mono); }
+  .miniline{ margin:0 20px 10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; }
+  .miniline .n{font-weight:600; font-size:13.5px;}
+  .miniline .c{font-size:11px; color:var(--text-mute); font-family:var(--font-mono);}
   .placeholder{ margin:40px 20px; text-align:center; color:var(--text-mute); font-size:13.5px; line-height:1.8; }
 
   .loading{text-align:center; padding:50px 20px; color:var(--text-mute); font-family:var(--font-mono); font-size:13px;}
@@ -349,6 +364,7 @@
   let currentRegion = null, currentDriver = null, currentStopIdx = null;
   let currentState = null; // {stops:[{arrivedAt,departedAt,gps,photo,note,tasks:{}}]}
   let allCheckins = []; // fetched from backend
+  let checkinsLoadedOnce = false;
 
   function showView(id){
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -416,12 +432,8 @@
     $('drvName').textContent = currentDriver.name;
     $('drvMeta').textContent = `${currentDriver.region}${currentDriver.code} · ${currentDriver.name} · ${todayDateStr()}`;
     showView('view-driver');
-    setSyncBadge('saving');
-    $('stopList').innerHTML = '<div class="loading">載入中...</div>';
-    await refreshCheckins();
-    loadCurrentState();
-    renderDriverView();
     setSyncBadge('ok');
+    await ensureCheckinsThen(()=>{ loadCurrentState(); renderDriverView(); }, $('stopList'));
   }
 
   async function refreshCheckins(){
@@ -429,7 +441,22 @@
       const res = await fetch(APPS_SCRIPT_URL);
       const data = await res.json();
       allCheckins = Array.isArray(data) ? data.filter(r=>r && r.key) : [];
+      checkinsLoadedOnce = true;
     }catch(e){ allCheckins = allCheckins || []; console.error(e); }
+  }
+
+  // Renders instantly from cache if we have it, then quietly re-fetches and
+  // re-renders in the background so navigation never feels blocked after the
+  // first load of the session.
+  async function ensureCheckinsThen(renderFn, showLoadingEl){
+    if(checkinsLoadedOnce){
+      renderFn();
+      refreshCheckins().then(renderFn).catch(()=>{});
+      return;
+    }
+    if(showLoadingEl) showLoadingEl.innerHTML = '<div class="loading">載入中...</div>';
+    await refreshCheckins();
+    renderFn();
   }
 
   function loadCurrentState(){
@@ -684,9 +711,7 @@
   let adminDate = todayDateStr();
   async function openAdmin(){
     showView('view-admin');
-    $('adminBody').innerHTML = '<div class="loading">載入中...</div>';
-    await refreshCheckins();
-    renderAdmin();
+    await ensureCheckinsThen(renderAdmin, $('adminBody'));
   }
   document.querySelectorAll('.admintab').forEach(t=>{
     t.addEventListener('click', ()=>{
@@ -699,48 +724,98 @@
 
   function weekdayOfDateStr(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d).getDay(); }
 
+  function buildAdminAnalytics(weekday, dateStr){
+    const online = [], notOnline = [], anomalies = [];
+    let totalTasks=0, totalDone=0;
+    DRIVERS.forEach(d=>{
+      const stops = getStopsFor(d, weekday);
+      if(d.noSchedule || stops.length===0) return; // skip drivers with no schedule data
+      const key = driverKey(d)+'|'+dateStr;
+      const rec = allCheckins.find(r=>r.key===key);
+      let state = { stops: stops.map(()=>({tasks:{}})) };
+      if(rec && rec.state){ try{ const p = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; if(p&&p.stops) state=p; }catch(e){} }
+      const prog = computeProgress(d, weekday, state);
+      totalTasks += prog.totalTasks; totalDone += prog.doneTasks;
+      const started = state.stops.some(s=>s && s.arrivedAt);
+      if(started) online.push({d, prog}); else notOnline.push({d, prog});
+
+      stops.forEach((stop,i)=>{
+        const st = state.stops[i] || {};
+        if(st.arrivedAt){
+          const sched = parseSchedStart(stop.time);
+          if(sched){
+            const diff = Math.round((new Date(st.arrivedAt) - sched)/60000);
+            if(diff > LATE_TOLERANCE_MIN) anomalies.push({type:'late', driver:d, stop, detail:`晚 ${diff} 分`});
+          }
+        }
+        const tasks = getStopTasks(d, stop, weekday).filter(t=>t.active);
+        tasks.forEach(t=>{
+          const v = st.tasks && st.tasks[t.name];
+          if(v==='notdone') anomalies.push({type:'notdone', driver:d, stop, detail:t.name});
+          if(v==='na') anomalies.push({type:'na', driver:d, stop, detail:t.name});
+        });
+        if(st.note && st.note.trim()) anomalies.push({type:'note', driver:d, stop, detail:st.note.trim()});
+      });
+    });
+    return { online, notOnline, anomalies, totalTasks, totalDone, overallPct: totalTasks ? Math.round(totalDone/totalTasks*100) : 0 };
+  }
+
+  const ANOMALY_LABEL = { late:'遲到', notdone:'未完成', na:'不適用', note:'備註' };
+
   function renderAdmin(){
     if(adminTab==='reason' || adminTab==='export' || adminTab==='people'){
       const labels = {reason:'原因分析', export:'匯出', people:'排程與人員'};
       $('adminBody').innerHTML = `<div class="placeholder">「${labels[adminTab]}」功能開發中，下一輪會加進來。</div>`;
       return;
     }
-    const weekday = weekdayOfDateStr(adminDate);
-    let totalTasks=0, totalDone=0, onlineCount=0, lateTotal=0, notStartedCount=0;
-    const rows = DRIVERS.map(d=>{
-      const stops = getStopsFor(d, weekday);
-      const key = driverKey(d)+'|'+adminDate;
-      const rec = allCheckins.find(r=>r.key===key);
-      let state = { stops: stops.map(()=>({tasks:{}})) };
-      if(rec && rec.state){ try{ const p = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; if(p&&p.stops) state=p; }catch(e){} }
-      const prog = computeProgress(d, weekday, state);
-      totalTasks += prog.totalTasks; totalDone += prog.doneTasks; lateTotal += prog.lateCount;
-      const started = state.stops.some(s=>s.arrivedAt);
-      const finished = stops.length>0 && state.stops.every((s,i)=> stops[i] ? !!s.departedAt : true) && started;
-      if(started && !finished) onlineCount++;
-      if(!started) notStartedCount++;
-      return { d, stops, prog, started, finished };
-    });
 
-    const overallPct = totalTasks ? Math.round(totalDone/totalTasks*100) : 0;
+    const weekday = weekdayOfDateStr(adminDate);
+    const a = buildAdminAnalytics(weekday, adminDate);
 
     let body = `
       <div class="datepicker">
         <input type="date" id="adminDateInput" value="${adminDate}">
         <button class="refreshsmall" id="adminRefreshBtn">重新載入</button>
       </div>
-      <div class="cards4">
-        <div class="kpi"><div class="v">${overallPct}%</div><div class="l">全台完成度 · ${totalDone}/${totalTasks} 項</div></div>
-        <div class="kpi"><div class="v">${onlineCount}</div><div class="l">在線司機（作業中）</div></div>
-        <div class="kpi"><div class="v">${lateTotal}</div><div class="l">遲到次數（容差 ±${LATE_TOLERANCE_MIN}分）</div></div>
-        <div class="kpi"><div class="v">${notStartedCount}</div><div class="l">未開始／未回報</div></div>
-      </div>
     `;
 
-    if(adminTab==='live' || adminTab==='rate'){
-      body += rows.map(({d,stops,prog,started,finished})=>{
-        const statusLabel = d.noSchedule ? '尚未開始' : (finished ? '已完成' : started ? '在店中' : '尚未開始');
-        const statusClass = (!d.noSchedule && (started && !finished)) ? 'on' : 'off';
+    if(adminTab==='live'){
+      body += `<div class="heroCard"><div class="v">${a.overallPct}%</div><div class="l">全台完成度 · ${a.totalDone}/${a.totalTasks} 項</div></div>`;
+
+      body += `<div class="section-label">上線司機（${a.online.length}）</div>`;
+      body += a.online.length ? a.online.map(({d,prog})=>`
+        <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code}</div></div><div class="c">${prog.pct}% · 到站 ${prog.arrivedCount}/${prog.totalStops}</div></div>
+      `).join('') : `<div class="placeholder" style="margin:10px 20px;">目前沒有司機上線</div>`;
+
+      body += `<div class="section-label">異常狀況（${a.anomalies.length}）</div>`;
+      body += a.anomalies.length ? a.anomalies.map(an=>`
+        <div class="anomaly">
+          <span class="abadge ${an.type}">${ANOMALY_LABEL[an.type]}</span>
+          <div class="atext"><b>${escapeHtml(an.driver.name)}</b>　${escapeHtml(an.stop.site)}<div class="sub">${escapeHtml(an.detail)}</div></div>
+        </div>
+      `).join('') : `<div class="placeholder" style="margin:10px 20px;">目前沒有異常狀況</div>`;
+
+      body += `<div class="section-label">未上線司機（${a.notOnline.length}）</div>`;
+      body += a.notOnline.length ? a.notOnline.map(({d})=>`
+        <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${d.hours}</div></div><div class="c">尚未打卡</div></div>
+      `).join('') : `<div class="placeholder" style="margin:10px 20px;">今天排班的司機都已上線</div>`;
+
+    }else if(adminTab==='rate'){
+      const rows = DRIVERS.filter(d=>!d.noSchedule).map(d=>{
+        const stops = getStopsFor(d, weekday);
+        const key = driverKey(d)+'|'+adminDate;
+        const rec = allCheckins.find(r=>r.key===key);
+        let state = { stops: stops.map(()=>({tasks:{}})) };
+        if(rec && rec.state){ try{ const p = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; if(p&&p.stops) state=p; }catch(e){} }
+        const prog = computeProgress(d, weekday, state);
+        const started = state.stops.some(s=>s && s.arrivedAt);
+        const finished = stops.length>0 && state.stops.every((s,i)=> stops[i] ? !!(s&&s.departedAt) : true) && started;
+        return { d, stops, prog, started, finished };
+      });
+      body += `<div class="heroCard"><div class="v">${a.overallPct}%</div><div class="l">全台完成度 · ${a.totalDone}/${a.totalTasks} 項</div></div>`;
+      body += rows.map(({d,prog,started,finished})=>{
+        const statusLabel = finished ? '已完成' : started ? '在店中' : '尚未開始';
+        const statusClass = (started && !finished) ? 'on' : 'off';
         return `<div class="drow">
           <div class="top">
             <div><div class="dn">${escapeHtml(d.name)}</div><div class="dc">${d.region} · ${d.code} · ${escapeHtml(d.name)}</div></div>
