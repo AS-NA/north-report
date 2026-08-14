@@ -349,8 +349,15 @@
       tables:{ A:[T('勻貨歸倉',[3,5]),T('補貨歸倉',[3,4]),T('追加歸倉',[2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('集貨寄貨',[1,2,3,4,5])] },
       dailyStops:[ {site:'一中/OL',time:'10:30-11:00',table:'A'}, {site:'漢神',time:'11:20-11:40',table:'A'}, {site:'逢甲',time:'12:00-12:10',table:'A'}, {site:'新光',time:'12:20-12:30',table:'A'}, {site:'一中門市(支援)',time:'14:00-16:00',table:'A'}, {site:'漢神洲際(支援)',time:'16:20-19:30',table:'A'} ]
     },
-    { region:'台北', code:'北1', name:'林柏均', hours:'09:00-18:00', route:'南西區',
-      tables:{}, weeklyStops:{1:[],2:[],3:[],4:[],5:[]}, noSchedule:true
+    { region:'台北', code:'北1', name:'林柏均', hours:'依當日排程',
+      tables:{ A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3,4]),T('新品整理',[3,4]),T('濾網清潔',[2,3])] },
+      weeklyStops:{
+        1:[{site:'南西AS店',time:'10:30-12:30',table:'A'},{site:'中山一店',time:'12:30-13:30',table:'A'},{site:'南西一店',time:'14:30-17:30',table:'A'},{site:'南西LADY',time:'17:40-18:40',table:'A'},{site:'南西三店',time:'18:40-19:30',table:'A'}],
+        2:[{site:'南西LADY',time:'10:30-12:00',table:'A'},{site:'中山一店',time:'12:00-14:00',table:'A'},{site:'南西AS',time:'15:00-17:30',table:'A'},{site:'敦南OL',time:'17:35-19:30',table:'A'}],
+        3:[{site:'中山一店',time:'09:30-12:30',table:'A'}],
+        4:[],
+        5:[{site:'延平倉',time:'09:30-18:30',table:'A'}]
+      }
     },
     { region:'台北', code:'北2', name:'朱銘澤', hours:'依當日排程',
       tables:{ A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('濾網清潔',[2,3])] },
@@ -722,6 +729,12 @@
       if(status==='partial'){
         extraHtml = `<div class="taskextra">
           <div class="pctrow"><input type="range" min="0" max="99" step="5" value="${percent}" data-pct-task="${escapeHtml(t.name)}"><span class="pctval">${percent}%</span></div>
+          <div class="naReasonSelect" style="margin-top:10px;">
+            <select data-reason-task="${escapeHtml(t.name)}">
+              <option value="">請選擇未完成原因（選填）</option>
+              ${NA_REASONS.map(r=>`<option value="${r.code}" ${rec.reason===r.code?'selected':''}>${r.code} ${r.label}</option>`).join('')}
+            </select>
+          </div>
         </div>`;
       }else if(status==='na'){
         extraHtml = `<div class="taskextra naReasonSelect">
@@ -756,7 +769,7 @@
         }else if(val==='done'){
           st.tasks[taskName] = { status:'done' };
         }else if(val==='partial'){
-          st.tasks[taskName] = { status:'partial', percent: (typeof prev.percent==='number')?prev.percent:50 };
+          st.tasks[taskName] = { status:'partial', percent: (typeof prev.percent==='number')?prev.percent:50, reason: prev.reason||'' };
         }else if(val==='na'){
           st.tasks[taskName] = { status:'na', reason: prev.reason||'' };
         }
@@ -914,7 +927,8 @@
           else if(rec2 && rec2.status==='partial'){
             const pct = typeof rec2.percent==='number' ? rec2.percent : 0;
             byTaskType[t.name].weighted += pct;
-            anomalies.push({type:'notdone', driver:d, stop, detail:`${t.name}　${pct}%`});
+            const reasonSuffix = rec2.reason ? `　（${reasonMap[rec2.reason]||rec2.reason}）` : '';
+            anomalies.push({type:'notdone', driver:d, stop, detail:`${t.name}　${pct}%${reasonSuffix}`});
           }
         });
         if(st.note && st.note.trim()) anomalies.push({type:'note', driver:d, stop, detail:st.note.trim()});
@@ -1002,7 +1016,7 @@
           const tasks = getStopTasks(d, stop, weekday).filter(t=>t.active);
           tasks.forEach(t=>{
             const rec2 = st.tasks && st.tasks[t.name];
-            if(rec2 && rec2.status==='na'){
+            if(rec2 && (rec2.status==='na' || rec2.status==='partial')){
               const code = rec2.reason || '';
               if(!counts[code]) counts[code] = {count:0, drivers:{}};
               counts[code].count++;
