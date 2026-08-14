@@ -95,14 +95,21 @@
   .taskcount b{color:var(--text);}
   .alldone{ margin:0 20px 14px; background:rgba(63,191,127,0.12); border:1px solid var(--green); color:var(--green); text-align:center; padding:10px; border-radius:10px; font-size:13.5px; font-weight:600; }
 
-  .taskrow{ margin:0 20px 10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:10px; }
-  .taskrow.na{ opacity:0.4; }
+  .taskrow{ margin:0 20px 10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .taskrow.na{ opacity:0.75; }
+  .taskrow .trtop{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
   .taskname{flex:1; font-size:14.5px; font-weight:600;}
   .taskbtns{display:flex; gap:6px;}
-  .tbtn{ font-size:11.5px; padding:6px 9px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text-mute); cursor:pointer; font-family:var(--font-body); }
+  .tbtn{ font-size:11.5px; padding:6px 9px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text-mute); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
   .tbtn.done.active{ background:var(--green); border-color:var(--green); color:#0C1F14; }
-  .tbtn.notdone.active{ background:var(--red); border-color:var(--red); color:#2A0E09; }
-  .tbtn.na.active{ background:var(--grey); border-color:var(--grey); color:#fff; }
+  .tbtn.notdone.active{ background:var(--accent); border-color:var(--accent); color:#1B1300; }
+  .nabtn{ font-size:11.5px; padding:6px 10px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text-mute); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
+  .nabtn.active{ background:var(--grey); border-color:var(--grey); color:#fff; }
+  .pctrow{ display:flex; align-items:center; gap:10px; }
+  .pctrow input[type=range]{ flex:1; accent-color:var(--accent); height:4px; }
+  .pctval{ font-family:var(--font-mono); font-size:14px; font-weight:700; width:44px; text-align:right; }
+  .taskextra{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .naReasonSelect{ margin-top:2px; }
   .naword{font-size:12px; color:var(--text-mute); font-family:var(--font-mono);}
 
   .field{margin:16px 20px;}
@@ -306,7 +313,7 @@
         5:[{site:'大江',time:'11:00-12:30',table:'A'},{site:'巨城',time:'13:40-15:00',table:'A'},{site:'台茂',time:'15:50-16:50',table:'A'},{site:'統領',time:'17:30-20:00',table:'A'}]
       }
     },
-    { region:'台中', code:'中1', name:'王昱文', hours:'10:30-19:30',
+    { region:'台中', code:'中1', name:'王郁文', hours:'10:30-19:30',
       tables:{ A:[T('勻貨歸倉',[3,5]),T('補貨歸倉',[3,4]),T('追加歸倉',[2,3,4,5]),T('撤貨抓貨',[1]),T('區內勻貨',[1,2,4]),T('跨區勻貨',[1]),T('新品入倉',[4]),T('新品整理',[4]),T('集貨寄貨',[1,2,3,4,5])] },
       dailyStops:[ {site:'一中大碼/OL',time:'10:30-11:00',table:'A'}, {site:'文心',time:'11:20-11:30',table:'A'}, {site:'遠百',time:'11:50-12:00',table:'A'}, {site:'新光',time:'12:05-12:30',table:'A'}, {site:'一中OL(寄貨)',time:'13:00-14:00',table:'A'}, {site:'一中(門市作業)',time:'15:00-16:00',table:'A'}, {site:'新光/遠百(支援)',time:'16:20-19:30',table:'A'} ]
     },
@@ -379,6 +386,7 @@
   }
   document.querySelectorAll('[data-back]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
+      stopAdminAutoRefresh();
       const to = btn.dataset.back;
       if(to==='home') renderHome();
       if(to==='driver') renderDriverView();
@@ -504,12 +512,17 @@
 
   function computeProgress(driver, weekday, state){
     const stops = getStopsFor(driver, weekday);
-    let totalTasks=0, doneTasks=0, arrivedCount=0, lateCount=0;
+    let totalTasks=0, doneTasks=0, weightedSum=0, arrivedCount=0, lateCount=0;
     stops.forEach((stop,i)=>{
       const tasks = getStopTasks(driver, stop, weekday).filter(t=>t.active);
-      totalTasks += tasks.length;
       const st = state.stops[i] || {};
-      tasks.forEach(t=>{ if(st.tasks && st.tasks[t.name]==='done') doneTasks++; });
+      tasks.forEach(t=>{
+        const rec = st.tasks && st.tasks[t.name];
+        if(rec && rec.status==='na') return; // not-applicable items don't count toward completion
+        totalTasks++;
+        if(rec && rec.status==='done'){ doneTasks++; weightedSum += 100; }
+        else if(rec && rec.status==='partial'){ weightedSum += (typeof rec.percent==='number' ? rec.percent : 0); }
+      });
       if(st.arrivedAt){
         arrivedCount++;
         const sched = parseSchedStart(stop.time);
@@ -520,7 +533,7 @@
       }
     });
     return { totalTasks, doneTasks, arrivedCount, totalStops:stops.length, lateCount,
-      pct: totalTasks ? Math.round(doneTasks/totalTasks*100) : 0 };
+      pct: totalTasks ? Math.round(weightedSum/totalTasks) : 0 };
   }
   function parseSchedStart(timeStr){
     if(!timeStr) return null;
@@ -619,37 +632,91 @@
     $('stopInfoBox').innerHTML = `<div class="row1"><span class="arrived">到店 ${arrivedD.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}（預定 ${stop.time.split('-')[0]}）</span>${diffHtml}</div>${gpsHtml}`;
   }
 
+  const NA_REASONS = [
+    {code:'3-1', label:'現場沒有這項工作可執行'},
+    {code:'3-2', label:'門市已做完'},
+    {code:'3-3', label:'商品貨品未到現場'},
+    {code:'3-4', label:'上一站延誤'},
+    {code:'3-5', label:'時間不夠'},
+    {code:'3-6', label:'系統設備與網路問題'},
+    {code:'3-7', label:'及時調整業務項目'},
+    {code:'3-8', label:'其他'}
+  ];
+
   function renderTaskRows(stop, st, weekday){
     const tasks = getStopTasks(currentDriver, stop, weekday);
     const activeTasks = tasks.filter(t=>t.active);
     const inactiveCount = tasks.length - activeTasks.length;
-    const doneCount = activeTasks.filter(t=> st.tasks && st.tasks[t.name]==='done').length;
+    const doneCount = activeTasks.filter(t=> st.tasks && st.tasks[t.name] && st.tasks[t.name].status==='done').length;
+    const answeredCount = activeTasks.filter(t=> st.tasks && st.tasks[t.name] && st.tasks[t.name].status).length;
     $('taskCountLine').innerHTML = `工作項目 <b>${doneCount}/${activeTasks.length}</b>　·　本日未排程 ${inactiveCount} 項`;
-    $('allDoneMsg').innerHTML = (activeTasks.length>0 && doneCount===activeTasks.length) ? `<div class="alldone">✓ 本站全部完成</div>` : '';
+    $('allDoneMsg').innerHTML = (activeTasks.length>0 && answeredCount===activeTasks.length) ? `<div class="alldone">✓ 本站全部已填寫</div>` : '';
 
     $('taskRows').innerHTML = tasks.map(t=>{
       if(!t.active){
         return `<div class="taskrow na"><div class="taskname">— ${escapeHtml(t.name)}</div><div class="naword">本日未排程</div></div>`;
       }
-      const cur = (st.tasks && st.tasks[t.name]) || '';
+      const rec = (st.tasks && st.tasks[t.name]) || {};
+      const status = rec.status || '';
+      const percent = (typeof rec.percent === 'number') ? rec.percent : 50;
+      let extraHtml = '';
+      if(status==='partial'){
+        extraHtml = `<div class="taskextra">
+          <div class="pctrow"><input type="range" min="0" max="99" step="5" value="${percent}" data-pct-task="${escapeHtml(t.name)}"><span class="pctval">${percent}%</span></div>
+        </div>`;
+      }else if(status==='na'){
+        extraHtml = `<div class="taskextra naReasonSelect">
+          <select data-reason-task="${escapeHtml(t.name)}">
+            <option value="">請選擇不適用原因</option>
+            ${NA_REASONS.map(r=>`<option value="${r.code}" ${rec.reason===r.code?'selected':''}>${r.code} ${r.label}</option>`).join('')}
+          </select>
+        </div>`;
+      }
       return `<div class="taskrow" data-task="${escapeHtml(t.name)}">
-        <div class="taskname">${escapeHtml(t.name)}</div>
-        <div class="taskbtns">
-          <button class="tbtn done ${cur==='done'?'active':''}" data-val="done">完成</button>
-          <button class="tbtn notdone ${cur==='notdone'?'active':''}" data-val="notdone">未完成</button>
-          <button class="tbtn na ${cur==='na'?'active':''}" data-val="na">不適用</button>
+        <div class="trtop">
+          <div class="taskname">${escapeHtml(t.name)}</div>
+          <div class="taskbtns">
+            <button class="tbtn done ${status==='done'?'active':''}" data-val="done">完成</button>
+            <button class="tbtn notdone ${status==='partial'?'active':''}" data-val="partial">未完成</button>
+            <button class="nabtn ${status==='na'?'active':''}" data-val="na">不適用</button>
+          </div>
         </div>
+        ${extraHtml}
       </div>`;
     }).join('');
 
-    document.querySelectorAll('#taskRows .taskrow[data-task] .tbtn').forEach(btn=>{
+    document.querySelectorAll('#taskRows .taskrow[data-task] .tbtn, #taskRows .taskrow[data-task] .nabtn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         const row = btn.closest('.taskrow');
         const taskName = row.dataset.task;
         const val = btn.dataset.val;
         if(!st.tasks) st.tasks = {};
-        st.tasks[taskName] = st.tasks[taskName]===val ? '' : val;
+        const prev = st.tasks[taskName] || {};
+        if(prev.status === val){
+          st.tasks[taskName] = {}; // toggle off
+        }else if(val==='done'){
+          st.tasks[taskName] = { status:'done' };
+        }else if(val==='partial'){
+          st.tasks[taskName] = { status:'partial', percent: (typeof prev.percent==='number')?prev.percent:50 };
+        }else if(val==='na'){
+          st.tasks[taskName] = { status:'na', reason: prev.reason||'' };
+        }
         renderTaskRows(stop, st, weekday);
+        await saveCurrentState();
+      });
+    });
+    document.querySelectorAll('#taskRows input[data-pct-task]').forEach(inp=>{
+      inp.addEventListener('input', (e)=>{
+        const taskName = inp.dataset.pctTask;
+        if(st.tasks[taskName]) st.tasks[taskName].percent = +e.target.value;
+        inp.closest('.pctrow').querySelector('.pctval').textContent = e.target.value+'%';
+      });
+      inp.addEventListener('change', async ()=>{ await saveCurrentState(); });
+    });
+    document.querySelectorAll('#taskRows select[data-reason-task]').forEach(sel=>{
+      sel.addEventListener('change', async (e)=>{
+        const taskName = sel.dataset.reasonTask;
+        if(st.tasks[taskName]) st.tasks[taskName].reason = e.target.value;
         await saveCurrentState();
       });
     });
@@ -720,6 +787,20 @@
     liveDrill = null;
     showView('view-admin');
     await ensureCheckinsThen(renderAdmin, $('adminBody'));
+    startAdminAutoRefresh();
+  }
+
+  let adminAutoRefreshTimer = null;
+  function startAdminAutoRefresh(){
+    stopAdminAutoRefresh();
+    adminAutoRefreshTimer = setInterval(async ()=>{
+      if(!$('view-admin').classList.contains('active')){ stopAdminAutoRefresh(); return; }
+      await refreshCheckins();
+      renderAdmin();
+    }, 8000);
+  }
+  function stopAdminAutoRefresh(){
+    if(adminAutoRefreshTimer){ clearInterval(adminAutoRefreshTimer); adminAutoRefreshTimer = null; }
   }
   document.querySelectorAll('.admintab').forEach(t=>{
     t.addEventListener('click', ()=>{
@@ -736,7 +817,8 @@
   function buildAdminAnalytics(weekday, dateStr){
     const online = [], notOnline = [], anomalies = [];
     let totalTasks=0, totalDone=0;
-    const byTaskType = {}; // name -> {total, done}
+    const byTaskType = {}; // name -> {totalWeighted, count}
+    const reasonMap = {}; NA_REASONS.forEach(r=> reasonMap[r.code]=r.label);
     DRIVERS.forEach(d=>{
       const stops = getStopsFor(d, weekday);
       if(d.noSchedule || stops.length===0) return; // skip drivers with no schedule data
@@ -760,19 +842,27 @@
         }
         const tasks = getStopTasks(d, stop, weekday).filter(t=>t.active);
         tasks.forEach(t=>{
-          if(!byTaskType[t.name]) byTaskType[t.name] = {total:0, done:0};
-          byTaskType[t.name].total++;
-          const v = st.tasks && st.tasks[t.name];
-          if(v==='done') byTaskType[t.name].done++;
-          if(v==='notdone') anomalies.push({type:'notdone', driver:d, stop, detail:t.name});
-          if(v==='na') anomalies.push({type:'na', driver:d, stop, detail:t.name});
+          const rec2 = st.tasks && st.tasks[t.name];
+          if(rec2 && rec2.status==='na'){
+            const reasonLabel = reasonMap[rec2.reason] || '尚未選擇原因';
+            anomalies.push({type:'na', driver:d, stop, detail:`${t.name}　${reasonLabel}`});
+            return; // excluded from task-type completion stats
+          }
+          if(!byTaskType[t.name]) byTaskType[t.name] = {weighted:0, count:0};
+          byTaskType[t.name].count++;
+          if(rec2 && rec2.status==='done'){ byTaskType[t.name].weighted += 100; }
+          else if(rec2 && rec2.status==='partial'){
+            const pct = typeof rec2.percent==='number' ? rec2.percent : 0;
+            byTaskType[t.name].weighted += pct;
+            anomalies.push({type:'notdone', driver:d, stop, detail:`${t.name}　${pct}%`});
+          }
         });
         if(st.note && st.note.trim()) anomalies.push({type:'note', driver:d, stop, detail:st.note.trim()});
       });
     });
     const taskTypeList = Object.keys(byTaskType).map(name=>({
-      name, total: byTaskType[name].total, done: byTaskType[name].done,
-      pct: byTaskType[name].total ? Math.round(byTaskType[name].done/byTaskType[name].total*100) : 0
+      name, total: byTaskType[name].count,
+      pct: byTaskType[name].count ? Math.round(byTaskType[name].weighted/byTaskType[name].count) : 0
     })).sort((a,b)=> a.pct - b.pct);
     return { online, notOnline, anomalies, totalTasks, totalDone, taskTypeList, overallPct: totalTasks ? Math.round(totalDone/totalTasks*100) : 0 };
   }
