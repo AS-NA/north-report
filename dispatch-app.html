@@ -8,9 +8,9 @@
 <title>AIR SPACE 倉儲物流工作回報</title>
 <style>
   :root{
-    --bg:#14161A; --panel:#1E2126; --panel-2:#252932; --line:#333844;
-    --accent:#F2994A; --teal:#4FBDBA; --green:#3FBF7F; --red:#E0654F; --grey:#6B7280;
-    --text:#F3F1EA; --text-mute:#9A9CA3;
+    --bg:#0A0E1A; --panel:#131A2C; --panel-2:#1B2440; --line:#2A3555;
+    --accent:#3DDBFF; --accent-2:#7C6CFF; --teal:#4FBDBA; --green:#3FBF7F; --red:#E0654F; --grey:#6B7280;
+    --text:#EAF2FF; --text-mute:#8B9BC2;
     --font-display:'Space Grotesk','Noto Sans TC',sans-serif;
     --font-body:'Inter','Noto Sans TC',sans-serif;
     --font-mono:'JetBrains Mono','Courier New',monospace;
@@ -18,7 +18,9 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
   body{ background:var(--bg); color:var(--text); font-family:var(--font-body); min-height:100vh; display:flex; justify-content:center; }
-  .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); }
+  .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); position:relative; }
+  .watermark{ position:fixed; bottom:14px; right:16px; z-index:5; pointer-events:none; font-family:var(--font-display); font-weight:700; font-size:11px; letter-spacing:0.12em; color:var(--accent); opacity:0.4; text-transform:uppercase; }
+  .watermark span{ color:var(--text-mute); opacity:0.75; }
   .view{display:none;} .view.active{display:block;}
 
   .topbar{ background:linear-gradient(135deg,#1B3A5C,#12283F); padding:22px 20px; border-bottom:1px solid var(--line); }
@@ -72,6 +74,7 @@
   .stopcard{ background:var(--panel); border:1px solid var(--line); border-radius:14px; margin-bottom:12px; padding:14px 16px; cursor:pointer; }
   .stopcard.locked{ opacity:0.45; cursor:not-allowed; }
   .stopcard.done{ border-color:var(--green); }
+  .stopcard.partial{ border-color:var(--accent-2); }
   .stopcard .srow{display:flex; justify-content:space-between; align-items:flex-start;}
   .stopcard .idx{ font-family:var(--font-mono); font-size:12px; color:var(--text-mute); margin-bottom:3px; }
   .stopcard .site{font-weight:700; font-size:15.5px;}
@@ -80,6 +83,7 @@
   .stopcard .status.wait{background:var(--panel-2); color:var(--text-mute);}
   .stopcard .status.inprogress{background:rgba(242,153,74,0.18); color:var(--accent);}
   .stopcard .status.done{background:rgba(63,191,127,0.18); color:var(--green);}
+  .stopcard .status.partial{background:rgba(124,108,255,0.18); color:var(--accent-2);}
   .stopcard .locknote{font-size:12px; color:var(--text-mute); margin-top:8px; text-align:center;}
   .stopcard .itemcount{font-size:12px; color:var(--text-mute); margin-top:6px;}
 
@@ -102,7 +106,7 @@
   .taskbtns{display:flex; gap:6px;}
   .tbtn{ font-size:11.5px; padding:6px 9px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text-mute); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
   .tbtn.done.active{ background:var(--green); border-color:var(--green); color:#0C1F14; }
-  .tbtn.notdone.active{ background:var(--accent); border-color:var(--accent); color:#1B1300; }
+  .tbtn.notdone.active{ background:var(--accent); border-color:var(--accent); color:#04212E; }
   .nabtn{ font-size:11.5px; padding:6px 10px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text-mute); cursor:pointer; font-family:var(--font-body); white-space:nowrap; }
   .nabtn.active{ background:var(--grey); border-color:var(--grey); color:#fff; }
   .pctrow{ display:flex; align-items:center; gap:10px; }
@@ -122,7 +126,7 @@
 
   .bigbtn{ display:block; width:calc(100% - 40px); margin:20px 20px 30px; padding:15px; border-radius:12px; border:none; font-size:15px; font-weight:700; font-family:var(--font-display); cursor:pointer; text-align:center; }
   .bigbtn.arrive{ background:var(--teal); color:#0C2422; }
-  .bigbtn.depart{ background:var(--accent); color:#1B1300; }
+  .bigbtn.depart{ background:var(--accent); color:#04212E; }
   .bigbtn:disabled{ opacity:0.4; }
   .statusline{text-align:center; font-size:12.5px; font-family:var(--font-mono); margin-top:-14px; margin-bottom:14px; min-height:14px;}
   .statusline.err{color:var(--red);} .statusline.ok{color:var(--green);}
@@ -181,6 +185,7 @@
 </head>
 <body>
 <div class="app">
+  <div class="watermark">AIR <span>SPACE</span></div>
 
   <!-- HOME -->
   <div class="view active" id="view-home">
@@ -564,10 +569,13 @@
     $('stopList').innerHTML = stops.map((stop,i)=>{
       const st = currentState.stops[i] || {};
       const tasks = getStopTasks(currentDriver, stop, weekday);
-      const activeCount = tasks.filter(t=>t.active).length;
+      const activeTasks = tasks.filter(t=>t.active);
+      const activeCount = activeTasks.length;
+      const fullyDone = activeCount>0 && activeTasks.every(t=> st.tasks && st.tasks[t.name] && (st.tasks[t.name].status==='done' || st.tasks[t.name].status==='na'));
       const locked = !prevDeparted;
       let statusHtml, cardClass='';
-      if(st.departedAt){ statusHtml = '<span class="status done">已完成</span>'; cardClass='done'; prevDeparted=true; }
+      if(st.departedAt && fullyDone){ statusHtml = '<span class="status done">已完成</span>'; cardClass='done'; prevDeparted=true; }
+      else if(st.departedAt){ statusHtml = '<span class="status partial">已離店（項目未全滿）</span>'; cardClass='partial'; prevDeparted=true; }
       else if(st.arrivedAt){ statusHtml = '<span class="status inprogress">作業中</span>'; prevDeparted=false; }
       else{ statusHtml = locked ? '<span class="status wait">等待中</span>' : '<span class="status wait">未開始</span>'; prevDeparted=false; }
       return `<div class="stopcard ${cardClass} ${locked && !st.arrivedAt ? 'locked':''}" data-idx="${i}">
@@ -946,13 +954,14 @@
         if(rec && rec.state){ try{ const p = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; if(p&&p.stops) state=p; }catch(e){} }
         const prog = computeProgress(d, weekday, state);
         const started = state.stops.some(s=>s && s.arrivedAt);
-        const finished = stops.length>0 && state.stops.every((s,i)=> stops[i] ? !!(s&&s.departedAt) : true) && started;
-        return { d, stops, prog, started, finished };
+        const allDeparted = stops.length>0 && state.stops.every((s,i)=> stops[i] ? !!(s&&s.departedAt) : true) && started;
+        const finished = allDeparted && prog.pct===100;
+        return { d, stops, prog, started, finished, allDeparted };
       });
       body += `<div class="heroCard"><div class="v">${a.overallPct}%</div><div class="l">全台完成度 · ${a.totalDone}/${a.totalTasks} 項</div></div>`;
-      body += rows.map(({d,prog,started,finished})=>{
-        const statusLabel = finished ? '已完成' : started ? '在店中' : '尚未開始';
-        const statusClass = (started && !finished) ? 'on' : 'off';
+      body += rows.map(({d,prog,started,finished,allDeparted})=>{
+        const statusLabel = finished ? '已完成' : allDeparted ? '已離店（未全滿）' : started ? '在店中' : '尚未開始';
+        const statusClass = (started && !allDeparted) ? 'on' : 'off';
         return `<div class="drow">
           <div class="top">
             <div><div class="dn">${escapeHtml(d.name)}</div><div class="dc">${d.region} · ${d.code} · ${escapeHtml(d.name)}</div></div>
