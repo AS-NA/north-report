@@ -8,9 +8,9 @@
 <title>AIR SPACE 倉儲物流工作回報</title>
 <style>
   :root{
-    --bg:#0A0E1A; --panel:#131A2C; --panel-2:#1B2440; --line:#2A3555;
-    --accent:#3DDBFF; --accent-2:#7C6CFF; --teal:#4FBDBA; --green:#3FBF7F; --red:#E0654F; --grey:#6B7280;
-    --text:#EAF2FF; --text-mute:#8B9BC2;
+    --bg:#F3F6FC; --panel:#FFFFFF; --panel-2:#EEF2FA; --line:#DCE3F0;
+    --accent:#2FA5D6; --accent-2:#8B7FEF; --teal:#2FA39A; --green:#3AAE72; --red:#D9604B; --grey:#94A0B8;
+    --text:#1C2536; --text-mute:#6E7996;
     --font-display:'Space Grotesk','Noto Sans TC',sans-serif;
     --font-body:'Inter','Noto Sans TC',sans-serif;
     --font-mono:'JetBrains Mono','Courier New',monospace;
@@ -18,23 +18,24 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
   body{ background:var(--bg); color:var(--text); font-family:var(--font-body); min-height:100vh; display:flex; justify-content:center; }
-  .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); position:relative; }
-  .watermark{ position:fixed; bottom:14px; right:16px; z-index:5; pointer-events:none; font-family:var(--font-display); font-weight:700; font-size:11px; letter-spacing:0.12em; color:var(--accent); opacity:0.4; text-transform:uppercase; }
-  .watermark span{ color:var(--text-mute); opacity:0.75; }
-  .view{display:none;} .view.active{display:block;}
+  .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); position:relative; z-index:2; }
+  .watermark{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); z-index:1; pointer-events:none; font-family:var(--font-display); font-weight:800; font-size:15vw; letter-spacing:0.06em; color:var(--accent); opacity:0.08; text-transform:uppercase; white-space:nowrap; }
+  .watermark span{ color:var(--accent-2); }
+  .view{display:none; position:relative; z-index:2;} .view.active{display:block;}
 
-  .topbar{ background:linear-gradient(135deg,#1B3A5C,#12283F); padding:22px 20px; border-bottom:1px solid var(--line); }
-  .topbar .eyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:0.1em; color:#9FC2E0; text-transform:uppercase; }
+  .topbar{ background:linear-gradient(135deg,#D7ECFB,#E8E3FB); padding:22px 20px; border-bottom:1px solid var(--line); }
+  .topbar h1, .topbar .who .n{ color:var(--text); }
+  .topbar .eyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:0.1em; color:#3E7FA8; text-transform:uppercase; }
   .topbar h1{ font-family:var(--font-display); font-size:22px; margin:6px 0 4px; }
-  .topbar .date{ font-size:12.5px; color:#B9CFE3; font-family:var(--font-mono); }
+  .topbar .date{ font-size:12.5px; color:#5C6E90; font-family:var(--font-mono); }
   .topbar.small{ padding:16px 20px; display:flex; align-items:center; gap:10px; }
-  .backbtn{ background:none; border:none; color:#fff; font-size:20px; cursor:pointer; padding:0 4px 0 0; }
+  .backbtn{ background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; padding:0 4px 0 0; }
   .topbar.small .who{flex:1;}
   .topbar.small .who .n{font-family:var(--font-display); font-weight:700; font-size:16px;}
-  .topbar.small .who .m{font-size:11.5px; color:#B9CFE3; font-family:var(--font-mono);}
+  .topbar.small .who .m{font-size:11.5px; color:#5C6E90; font-family:var(--font-mono);}
   .badge{ font-size:11px; padding:3px 9px; border-radius:20px; font-family:var(--font-mono); }
-  .badge.synced{ background:rgba(63,191,127,0.18); color:var(--green); }
-  .switchbtn{ background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); color:#fff; font-size:12px; padding:6px 10px; border-radius:8px; cursor:pointer; }
+  .badge.synced{ background:rgba(58,174,114,0.16); color:var(--green); }
+  .switchbtn{ background:rgba(28,37,54,0.06); border:1px solid rgba(28,37,54,0.14); color:var(--text); font-size:12px; padding:6px 10px; border-radius:8px; cursor:pointer; }
 
   main{padding:18px 20px 40px;}
   .section-label{ font-family:var(--font-mono); font-size:11.5px; color:var(--text-mute); text-transform:uppercase; letter-spacing:0.06em; margin:20px 0 10px; }
