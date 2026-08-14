@@ -21,7 +21,7 @@
   .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); position:relative; z-index:2; transition:max-width .2s ease; }
   .app.wide{ max-width:1180px; }
   @media (max-width: 860px){ .app.wide{ max-width:480px; } }
-  .watermark{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); z-index:1; pointer-events:none; font-family:var(--font-display); font-weight:800; font-size:15vw; letter-spacing:0.06em; color:var(--accent); opacity:0.08; text-transform:uppercase; white-space:nowrap; }
+  .watermark{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); z-index:1; pointer-events:none; font-family:var(--font-display); font-weight:800; font-size:15vw; letter-spacing:0.06em; color:var(--accent); opacity:0.15; text-transform:uppercase; white-space:nowrap; }
   .watermark span{ color:var(--accent-2); }
   .view{display:none; position:relative; z-index:2;} .view.active{display:block;}
 
@@ -263,6 +263,8 @@
       <div class="who"><div class="n" id="stopSite"></div><div class="m" id="stopTime"></div></div>
     </div>
     <div class="infobox" id="stopInfoBox"></div>
+    <button class="bigbtn arrive" id="arriveBtn">到店打卡</button>
+    <div class="statusline" id="arriveStatus"></div>
     <div class="taskcount" id="taskCountLine"></div>
     <div id="allDoneMsg"></div>
     <div id="taskRows"></div>
@@ -275,9 +277,8 @@
       <label>備註（選填）</label>
       <textarea id="stopNote" placeholder="有狀況可以在這裡說明..."></textarea>
     </div>
-    <div class="statusline" id="stopStatus"></div>
-    <button class="bigbtn arrive" id="arriveBtn">到店打卡</button>
     <button class="bigbtn depart" id="departBtn" style="display:none;">離店打卡</button>
+    <div class="statusline" id="stopStatus"></div>
   </div>
 
   <!-- ADMIN -->
@@ -308,6 +309,7 @@
 
   // ============ DRIVER DATA ============
   function T(name, days){ return {name, days}; }
+  const REGION_ORDER = ['台北','桃園','台中','嘉義','台南','高雄'];
   const DRIVERS = [
     { region:'高雄', code:'南高1', name:'朱家宏', hours:'09:00-18:00',
       tables:{ A:[T('勻貨歸倉',[2,3,4,5]),T('補貨歸倉',[3,4,5]),T('追加歸倉',[3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('集貨寄貨',[1,2,3,4,5])] },
@@ -350,7 +352,7 @@
       dailyStops:[ {site:'一中/OL',time:'10:30-11:00',table:'A'}, {site:'漢神',time:'11:20-11:40',table:'A'}, {site:'逢甲',time:'12:00-12:10',table:'A'}, {site:'新光',time:'12:20-12:30',table:'A'}, {site:'一中門市(支援)',time:'14:00-16:00',table:'A'}, {site:'漢神洲際(支援)',time:'16:20-19:30',table:'A'} ]
     },
     { region:'台北', code:'北1', name:'林柏均', hours:'依當日排程',
-      tables:{ A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3,4]),T('新品整理',[3,4]),T('濾網清潔',[2,3])] },
+      tables:{ A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3,4]),T('新品整理',[3,4,5]),T('濾網清潔',[2,3])] },
       weeklyStops:{
         1:[{site:'南西AS店',time:'10:30-12:30',table:'A'},{site:'中山一店',time:'12:30-13:30',table:'A'},{site:'南西一店',time:'14:30-17:30',table:'A'},{site:'南西LADY',time:'17:40-18:40',table:'A'},{site:'南西三店',time:'18:40-19:30',table:'A'}],
         2:[{site:'南西LADY',time:'10:30-12:00',table:'A'},{site:'中山一店',time:'12:00-14:00',table:'A'},{site:'南西AS',time:'15:00-17:30',table:'A'},{site:'敦南OL',time:'17:35-19:30',table:'A'}],
@@ -360,7 +362,7 @@
       }
     },
     { region:'台北', code:'北2', name:'朱銘澤', hours:'依當日排程',
-      tables:{ A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('濾網清潔',[2,3])] },
+      tables:{ A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3,5]),T('濾網清潔',[2,3])] },
       weeklyStops:{
         1:[{site:'大安',time:'10:30-12:00',table:'A'},{site:'敦南AS',time:'15:40-17:40',table:'A'},{site:'敦南OL',time:'17:40-19:30',table:'A'}],
         2:[{site:'大安',time:'10:30-12:00',table:'A'},{site:'敦南AS',time:'15:40-17:40',table:'A'},{site:'敦南OL',time:'17:40-19:30',table:'A'}],
@@ -371,7 +373,7 @@
     },
     { region:'台北', code:'北3', name:'賴昱誠', hours:'依當日排程',
       tables:{
-        A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3,4,5]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3])],
+        A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3,4,5]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3,5])],
         B:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[4]),T('新品整理',[4]),T('濾網清潔',[2,3])]
       },
       weeklyStops:{
@@ -430,7 +432,7 @@
   // ============ HOME ============
   function renderHome(){
     $('homeDate').textContent = fmtDateDisplay();
-    const regions = [...new Set(DRIVERS.map(d=>d.region))];
+    const regions = [...new Set(DRIVERS.map(d=>d.region))].sort((a,b)=> REGION_ORDER.indexOf(a) - REGION_ORDER.indexOf(b));
     $('regionGrid').innerHTML = regions.map(r=>{
       const count = DRIVERS.filter(d=>d.region===r).length;
       return `<div class="regioncard" data-region="${r}"><div class="rn">${r}</div><div class="rc">${count} 位司機</div></div>`;
@@ -668,6 +670,7 @@
     $('photoHint').style.display='block';
     if(st.photo){ $('photoPreview').src = st.photo; $('photoPreview').style.display='block'; $('photoHint').style.display='none'; }
     $('stopStatus').textContent=''; $('stopStatus').className='statusline';
+    $('arriveStatus').textContent=''; $('arriveStatus').className='statusline';
 
     renderStopInfoBox(stop, st);
     renderTaskRows(stop, st, weekday);
@@ -824,7 +827,7 @@
       $('arriveBtn').style.display='none'; $('departBtn').style.display='block';
       $('arriveBtn').disabled=false; $('arriveBtn').textContent='到店打卡';
       const ok = await saveCurrentState();
-      setStopStatus(ok ? '✓ 已記錄到店' : '打卡失敗，請檢查網路', !ok);
+      setArriveStatus(ok ? '✓ 已記錄到店' : '打卡失敗，請檢查網路', !ok);
     };
     if(navigator.geolocation){
       navigator.geolocation.getCurrentPosition(
@@ -851,6 +854,7 @@
     }
   });
   function setStopStatus(msg, isErr){ $('stopStatus').textContent = msg; $('stopStatus').className = 'statusline '+(isErr?'err':'ok'); }
+  function setArriveStatus(msg, isErr){ $('arriveStatus').textContent = msg; $('arriveStatus').className = 'statusline '+(isErr?'err':'ok'); }
 
   // ============ ADMIN ============
   let adminTab = 'live';
