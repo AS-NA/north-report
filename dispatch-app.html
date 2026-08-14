@@ -154,6 +154,13 @@
   .heroCard .v{ font-family:var(--font-display); font-size:44px; font-weight:700; }
   .heroCard .l{ font-size:12px; color:var(--text-mute); margin-top:4px; font-family:var(--font-mono); }
   .miniline{ margin:0 20px 10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; }
+  .drillbar{ display:flex; align-items:center; gap:10px; margin:0 20px 14px; }
+  .drillbar .back2{ background:var(--panel); border:1px solid var(--line); color:var(--text); width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:16px; }
+  .drillbar .title{ font-family:var(--font-display); font-weight:700; font-size:16px; }
+  .taskpct{ margin:0 20px 10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .taskpct .trow{ display:flex; justify-content:space-between; font-size:13.5px; margin-bottom:6px; }
+  .taskpct .trow b{ font-weight:700; }
+  .taskpct .trow span{ font-family:var(--font-mono); color:var(--text-mute); font-size:12px; }
   .miniline .n{font-weight:600; font-size:13.5px;}
   .miniline .c{font-size:11px; color:var(--text-mute); font-family:var(--font-mono);}
   .placeholder{ margin:40px 20px; text-align:center; color:var(--text-mute); font-size:13.5px; line-height:1.8; }
@@ -710,6 +717,7 @@
   let adminTab = 'live';
   let adminDate = todayDateStr();
   async function openAdmin(){
+    liveDrill = null;
     showView('view-admin');
     await ensureCheckinsThen(renderAdmin, $('adminBody'));
   }
@@ -718,6 +726,7 @@
       document.querySelectorAll('.admintab').forEach(x=>x.classList.remove('active'));
       t.classList.add('active');
       adminTab = t.dataset.atab;
+      liveDrill = null;
       renderAdmin();
     });
   });
@@ -727,6 +736,7 @@
   function buildAdminAnalytics(weekday, dateStr){
     const online = [], notOnline = [], anomalies = [];
     let totalTasks=0, totalDone=0;
+    const byTaskType = {}; // name -> {total, done}
     DRIVERS.forEach(d=>{
       const stops = getStopsFor(d, weekday);
       if(d.noSchedule || stops.length===0) return; // skip drivers with no schedule data
@@ -750,17 +760,25 @@
         }
         const tasks = getStopTasks(d, stop, weekday).filter(t=>t.active);
         tasks.forEach(t=>{
+          if(!byTaskType[t.name]) byTaskType[t.name] = {total:0, done:0};
+          byTaskType[t.name].total++;
           const v = st.tasks && st.tasks[t.name];
+          if(v==='done') byTaskType[t.name].done++;
           if(v==='notdone') anomalies.push({type:'notdone', driver:d, stop, detail:t.name});
           if(v==='na') anomalies.push({type:'na', driver:d, stop, detail:t.name});
         });
         if(st.note && st.note.trim()) anomalies.push({type:'note', driver:d, stop, detail:st.note.trim()});
       });
     });
-    return { online, notOnline, anomalies, totalTasks, totalDone, overallPct: totalTasks ? Math.round(totalDone/totalTasks*100) : 0 };
+    const taskTypeList = Object.keys(byTaskType).map(name=>({
+      name, total: byTaskType[name].total, done: byTaskType[name].done,
+      pct: byTaskType[name].total ? Math.round(byTaskType[name].done/byTaskType[name].total*100) : 0
+    })).sort((a,b)=> a.pct - b.pct);
+    return { online, notOnline, anomalies, totalTasks, totalDone, taskTypeList, overallPct: totalTasks ? Math.round(totalDone/totalTasks*100) : 0 };
   }
 
   const ANOMALY_LABEL = { late:'遲到', notdone:'未完成', na:'不適用', note:'備註' };
+  let liveDrill = null; // null | 'completion' | 'online' | 'offline' | 'anomaly'
 
   function renderAdmin(){
     if(adminTab==='reason' || adminTab==='export' || adminTab==='people'){
@@ -780,26 +798,55 @@
     `;
 
     if(adminTab==='live'){
-      body += `<div class="heroCard"><div class="v">${a.overallPct}%</div><div class="l">全台完成度 · ${a.totalDone}/${a.totalTasks} 項</div></div>`;
-
-      body += `<div class="section-label">上線司機（${a.online.length}）</div>`;
-      body += a.online.length ? a.online.map(({d,prog})=>`
-        <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code}</div></div><div class="c">${prog.pct}% · 到站 ${prog.arrivedCount}/${prog.totalStops}</div></div>
-      `).join('') : `<div class="placeholder" style="margin:10px 20px;">目前沒有司機上線</div>`;
-
-      body += `<div class="section-label">異常狀況（${a.anomalies.length}）</div>`;
-      body += a.anomalies.length ? a.anomalies.map(an=>`
-        <div class="anomaly">
-          <span class="abadge ${an.type}">${ANOMALY_LABEL[an.type]}</span>
-          <div class="atext"><b>${escapeHtml(an.driver.name)}</b>　${escapeHtml(an.stop.site)}<div class="sub">${escapeHtml(an.detail)}</div></div>
-        </div>
-      `).join('') : `<div class="placeholder" style="margin:10px 20px;">目前沒有異常狀況</div>`;
-
-      body += `<div class="section-label">未上線司機（${a.notOnline.length}）</div>`;
-      body += a.notOnline.length ? a.notOnline.map(({d})=>`
-        <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${d.hours}</div></div><div class="c">尚未打卡</div></div>
-      `).join('') : `<div class="placeholder" style="margin:10px 20px;">今天排班的司機都已上線</div>`;
-
+      if(!liveDrill){
+        body += `<div class="cards4">
+          <div class="kpi" data-drill="completion" style="cursor:pointer;"><div class="v">${a.overallPct}%</div><div class="l">全台完成度 · ${a.totalDone}/${a.totalTasks} 項</div></div>
+          <div class="kpi" data-drill="online" style="cursor:pointer;"><div class="v">${a.online.length}</div><div class="l">上線司機</div></div>
+          <div class="kpi" data-drill="offline" style="cursor:pointer;"><div class="v">${a.notOnline.length}</div><div class="l">未上線司機</div></div>
+          <div class="kpi" data-drill="anomaly" style="cursor:pointer;"><div class="v">${a.anomalies.length}</div><div class="l">異常狀況</div></div>
+        </div>`;
+      }else if(liveDrill==='completion'){
+        body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">全台完成度 · ${a.overallPct}%</div></div>`;
+        body += a.taskTypeList.length ? a.taskTypeList.map(t=>`
+          <div class="taskpct">
+            <div class="trow"><b>${escapeHtml(t.name)}</b><span>${t.done}/${t.total} · ${t.pct}%</span></div>
+            <div class="barbg"><div class="barfg" style="width:${t.pct}%"></div></div>
+          </div>
+        `).join('') : `<div class="placeholder">今天還沒有任何工作項目資料</div>`;
+      }else if(liveDrill==='online'){
+        body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">上線司機（${a.online.length}）</div></div>`;
+        body += a.online.length ? a.online.map(({d,prog})=>`
+          <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code}</div></div><div class="c">${prog.pct}% · 到站 ${prog.arrivedCount}/${prog.totalStops}</div></div>
+        `).join('') : `<div class="placeholder">目前沒有司機上線</div>`;
+      }else if(liveDrill==='offline'){
+        body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">未上線司機（${a.notOnline.length}）</div></div>`;
+        body += a.notOnline.length ? a.notOnline.map(({d})=>`
+          <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${d.hours}</div></div><div class="c">尚未打卡</div></div>
+        `).join('') : `<div class="placeholder">今天排班的司機都已上線</div>`;
+      }else if(liveDrill==='anomaly'){
+        body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">異常狀況（${a.anomalies.length}）</div></div>`;
+        if(a.anomalies.length){
+          const bySite = {};
+          a.anomalies.forEach(an=>{
+            const siteKey = an.stop.site;
+            if(!bySite[siteKey]) bySite[siteKey] = [];
+            bySite[siteKey].push(an);
+          });
+          body += Object.keys(bySite).map(site=>{
+            const items = bySite[site];
+            const driverNames = [...new Set(items.map(i=>i.driver.name))].join('、');
+            return `<div class="section-label" style="margin-top:18px;">${escapeHtml(site)}（${items.length}）<span style="font-weight:400; color:var(--text-mute); text-transform:none; font-family:var(--font-body);">　${escapeHtml(driverNames)}</span></div>` +
+              items.map(an=>`
+                <div class="anomaly">
+                  <span class="abadge ${an.type}">${ANOMALY_LABEL[an.type]}</span>
+                  <div class="atext"><b>${escapeHtml(an.driver.name)}</b><div class="sub">${escapeHtml(an.detail)}</div></div>
+                </div>
+              `).join('');
+          }).join('');
+        }else{
+          body += `<div class="placeholder">目前沒有異常狀況</div>`;
+        }
+      }
     }else if(adminTab==='rate'){
       const rows = DRIVERS.filter(d=>!d.noSchedule).map(d=>{
         const stops = getStopsFor(d, weekday);
@@ -830,6 +877,11 @@
     $('adminBody').innerHTML = body;
     $('adminDateInput').addEventListener('change', (e)=>{ adminDate = e.target.value; renderAdmin(); });
     $('adminRefreshBtn').addEventListener('click', async ()=>{ $('adminBody').innerHTML='<div class="loading">載入中...</div>'; await refreshCheckins(); renderAdmin(); });
+    document.querySelectorAll('#adminBody [data-drill]').forEach(el=>{
+      el.addEventListener('click', ()=>{ liveDrill = el.dataset.drill; renderAdmin(); });
+    });
+    const backBtn = $('drillBackBtn');
+    if(backBtn) backBtn.addEventListener('click', ()=>{ liveDrill = null; renderAdmin(); });
   }
 
   $('imgModalBg').addEventListener('click', ()=> $('imgModalBg').classList.remove('active'));
