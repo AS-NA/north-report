@@ -175,6 +175,20 @@
   .taskpct .trow span{ font-family:var(--font-mono); color:var(--text-mute); font-size:12px; }
   .miniline .n{font-weight:600; font-size:13.5px;}
   .miniline .c{font-size:11px; color:var(--text-mute); font-family:var(--font-mono);}
+  .weekhead{ margin:0 20px 12px; font-size:12.5px; color:var(--text-mute); font-family:var(--font-mono); }
+  .weektablewrap{ margin:0 20px 12px; overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+  .weektable{ border-collapse:collapse; width:100%; min-width:640px; font-size:12.5px; }
+  .weektable th, .weektable td{ padding:10px 12px; text-align:center; white-space:nowrap; border-bottom:1px solid var(--line); }
+  .weektable th{ font-family:var(--font-mono); font-size:11px; color:var(--text-mute); text-transform:uppercase; letter-spacing:0.04em; background:var(--panel-2); position:sticky; top:0; }
+  .weektable td:nth-child(2){ text-align:left; }
+  .weektable tr:last-child td{ border-bottom:none; }
+  .wdn{ font-weight:700; font-size:13px; }
+  .wdc{ font-size:10.5px; color:var(--text-mute); font-family:var(--font-mono); }
+  .wpct{ font-family:var(--font-display); font-weight:700; font-size:14px; }
+  .wfrac{ font-size:10px; color:var(--text-mute); font-family:var(--font-mono); margin-top:2px; }
+  .wflag{ display:inline-block; min-width:20px; padding:2px 6px; border-radius:10px; font-family:var(--font-mono); font-weight:700; }
+  .wflag.warn{ background:rgba(217,96,75,0.16); color:var(--red); }
+  .weekfoot{ margin:0 20px 20px; font-size:11.5px; color:var(--text-mute); line-height:1.6; }
   .placeholder{ margin:40px 20px; text-align:center; color:var(--text-mute); font-size:13.5px; line-height:1.8; }
 
   .loading{text-align:center; padding:50px 20px; color:var(--text-mute); font-family:var(--font-mono); font-size:13px;}
@@ -877,6 +891,61 @@
   }
 
   const ANOMALY_LABEL = { late:'遲到', notdone:'未完成', na:'不適用', note:'備註' };
+
+  function mondayOfWeek(dateStr){
+    const [y,m,d] = dateStr.split('-').map(Number);
+    const date = new Date(y,m-1,d);
+    const day = date.getDay();
+    const diffToMonday = day===0 ? -6 : 1-day;
+    date.setDate(date.getDate()+diffToMonday);
+    return date;
+  }
+  function dateStrFromDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function buildWeekDates(dateStr){
+    const monday = mondayOfWeek(dateStr);
+    const dates = [];
+    for(let i=0;i<5;i++){ const dt = new Date(monday); dt.setDate(monday.getDate()+i); dates.push(dateStrFromDate(dt)); }
+    return dates;
+  }
+
+  function buildWeeklyTable(weekDates){
+    const rows = DRIVERS.filter(d=>!d.noSchedule).map(d=>{
+      let totalTasks=0, doneCount=0, weightedSum=0, lateCount=0, naCount=0, allTasksCount=0;
+      const dayPct = [];
+      weekDates.forEach((dateStr, idx)=>{
+        const weekday = idx+1; // Monday..Friday
+        const stops = getStopsFor(d, weekday);
+        const key = driverKey(d)+'|'+dateStr;
+        const rec = allCheckins.find(r=>r.key===key);
+        let state = { stops: stops.map(()=>({tasks:{}})) };
+        if(rec && rec.state){ try{ const p = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; if(p&&p.stops) state=p; }catch(e){} }
+        let dTotal=0, dWeighted=0;
+        stops.forEach((stop,i)=>{
+          const st = state.stops[i] || {};
+          if(st.arrivedAt){
+            const sched = parseSchedStart(stop.time);
+            if(sched){ const diff = Math.round((new Date(st.arrivedAt)-sched)/60000); if(diff>LATE_TOLERANCE_MIN) lateCount++; }
+          }
+          const tasks = getStopTasks(d, stop, weekday).filter(t=>t.active);
+          tasks.forEach(t=>{
+            allTasksCount++;
+            const rec2 = st.tasks && st.tasks[t.name];
+            if(rec2 && rec2.status==='na'){ naCount++; return; }
+            dTotal++; totalTasks++;
+            if(rec2 && rec2.status==='done'){ dWeighted+=100; doneCount++; }
+            else if(rec2 && rec2.status==='partial'){ dWeighted += (typeof rec2.percent==='number'?rec2.percent:0); }
+          });
+        });
+        dayPct.push(dTotal ? Math.round(dWeighted/dTotal) : 0);
+        weightedSum += dWeighted;
+      });
+      const weekPct = totalTasks ? Math.round(weightedSum/totalTasks) : 0;
+      const naRate = allTasksCount ? Math.round(naCount/allTasksCount*100) : 0;
+      return { d, weekPct, dayPct, doneCount, totalTasks, notdoneCount: totalTasks-doneCount, lateCount, naRate };
+    });
+    rows.sort((a,b)=> b.weekPct - a.weekPct);
+    return rows;
+  }
   let liveDrill = null; // null | 'completion' | 'online' | 'offline' | 'anomaly'
 
   function renderAdmin(){
@@ -947,31 +1016,35 @@
         }
       }
     }else if(adminTab==='rate'){
-      const rows = DRIVERS.filter(d=>!d.noSchedule).map(d=>{
-        const stops = getStopsFor(d, weekday);
-        const key = driverKey(d)+'|'+adminDate;
-        const rec = allCheckins.find(r=>r.key===key);
-        let state = { stops: stops.map(()=>({tasks:{}})) };
-        if(rec && rec.state){ try{ const p = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; if(p&&p.stops) state=p; }catch(e){} }
-        const prog = computeProgress(d, weekday, state);
-        const started = state.stops.some(s=>s && s.arrivedAt);
-        const allDeparted = stops.length>0 && state.stops.every((s,i)=> stops[i] ? !!(s&&s.departedAt) : true) && started;
-        const finished = allDeparted && prog.pct===100;
-        return { d, stops, prog, started, finished, allDeparted };
-      });
-      body += `<div class="heroCard"><div class="v">${a.overallPct}%</div><div class="l">全台完成度 · ${a.totalDone}/${a.totalTasks} 項</div></div>`;
-      body += rows.map(({d,prog,started,finished,allDeparted})=>{
-        const statusLabel = finished ? '已完成' : allDeparted ? '已離店（未全滿）' : started ? '在店中' : '尚未開始';
-        const statusClass = (started && !allDeparted) ? 'on' : 'off';
-        return `<div class="drow">
-          <div class="top">
-            <div><div class="dn">${escapeHtml(d.name)}</div><div class="dc">${d.region} · ${d.code} · ${escapeHtml(d.name)}</div></div>
-            <span class="st ${statusClass}">${statusLabel}</span>
-          </div>
-          <div class="barbg"><div class="barfg" style="width:${prog.pct}%"></div></div>
-          <div class="bottom"><span>${prog.doneTasks}/${prog.totalTasks} 項</span><span>到站 ${prog.arrivedCount}/${prog.totalStops}</span><span>遲到 ${prog.lateCount}</span></div>
-        </div>`;
-      }).join('');
+      const weekDates = buildWeekDates(adminDate);
+      const weekRows = buildWeeklyTable(weekDates);
+      const dayLabels = ['週一','週二','週三','週四','週五'];
+      body += `<div class="weekhead">本週 ${weekDates[0]} ～ ${weekDates[4]}　·　完成度 ＝ 已完成 ÷（應做－不適用）</div>`;
+      body += `<div class="weektablewrap"><table class="weektable">
+        <thead><tr>
+          <th>名次</th><th>司機</th><th>週完成度</th>
+          ${dayLabels.map(l=>`<th>${l}</th>`).join('')}
+          <th>未完成</th><th>遲到</th><th>不適用率</th>
+        </tr></thead>
+        <tbody>
+        ${weekRows.map((r,i)=>`
+          <tr>
+            <td>${i+1}</td>
+            <td><div class="wdn">${escapeHtml(r.d.name)}</div><div class="wdc">${r.d.region}</div></td>
+            <td>
+              <div class="wpct">${r.weekPct}%</div>
+              <div class="barbg" style="width:90px;"><div class="barfg" style="width:${r.weekPct}%"></div></div>
+              <div class="wfrac">${r.doneCount}/${r.totalTasks}</div>
+            </td>
+            ${r.dayPct.map(p=>`<td>${p}%</td>`).join('')}
+            <td>${r.notdoneCount>0?`<span class="wflag warn">${r.notdoneCount}</span>`:r.notdoneCount}</td>
+            <td>${r.lateCount}</td>
+            <td>${r.naRate}%</td>
+          </tr>
+        `).join('')}
+        </tbody>
+      </table></div>
+      <div class="weekfoot">不適用率連續兩週超過 20% 者，之後會自動列入異常清單（此邏輯下一輪加入）。</div>`;
     }
 
     $('adminBody').innerHTML = body;
