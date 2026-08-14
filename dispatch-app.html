@@ -190,6 +190,8 @@
   .wflag.warn{ background:rgba(217,96,75,0.16); color:var(--red); }
   .weekfoot{ margin:0 20px 20px; font-size:11.5px; color:var(--text-mute); line-height:1.6; }
   .placeholder{ margin:40px 20px; text-align:center; color:var(--text-mute); font-size:13.5px; line-height:1.8; }
+  .appfooter{ margin:30px 20px 10px; padding-top:14px; border-top:1px solid var(--line); text-align:center; font-size:11px; color:var(--text-mute); font-family:var(--font-mono); line-height:1.8; }
+  .clearlocal{ color:var(--accent); text-decoration:underline; cursor:pointer; }
 
   .loading{text-align:center; padding:50px 20px; color:var(--text-mute); font-family:var(--font-mono); font-size:13px;}
   .modal-bg{ position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:100; display:none; align-items:center; justify-content:center; padding:24px; }
@@ -214,6 +216,7 @@
       <div class="section-label">請選擇你的區域</div>
       <div class="grid2" id="regionGrid"></div>
       <button class="adminbtn" id="adminBtn">管理端 ／ 總部看板</button>
+      <div id="homeFooterWrap"></div>
     </main>
   </div>
 
@@ -396,6 +399,7 @@
 
   // ============ NAV ============
   let currentRegion = null, currentDriver = null, currentStopIdx = null;
+  let lastLoadedAt = null;
   let currentState = null; // {stops:[{arrivedAt,departedAt,gps,photo,note,tasks:{}}]}
   let allCheckins = []; // fetched from backend
   let checkinsLoadedOnce = false;
@@ -441,7 +445,16 @@
     }else{ $('quickcardWrap').innerHTML=''; }
 
     $('adminBtn').onclick = openAdmin;
+    $('homeFooterWrap').innerHTML = footerInfoHtml();
+    wireFooterInfo();
     showView('view-home');
+    // refresh checkins quietly so the "last loaded" time and quickcard stay current
+    refreshCheckins().then(()=>{
+      if($('view-home').classList.contains('active')){
+        $('homeFooterWrap').innerHTML = footerInfoHtml();
+        wireFooterInfo();
+      }
+    });
   }
 
   function openRegion(region){
@@ -477,7 +490,26 @@
       const data = await res.json();
       allCheckins = Array.isArray(data) ? data.filter(r=>r && r.key) : [];
       checkinsLoadedOnce = true;
+      lastLoadedAt = new Date();
     }catch(e){ allCheckins = allCheckins || []; console.error(e); }
+  }
+
+  function footerInfoHtml(){
+    const timeStr = lastLoadedAt ? lastLoadedAt.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '尚未載入';
+    return `<div class="appfooter">
+      資料來源：Google Sheets 雲端　·　上次載入時間：${timeStr}
+      <br><span class="clearlocal" id="clearLocalBtn">清除本機資料</span>
+    </div>`;
+  }
+  function wireFooterInfo(){
+    const btn = document.getElementById('clearLocalBtn');
+    if(!btn) return;
+    btn.addEventListener('click', ()=>{
+      if(confirm('確定要清除本機儲存的身份紀錄嗎？（不會影響雲端已送出的回報資料）')){
+        try{ localStorage.clear(); }catch(e){}
+        location.reload();
+      }
+    });
   }
 
   // Renders instantly from cache if we have it, then quietly re-fetches and
@@ -1047,6 +1079,8 @@
       <div class="weekfoot">不適用率連續兩週超過 20% 者，之後會自動列入異常清單（此邏輯下一輪加入）。</div>`;
     }
 
+    body += footerInfoHtml();
+
     $('adminBody').innerHTML = body;
     $('adminDateInput').addEventListener('change', (e)=>{ adminDate = e.target.value; renderAdmin(); });
     $('adminRefreshBtn').addEventListener('click', async ()=>{ $('adminBody').innerHTML='<div class="loading">載入中...</div>'; await refreshCheckins(); renderAdmin(); });
@@ -1055,6 +1089,7 @@
     });
     const backBtn = $('drillBackBtn');
     if(backBtn) backBtn.addEventListener('click', ()=>{ liveDrill = null; renderAdmin(); });
+    wireFooterInfo();
   }
 
   $('imgModalBg').addEventListener('click', ()=> $('imgModalBg').classList.remove('active'));
