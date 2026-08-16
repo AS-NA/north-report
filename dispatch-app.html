@@ -116,6 +116,14 @@
   .pctrow input[type=range]{ flex:1; accent-color:var(--accent); height:4px; }
   .pctval{ font-family:var(--font-mono); font-size:14px; font-weight:700; width:44px; text-align:right; }
   .taskextra{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .taskextra select{ width:100%; margin-bottom:10px; }
+  .pctpresets{ display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .pctpreset{ flex:1; min-width:70px; font-size:12px; padding:8px 6px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text-mute); cursor:pointer; font-family:var(--font-body); }
+  .pctpreset.active{ background:var(--accent); border-color:var(--accent); color:#04212E; font-weight:700; }
+  .pctcustomwrap{ display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-mute); font-family:var(--font-mono); flex:0 0 auto; }
+  .pctcustom{ width:52px; padding:8px 6px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:12.5px; text-align:center; }
+  .tasknote{ width:100%; min-height:56px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:13px; font-family:var(--font-body); resize:vertical; }
+  .fieldhint{ font-size:11px; color:var(--text-mute); margin-top:4px; }
   .naReasonSelect{ margin-top:2px; }
   .naword{font-size:12px; color:var(--text-mute); font-family:var(--font-mono);}
 
@@ -738,9 +746,11 @@
               ${NA_REASONS.map(r=>`<option value="${r.code}" ${rec.reason===r.code?'selected':''}>${r.code} ${r.label}</option>`).join('')}
             </select>
           </div>
+          <textarea class="tasknote" style="margin-top:10px;" placeholder="補充說明（任何文字說明）" data-note-task="${escapeHtml(t.name)}">${escapeHtml(rec.note||'')}</textarea>
+          <div class="fieldhint">選填</div>
         </div>`;
       }else if(status==='na'){
-        extraHtml = `<div class="taskextra naReasonSelect">
+        extraHtml = `<div class="taskextra">
           <select data-reason-task="${escapeHtml(t.name)}">
             <option value="">請選擇不適用原因</option>
             ${NA_REASONS.map(r=>`<option value="${r.code}" ${rec.reason===r.code?'selected':''}>${r.code} ${r.label}</option>`).join('')}
@@ -772,7 +782,7 @@
         }else if(val==='done'){
           st.tasks[taskName] = { status:'done' };
         }else if(val==='partial'){
-          st.tasks[taskName] = { status:'partial', percent: (typeof prev.percent==='number')?prev.percent:50, reason: prev.reason||'' };
+          st.tasks[taskName] = { status:'partial', percent: (typeof prev.percent==='number')?prev.percent:50, reason: prev.reason||'', note: prev.note||'' };
         }else if(val==='na'){
           st.tasks[taskName] = { status:'na', reason: prev.reason||'' };
         }
@@ -787,6 +797,13 @@
         inp.closest('.pctrow').querySelector('.pctval').textContent = e.target.value+'%';
       });
       inp.addEventListener('change', async ()=>{ await saveCurrentState(); });
+    });
+    document.querySelectorAll('#taskRows textarea[data-note-task]').forEach(ta=>{
+      ta.addEventListener('change', async (e)=>{
+        const taskName = ta.dataset.noteTask;
+        if(st.tasks[taskName]) st.tasks[taskName].note = e.target.value;
+        await saveCurrentState();
+      });
     });
     document.querySelectorAll('#taskRows select[data-reason-task]').forEach(sel=>{
       sel.addEventListener('change', async (e)=>{
