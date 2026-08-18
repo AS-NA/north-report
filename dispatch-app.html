@@ -312,7 +312,7 @@
 (function(){
   const $ = id => document.getElementById(id);
   const WEEKDAY_NAMES = ['日','一','二','三','四','五','六'];
-  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMXk_qG9JwL6MrajNpFDbHk79mx6h4VZ_OEY8OI318aB2HIw1LA-WXlE8ZuX59BjfK/exec';
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxHRYoZX9d98aRmmpE7ApE3m1Eyr-QtxYhwecTevbs2QjyVLPCcHghU3rgCTt-pMLgj/exec';
   const LATE_TOLERANCE_MIN = 10;
 
   // ============ DRIVER DATA ============
@@ -554,12 +554,18 @@
     const rec = allCheckins.find(r=>r.key===key);
     const weekday = new Date().getDay();
     const stops = getStopsFor(currentDriver, weekday);
+    let base = null;
     if(rec && rec.state){
       let parsed = null;
       try{ parsed = typeof rec.state==='string' ? JSON.parse(rec.state) : rec.state; }catch(e){}
-      if(parsed && parsed.stops){ currentState = parsed; return; }
+      if(parsed && parsed.stops){ base = parsed; }
     }
-    currentState = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})) };
+    if(!base){
+      base = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})) };
+    }
+    // keep the site/time labels synced to the current schedule so the backend log stays readable
+    base.stops.forEach((s,i)=>{ if(stops[i]){ s.site = stops[i].site; s.time = stops[i].time; } });
+    currentState = base;
   }
 
   function setSyncBadge(state){
