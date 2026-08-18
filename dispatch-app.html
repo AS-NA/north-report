@@ -684,19 +684,30 @@
     const stops = getStopsFor(currentDriver, weekday);
     const stop = stops[idx];
     const st = currentState.stops[idx];
+    const locked = !!st.departedAt;
     stopPhotoData = null;
 
     $('stopSite').textContent = `① ${stop.site}`;
     $('stopTime').textContent = stop.time;
     $('stopNote').value = st.note || '';
+    $('stopNote').disabled = locked;
     $('photoPreview').style.display='none'; $('photoPreview').src='';
     $('photoHint').style.display='block';
     if(st.photo){ $('photoPreview').src = st.photo; $('photoPreview').style.display='block'; $('photoHint').style.display='none'; }
+    $('photoBox').style.pointerEvents = locked ? 'none' : 'auto';
+    $('photoBox').style.opacity = locked ? '0.6' : '1';
     $('stopStatus').textContent=''; $('stopStatus').className='statusline';
     $('arriveStatus').textContent=''; $('arriveStatus').className='statusline';
+    if(locked){
+      $('arriveStatus').textContent = '🔒 本站已離店，紀錄已鎖定，無法再修改';
+      $('arriveStatus').className = 'statusline';
+      $('arriveStatus').style.color = 'var(--text-mute)';
+    }else{
+      $('arriveStatus').style.color = '';
+    }
 
     renderStopInfoBox(stop, st);
-    renderTaskRows(stop, st, weekday);
+    renderTaskRows(stop, st, weekday, locked);
 
     $('arriveBtn').style.display = st.arrivedAt ? 'none' : 'block';
     $('departBtn').style.display = st.arrivedAt && !st.departedAt ? 'block' : 'none';
@@ -735,7 +746,7 @@
   ];
   const NA_REASON_MAP = {}; NA_REASONS.forEach(r=> NA_REASON_MAP[r.code]=r);
 
-  function renderTaskRows(stop, st, weekday){
+  function renderTaskRows(stop, st, weekday, locked){
     const tasks = getStopTasks(currentDriver, stop, weekday);
     const activeTasks = tasks.filter(t=>t.active);
     const inactiveCount = tasks.length - activeTasks.length;
@@ -751,22 +762,23 @@
       const rec = (st.tasks && st.tasks[t.name]) || {};
       const status = rec.status || '';
       const percent = (typeof rec.percent === 'number') ? rec.percent : 50;
+      const dis = locked ? 'disabled' : '';
       let extraHtml = '';
       if(status==='partial'){
         extraHtml = `<div class="taskextra">
-          <div class="pctrow"><input type="range" min="0" max="99" step="5" value="${percent}" data-pct-task="${escapeHtml(t.name)}"><span class="pctval">${percent}%</span></div>
+          <div class="pctrow"><input type="range" min="0" max="99" step="5" value="${percent}" data-pct-task="${escapeHtml(t.name)}" ${dis}><span class="pctval">${percent}%</span></div>
           <div class="naReasonSelect" style="margin-top:10px;">
-            <select data-reason-task="${escapeHtml(t.name)}">
+            <select data-reason-task="${escapeHtml(t.name)}" ${dis}>
               <option value="">請選擇未完成原因（選填）</option>
               ${NA_REASONS.map(r=>`<option value="${r.code}" ${rec.reason===r.code?'selected':''}>${r.code} ${r.label}</option>`).join('')}
             </select>
           </div>
-          <textarea class="tasknote" style="margin-top:10px;" placeholder="補充說明（任何文字說明）" data-note-task="${escapeHtml(t.name)}">${escapeHtml(rec.note||'')}</textarea>
+          <textarea class="tasknote" style="margin-top:10px;" placeholder="補充說明（任何文字說明）" data-note-task="${escapeHtml(t.name)}" ${dis}>${escapeHtml(rec.note||'')}</textarea>
           <div class="fieldhint">選填</div>
         </div>`;
       }else if(status==='na'){
         extraHtml = `<div class="taskextra">
-          <select data-reason-task="${escapeHtml(t.name)}">
+          <select data-reason-task="${escapeHtml(t.name)}" ${dis}>
             <option value="">請選擇不適用原因</option>
             ${NA_REASONS.map(r=>`<option value="${r.code}" ${rec.reason===r.code?'selected':''}>${r.code} ${r.label}</option>`).join('')}
           </select>
@@ -776,14 +788,16 @@
         <div class="trtop">
           <div class="taskname">${escapeHtml(t.name)}</div>
           <div class="taskbtns">
-            <button class="tbtn done ${status==='done'?'active':''}" data-val="done">完成</button>
-            <button class="tbtn notdone ${status==='partial'?'active':''}" data-val="partial">未完成</button>
-            <button class="nabtn ${status==='na'?'active':''}" data-val="na">不適用</button>
+            <button class="tbtn done ${status==='done'?'active':''}" data-val="done" ${dis}>完成</button>
+            <button class="tbtn notdone ${status==='partial'?'active':''}" data-val="partial" ${dis}>未完成</button>
+            <button class="nabtn ${status==='na'?'active':''}" data-val="na" ${dis}>不適用</button>
           </div>
         </div>
         ${extraHtml}
       </div>`;
     }).join('');
+
+    if(locked) return; // no listeners attached — record is locked after departure
 
     document.querySelectorAll('#taskRows .taskrow[data-task] .tbtn, #taskRows .taskrow[data-task] .nabtn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
@@ -801,7 +815,7 @@
         }else if(val==='na'){
           st.tasks[taskName] = { status:'na', reason: prev.reason||'' };
         }
-        renderTaskRows(stop, st, weekday);
+        renderTaskRows(stop, st, weekday, locked);
         await saveCurrentState();
       });
     });
