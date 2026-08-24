@@ -210,8 +210,22 @@
   .modal-bg{ position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:100; display:none; align-items:center; justify-content:center; padding:24px; }
   .modal-bg.active{display:flex;}
   .modal{ background:var(--panel-2); border:1px solid var(--line); border-radius:14px; padding:20px; max-width:92vw; max-height:86vh; }
+  .scanmodal{ width:360px; overflow-y:auto; }
+  .scanmodal h3{ margin:0 0 12px; font-family:var(--font-display); font-size:16px; }
+  #scanReaderDiv{ width:100%; border-radius:10px; overflow:hidden; background:#000; min-height:220px; }
+  .scanhint{ text-align:center; font-size:11.5px; color:var(--text-mute); margin-top:8px; }
+  .scanlist{ margin-top:12px; max-height:160px; overflow-y:auto; }
+  .scanitem{ display:flex; justify-content:space-between; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12.5px; }
+  .scanitem .code{ font-family:var(--font-mono); font-weight:600; }
+  .scanitem .rmv{ color:var(--red); cursor:pointer; font-size:11px; }
+  .shipblock{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .shipblock .shiplist{ margin-bottom:8px; }
+  .shipblock .shipitem{ font-family:var(--font-mono); font-size:12px; background:var(--panel-2); border:1px solid var(--line); border-radius:6px; padding:5px 8px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; }
+  .shipblock .shipitem .rmv{ color:var(--red); cursor:pointer; font-size:11px; margin-left:8px; }
+  .scanbtn{ width:100%; padding:9px; border-radius:8px; border:1px solid var(--accent); background:transparent; color:var(--accent); font-size:12.5px; cursor:pointer; font-family:var(--font-body); }
   .modal img{max-width:100%; max-height:78vh; border-radius:8px; display:block;}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -306,13 +320,23 @@
   </div>
 
   <div class="modal-bg" id="imgModalBg"><div class="modal"><img id="imgModalSrc"></div></div>
+
+  <div class="modal-bg" id="scanModalBg">
+    <div class="modal scanmodal">
+      <h3 id="scanModalTitle">掃描單號</h3>
+      <div id="scanReaderDiv"></div>
+      <div class="scanhint">將條碼對準框框內</div>
+      <div class="scanlist" id="scanList"></div>
+      <button class="btn accent" id="scanDoneBtn" style="margin-top:14px;">完成</button>
+    </div>
+  </div>
 </div>
 
 <script>
 (function(){
   const $ = id => document.getElementById(id);
   const WEEKDAY_NAMES = ['日','一','二','三','四','五','六'];
-  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQFwA5SkgqzeGeVWKbUJhDoeTRKUM_Up-ZocMrW67RHJROxJ10HGL4Tm1R9DvTNmwO/exec';
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpNQnSSTS_aFf_CbXH2q2JtxTP_1_veEJBkw43hwjNTF4_YiMypSF3t75l-2fKaIBY/exec';
   const LATE_TOLERANCE_MIN = 10;
 
   // ============ DRIVER DATA ============
@@ -784,6 +808,15 @@
           </select>
         </div>`;
       }
+      const isShipping = (t.name==='寄黑貓' || t.name==='寄新竹物流');
+      let shipHtml = '';
+      if(isShipping){
+        const scans = rec.scans || [];
+        shipHtml = `<div class="shipblock" data-ship-task="${escapeHtml(t.name)}">
+          <div class="shiplist">${scans.length ? scans.map((s,si)=>`<div class="shipitem"><span>${escapeHtml(s.code)}</span>${locked?'':`<span class="rmv" data-rm-idx="${si}">移除</span>`}</div>`).join('') : `<div class="fieldhint">尚未掃描任何單號</div>`}</div>
+          ${locked ? '' : `<button class="scanbtn" data-scan-task="${escapeHtml(t.name)}" type="button">📷 掃描單號（${scans.length}）</button>`}
+        </div>`;
+      }
       return `<div class="taskrow" data-task="${escapeHtml(t.name)}">
         <div class="trtop">
           <div class="taskname">${escapeHtml(t.name)}</div>
@@ -794,11 +827,29 @@
           </div>
         </div>
         ${extraHtml}
+        ${shipHtml}
       </div>`;
     }).join('');
 
     if(locked) return; // no listeners attached — record is locked after departure
 
+    document.querySelectorAll('#taskRows .scanbtn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        openScanner(btn.dataset.scanTask, stop, st, weekday);
+      });
+    });
+    document.querySelectorAll('#taskRows .shipitem .rmv').forEach(el=>{
+      el.addEventListener('click', async ()=>{
+        const block = el.closest('.shipblock');
+        const taskName = block.dataset.shipTask;
+        const idx = +el.dataset.rmIdx;
+        if(st.tasks[taskName] && st.tasks[taskName].scans){
+          st.tasks[taskName].scans.splice(idx,1);
+          renderTaskRows(stop, st, weekday, locked);
+          await saveCurrentState();
+        }
+      });
+    });
     document.querySelectorAll('#taskRows .taskrow[data-task] .tbtn, #taskRows .taskrow[data-task] .nabtn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         const row = btn.closest('.taskrow');
@@ -842,6 +893,69 @@
       });
     });
   }
+
+  // ============ BARCODE SCANNER (for 寄黑貓 / 寄新竹物流 tracking numbers) ============
+  let scannerInstance = null;
+  function renderScanList(taskName, st){
+    const scans = (st.tasks[taskName] && st.tasks[taskName].scans) || [];
+    $('scanList').innerHTML = scans.length
+      ? scans.map((s,i)=>`<div class="scanitem"><span class="code">${escapeHtml(s.code)}</span><span class="rmv" data-rm="${i}">移除</span></div>`).join('')
+      : '<div class="fieldhint">尚未掃描到任何單號</div>';
+    document.querySelectorAll('#scanList .rmv').forEach(el=>{
+      el.addEventListener('click', async ()=>{
+        scans.splice(+el.dataset.rm,1);
+        renderScanList(taskName, st);
+        await saveCurrentState();
+      });
+    });
+  }
+  function openScanner(taskName, stop, st, weekday){
+    if(typeof Html5Qrcode === 'undefined'){
+      alert('相機掃描功能載入失敗，請確認網路連線後重新整理頁面再試一次');
+      return;
+    }
+    if(!st.tasks[taskName]) st.tasks[taskName] = {};
+    if(!st.tasks[taskName].scans) st.tasks[taskName].scans = [];
+    $('scanModalTitle').textContent = `掃描單號 - ${taskName}`;
+    $('scanReaderDiv').innerHTML = '';
+    renderScanList(taskName, st);
+    $('scanModalBg').classList.add('active');
+
+    let lastCode = null, lastTime = 0;
+    scannerInstance = new Html5Qrcode('scanReaderDiv');
+    scannerInstance.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 260, height: 140 } },
+      (decodedText)=>{
+        const now = Date.now();
+        if(decodedText === lastCode && now - lastTime < 2000) return; // avoid duplicate reads of the same code
+        lastCode = decodedText; lastTime = now;
+        st.tasks[taskName].scans.push({ code: decodedText, ts: new Date().toISOString() });
+        renderScanList(taskName, st);
+        saveCurrentState();
+        if(navigator.vibrate) navigator.vibrate(80);
+      },
+      ()=>{ /* ignore per-frame decode misses */ }
+    ).catch(()=>{
+      $('scanReaderDiv').innerHTML = '<div style="color:#fff; padding:24px; text-align:center; font-size:12.5px;">無法開啟相機，請確認已允許相機權限</div>';
+    });
+  }
+  async function closeScanner(){
+    $('scanModalBg').classList.remove('active');
+    if(scannerInstance){
+      try{ await scannerInstance.stop(); scannerInstance.clear(); }catch(e){}
+      scannerInstance = null;
+    }
+  }
+  $('scanDoneBtn').addEventListener('click', async ()=>{
+    await closeScanner();
+    if(currentStopIdx !== null && currentDriver){
+      const weekday = new Date().getDay();
+      const stops = getStopsFor(currentDriver, weekday);
+      const st = currentState.stops[currentStopIdx];
+      if(stops[currentStopIdx] && st) renderTaskRows(stops[currentStopIdx], st, weekday, !!st.departedAt);
+    }
+  });
 
   $('photoBox').addEventListener('click', ()=> $('fPhoto').click());
   $('fPhoto').addEventListener('change', (e)=>{
