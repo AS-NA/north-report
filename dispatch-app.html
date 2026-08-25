@@ -212,7 +212,7 @@
   .modal{ background:var(--panel-2); border:1px solid var(--line); border-radius:14px; padding:20px; max-width:92vw; max-height:86vh; }
   .scanmodal{ width:360px; overflow-y:auto; }
   .scanmodal h3{ margin:0 0 12px; font-family:var(--font-display); font-size:16px; }
-  #scanReaderDiv{ width:100%; border-radius:10px; overflow:hidden; background:#000; min-height:220px; }
+  #scanReaderDiv{ width:100%; border-radius:10px; overflow:hidden; background:#000; min-height:220px; position:relative; }
   .scanhint{ text-align:center; font-size:11.5px; color:var(--text-mute); margin-top:8px; }
   .scanlist{ margin-top:12px; max-height:160px; overflow-y:auto; }
   .scanitem{ display:flex; justify-content:space-between; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:12.5px; }
@@ -225,7 +225,7 @@
   .scanbtn{ width:100%; padding:9px; border-radius:8px; border:1px solid var(--accent); background:transparent; color:var(--accent); font-size:12.5px; cursor:pointer; font-family:var(--font-body); }
   .modal img{max-width:100%; max-height:78vh; border-radius:8px; display:block;}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -894,8 +894,9 @@
     });
   }
 
-  // ============ BARCODE SCANNER (for 寄黑貓 / 寄新竹物流 tracking numbers) ============
-  let scannerInstance = null;
+  // ============ BARCODE SCANNER (Quagga2, for 寄黑貓 / 寄新竹物流 tracking numbers) ============
+  let scannerActive = false;
+  let quaggaDetectedHandler = null;
   function renderScanList(taskName, st){
     const scans = (st.tasks[taskName] && st.tasks[taskName].scans) || [];
     $('scanList').innerHTML = scans.length
@@ -910,7 +911,7 @@
     });
   }
   function openScanner(taskName, stop, st, weekday){
-    if(typeof Html5Qrcode === 'undefined'){
+    if(typeof Quagga === 'undefined'){
       alert('相機掃描功能載入失敗，請確認網路連線後重新整理頁面再試一次');
       return;
     }
@@ -922,33 +923,56 @@
     $('scanModalBg').classList.add('active');
 
     let lastCode = null, lastTime = 0;
-    scannerInstance = new Html5Qrcode('scanReaderDiv');
-    scannerInstance.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 260, height: 140 } },
-      (decodedText)=>{
-        const now = Date.now();
-        if(decodedText === lastCode && now - lastTime < 2000) return; // avoid duplicate reads of the same code
-        lastCode = decodedText; lastTime = now;
-        st.tasks[taskName].scans.push({ code: decodedText, ts: new Date().toISOString() });
-        renderScanList(taskName, st);
-        saveCurrentState();
-        if(navigator.vibrate) navigator.vibrate(80);
+    Quagga.init({
+      inputStream: {
+        name: 'Live',
+        type: 'LiveStream',
+        target: document.getElementById('scanReaderDiv'),
+        constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
       },
-      ()=>{ /* ignore per-frame decode misses */ }
-    ).catch(()=>{
-      $('scanReaderDiv').innerHTML = '<div style="color:#fff; padding:24px; text-align:center; font-size:12.5px;">無法開啟相機，請確認已允許相機權限</div>';
+      locate: true,
+      decoder: {
+        readers: ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','code_39_vin_reader','codabar_reader','upc_reader','upc_e_reader','i2of5_reader']
+      }
+    }, function(err){
+      if(err){
+        $('scanReaderDiv').innerHTML = '<div style="color:#fff; padding:24px; text-align:center; font-size:12.5px;">無法開啟相機，請確認已允許相機權限</div>';
+        return;
+      }
+      Quagga.start();
+      scannerActive = true;
+      const videoEl = document.querySelector('#scanReaderDiv video');
+      const canvasEl = document.querySelector('#scanReaderDiv canvas');
+      if(videoEl){ videoEl.style.width = '100%'; videoEl.style.borderRadius = '10px'; }
+      if(canvasEl){ canvasEl.style.width = '100%'; canvasEl.style.position = 'absolute'; canvasEl.style.top = '0'; }
     });
+
+    quaggaDetectedHandler = function(result){
+      const code = result && result.codeResult && result.codeResult.code;
+      if(!code) return;
+      const now = Date.now();
+      if(code === lastCode && now - lastTime < 2000) return; // avoid duplicate reads of the same code
+      lastCode = code; lastTime = now;
+      st.tasks[taskName].scans.push({ code, ts: new Date().toISOString() });
+      renderScanList(taskName, st);
+      saveCurrentState();
+      if(navigator.vibrate) navigator.vibrate(80);
+    };
+    Quagga.onDetected(quaggaDetectedHandler);
   }
-  async function closeScanner(){
+  function closeScanner(){
     $('scanModalBg').classList.remove('active');
-    if(scannerInstance){
-      try{ await scannerInstance.stop(); scannerInstance.clear(); }catch(e){}
-      scannerInstance = null;
+    if(scannerActive){
+      try{
+        if(quaggaDetectedHandler) Quagga.offDetected(quaggaDetectedHandler);
+        Quagga.stop();
+      }catch(e){}
+      scannerActive = false;
+      quaggaDetectedHandler = null;
     }
   }
-  $('scanDoneBtn').addEventListener('click', async ()=>{
-    await closeScanner();
+  $('scanDoneBtn').addEventListener('click', ()=>{
+    closeScanner();
     if(currentStopIdx !== null && currentDriver){
       const weekday = new Date().getDay();
       const stops = getStopsFor(currentDriver, weekday);
