@@ -930,20 +930,31 @@
         target: document.getElementById('scanReaderDiv'),
         constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
       },
+      numOfWorkers: 0,
       locate: true,
+      locator: { patchSize: 'medium', halfSample: true },
+      frequency: 10,
       decoder: {
-        readers: ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','code_39_vin_reader','codabar_reader','upc_reader','upc_e_reader','i2of5_reader']
+        readers: ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','code_39_vin_reader','codabar_reader','upc_reader','upc_e_reader','i2of5_reader'],
+        multiple: false
       }
     }, function(err){
       if(err){
         $('scanReaderDiv').innerHTML = '<div style="color:#fff; padding:24px; text-align:center; font-size:12.5px;">無法開啟相機，請確認已允許相機權限</div>';
         return;
       }
+      const videoEl = document.querySelector('#scanReaderDiv video');
+      if(videoEl){
+        // iOS Safari requires these to actually play (and keep decoding) inline
+        videoEl.setAttribute('playsinline', 'true');
+        videoEl.setAttribute('webkit-playsinline', 'true');
+        videoEl.muted = true;
+        videoEl.play().catch(()=>{});
+        videoEl.style.width = '100%'; videoEl.style.borderRadius = '10px';
+      }
       Quagga.start();
       scannerActive = true;
-      const videoEl = document.querySelector('#scanReaderDiv video');
       const canvasEl = document.querySelector('#scanReaderDiv canvas');
-      if(videoEl){ videoEl.style.width = '100%'; videoEl.style.borderRadius = '10px'; }
       if(canvasEl){ canvasEl.style.width = '100%'; canvasEl.style.position = 'absolute'; canvasEl.style.top = '0'; }
     });
 
