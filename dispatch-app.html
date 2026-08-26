@@ -228,6 +228,9 @@
   .shipblock .shipitem{ font-family:var(--font-mono); font-size:12px; background:var(--panel-2); border:1px solid var(--line); border-radius:6px; padding:5px 8px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; }
   .shipblock .shipitem .rmv{ color:var(--red); cursor:pointer; font-size:11px; margin-left:8px; }
   .scanbtn{ width:100%; padding:9px; border-radius:8px; border:1px solid var(--accent); background:transparent; color:var(--accent); font-size:12.5px; cursor:pointer; font-family:var(--font-body); }
+  .shipbtnrow{ display:flex; gap:8px; }
+  .shipbtnrow .scanbtn{ flex:1; }
+  .scanbtn.manual{ border-color:var(--text-mute); color:var(--text-mute); }
   .modal img{max-width:100%; max-height:78vh; border-radius:8px; display:block;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
@@ -840,8 +843,11 @@
       if(isShipping){
         const scans = rec.scans || [];
         shipHtml = `<div class="shipblock" data-ship-task="${escapeHtml(t.name)}">
-          <div class="shiplist">${scans.length ? scans.map((s,si)=>`<div class="shipitem"><span>${escapeHtml(s.code)}</span>${locked?'':`<span class="rmv" data-rm-idx="${si}">移除</span>`}</div>`).join('') : `<div class="fieldhint">尚未掃描任何單號</div>`}</div>
-          ${locked ? '' : `<button class="scanbtn" data-scan-task="${escapeHtml(t.name)}" type="button">📷 掃描單號（${scans.length}）</button>`}
+          <div class="shiplist">${scans.length ? scans.map((s,si)=>`<div class="shipitem"><span>${escapeHtml(s.code)}${s.dest?`　→　${escapeHtml(s.dest)}`:''}</span>${locked?'':`<span class="rmv" data-rm-idx="${si}">移除</span>`}</div>`).join('') : `<div class="fieldhint">尚未掃描任何單號</div>`}</div>
+          ${locked ? '' : `<div class="shipbtnrow">
+            <button class="scanbtn" data-scan-task="${escapeHtml(t.name)}" type="button">📷 掃描單號（${scans.length}）</button>
+            <button class="scanbtn manual" data-manual-task="${escapeHtml(t.name)}" type="button">✏️ 手動輸入</button>
+          </div>`}
         </div>`;
       }
       return `<div class="taskrow" data-task="${escapeHtml(t.name)}">
@@ -860,9 +866,14 @@
 
     if(locked) return; // no listeners attached — record is locked after departure
 
-    document.querySelectorAll('#taskRows .scanbtn').forEach(btn=>{
+    document.querySelectorAll('#taskRows .scanbtn[data-scan-task]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         openScanner(btn.dataset.scanTask, stop, st, weekday);
+      });
+    });
+    document.querySelectorAll('#taskRows .scanbtn[data-manual-task]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        openManualEntry(btn.dataset.manualTask, stop, st, weekday);
       });
     });
     document.querySelectorAll('#taskRows .shipitem .rmv').forEach(el=>{
@@ -923,6 +934,7 @@
 
   // ============ BARCODE SCANNER (Quagga2, for 寄黑貓 / 寄新竹物流 tracking numbers) ============
   let scannerActive = false;
+  let manualModeActive = false;
   let scannerPaused = false;
   let quaggaDetectedHandler = null;
   let lastRememberedDest = '';
@@ -944,6 +956,19 @@
       + ALL_SITES.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')
       + '<option value="__other__">其他（手動輸入）</option>';
   }
+  function openManualEntry(taskName, stop, st, weekday){
+    if(!st.tasks[taskName]) st.tasks[taskName] = {};
+    if(!st.tasks[taskName].scans) st.tasks[taskName].scans = [];
+    $('scanModalTitle').textContent = `手動輸入單號 - ${taskName}`;
+    $('scanReaderDiv').innerHTML = '<div style="color:#aaa; padding:30px; text-align:center; font-size:12.5px;">手動輸入模式（未使用相機）</div>';
+    $('scanHintText').style.display = 'none';
+    populateDestSelect();
+    renderScanList(taskName, st);
+    $('scanModalBg').classList.add('active');
+    scannerActive = false;
+    manualModeActive = true;
+    showScanConfirm('', taskName, st);
+  }
   function openScanner(taskName, stop, st, weekday){
     if(typeof Quagga === 'undefined'){
       alert('相機掃描功能載入失敗，請確認網路連線後重新整理頁面再試一次');
@@ -954,11 +979,13 @@
     $('scanModalTitle').textContent = `掃描單號 - ${taskName}`;
     $('scanReaderDiv').innerHTML = '';
     $('scanConfirmBox').style.display = 'none';
+    $('scanHintText').textContent = '將條碼對準框框內';
     $('scanHintText').style.display = 'block';
     populateDestSelect();
     renderScanList(taskName, st);
     $('scanModalBg').classList.add('active');
     scannerPaused = false;
+    manualModeActive = false;
 
     Quagga.init({
       inputStream: {
@@ -972,7 +999,7 @@
       locator: { patchSize: 'medium', halfSample: true },
       frequency: 10,
       decoder: {
-        readers: ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','code_39_vin_reader','codabar_reader','upc_reader','upc_e_reader','i2of5_reader'],
+        readers: ['code_128_reader','i2of5_reader'],
         multiple: false
       }
     }, function(err){
@@ -995,10 +1022,23 @@
       if(canvasEl){ canvasEl.style.width = '100%'; canvasEl.style.position = 'absolute'; canvasEl.style.top = '0'; }
     });
 
+    // Require the SAME code to be read several times in a row before trusting it —
+    // a single noisy camera frame can easily misread one digit, but it's very
+    // unlikely to misread the exact same wrong value multiple times consecutively.
+    let recentReads = [];
+    const REQUIRED_CONSENSUS = 3;
+    const CONSENSUS_WINDOW_MS = 3000;
     quaggaDetectedHandler = function(result){
       if(scannerPaused) return; // waiting on the person to confirm/reject the last read
       const code = result && result.codeResult && result.codeResult.code;
-      if(!code) return;
+      if(!code || code.length < 6) return; // filter out obviously-too-short noise reads
+      const now = Date.now();
+      recentReads = recentReads.filter(r => now - r.time < CONSENSUS_WINDOW_MS);
+      recentReads.push({ code, time: now });
+      const matches = recentReads.filter(r => r.code === code).length;
+      if($('scanHintText')) $('scanHintText').textContent = `辨識中...（${matches}/${REQUIRED_CONSENSUS}）`;
+      if(matches < REQUIRED_CONSENSUS) return;
+      recentReads = [];
       scannerPaused = true;
       if(navigator.vibrate) navigator.vibrate(80);
       showScanConfirm(code, taskName, st);
@@ -1010,28 +1050,46 @@
     $('scanHintText').style.display = 'none';
     $('scanConfirmBox').style.display = 'block';
     $('scanConfirmCode').value = code;
+    $('scanRejectBtn').textContent = manualModeActive ? '取消' : '重新掃描';
     const opt = ALL_SITES.find(s=>s===lastRememberedDest);
     $('scanConfirmDest').value = opt ? lastRememberedDest : '';
     $('scanConfirmDestOther').style.display = 'none';
     $('scanConfirmDestOther').value = '';
+    if(!code) setTimeout(()=> $('scanConfirmCode').focus(), 50);
 
     $('scanConfirmDest').onchange = ()=>{
       $('scanConfirmDestOther').style.display = $('scanConfirmDest').value==='__other__' ? 'block' : 'none';
     };
     $('scanRejectBtn').onclick = ()=>{
+      if(manualModeActive){
+        closeScanner();
+        if(currentStopIdx !== null && currentDriver){
+          const weekday = new Date().getDay();
+          const stops = getStopsFor(currentDriver, weekday);
+          const stt = currentState.stops[currentStopIdx];
+          if(stops[currentStopIdx] && stt) renderTaskRows(stops[currentStopIdx], stt, weekday, !!stt.departedAt);
+        }
+        return;
+      }
       $('scanConfirmBox').style.display = 'none';
+      $('scanHintText').textContent = '將條碼對準框框內';
       $('scanHintText').style.display = 'block';
       scannerPaused = false;
     };
     $('scanConfirmBtn').onclick = async ()=>{
       const finalCode = $('scanConfirmCode').value.trim();
       const dest = $('scanConfirmDest').value==='__other__' ? $('scanConfirmDestOther').value.trim() : $('scanConfirmDest').value;
-      if(!finalCode){ return; }
+      if(!finalCode){ $('scanConfirmCode').focus(); return; }
       st.tasks[taskName].scans.push({ code: finalCode, dest, ts: new Date().toISOString() });
       lastRememberedDest = dest;
       renderScanList(taskName, st);
       await saveCurrentState();
+      if(manualModeActive){
+        showScanConfirm('', taskName, st); // keep the entry form open for the next package
+        return;
+      }
       $('scanConfirmBox').style.display = 'none';
+      $('scanHintText').textContent = '將條碼對準框框內';
       $('scanHintText').style.display = 'block';
       scannerPaused = false;
     };
@@ -1041,6 +1099,7 @@
     $('scanModalBg').classList.remove('active');
     $('scanConfirmBox').style.display = 'none';
     scannerPaused = false;
+    manualModeActive = false;
     if(scannerActive){
       try{
         if(quaggaDetectedHandler) Quagga.offDetected(quaggaDetectedHandler);
