@@ -206,6 +206,11 @@
     const d = new Date();
     return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   }
+  function localDateStr(iso){
+    if(!iso) return '';
+    const d = new Date(iso);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
   function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function fmtTime(iso){ if(!iso) return ''; const d = new Date(iso); return d.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
   function fmtDuration(startIso, endIso){
@@ -347,7 +352,7 @@
   function renderAdmin(){
     if(!$('adminDate').value) $('adminDate').value = todayDateStr();
     const day = $('adminDate').value;
-    const dayRecords = allRecords.filter(r=> (r.arrivedAt||'').slice(0,10)===day );
+    const dayRecords = allRecords.filter(r=> localDateStr(r.arrivedAt)===day );
     const arrivedCount = dayRecords.length;
     const doneCount = dayRecords.filter(r=>r.departedAt).length;
     const pendingCount = arrivedCount - doneCount;
