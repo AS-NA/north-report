@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>點貨系統</title>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+<style>
+  :root{
+    --bg:#F3F6FC; --panel:#FFFFFF; --panel-2:#EEF2FA; --line:#DCE3F0;
+    --accent:#2FA5D6; --accent-2:#8B7FEF; --teal:#2FA39A; --green:#3AAE72; --red:#D9604B; --grey:#94A0B8;
+    --text:#1C2536; --text-mute:#6E7996;
+    --font-display:'Space Grotesk','Noto Sans TC',sans-serif;
+    --font-body:'Inter','Noto Sans TC',sans-serif;
+    --font-mono:'JetBrains Mono','Courier New',monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--bg); color:var(--text); font-family:var(--font-body); min-height:100vh; display:flex; justify-content:center; }
+  .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); position:relative; z-index:2; }
+  .watermark{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); z-index:1; pointer-events:none; font-family:var(--font-display); font-weight:800; font-size:15vw; letter-spacing:0.06em; color:var(--accent); opacity:0.12; text-transform:uppercase; white-space:nowrap; }
+  .view{display:none; position:relative; z-index:2;} .view.active{display:block;}
+
+  .topbar{ background:linear-gradient(135deg,#D7ECFB,#E8E3FB); padding:20px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .topbar .eyebrow{ font-family:var(--font-mono); font-size:11px; letter-spacing:0.1em; color:#3E7FA8; text-transform:uppercase; }
+  .topbar h1{ font-family:var(--font-display); font-size:20px; margin:5px 0 0; }
+  .backbtn{ background:none; border:none; color:var(--text); font-size:20px; cursor:pointer; }
+  .opbadge{ font-family:var(--font-mono); font-size:11.5px; color:var(--text-mute); border:1px solid var(--line); padding:6px 10px; border-radius:20px; background:var(--panel); cursor:pointer; white-space:nowrap; }
+
+  main{ padding:20px; padding-bottom:90px; }
+  .tabs{ display:flex; margin-bottom:18px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:3px; gap:3px; }
+  .tab{ flex:1; text-align:center; padding:9px 0; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--text-mute); cursor:pointer; user-select:none; }
+  .tab.active{ background:var(--accent); color:#fff; }
+
+  .bigscanbtn{ width:100%; padding:26px 20px; border-radius:16px; border:none; background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#fff; font-family:var(--font-display); font-weight:700; font-size:18px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; box-shadow:0 10px 24px rgba(47,165,214,0.28); }
+  .bigscanbtn .sub{ font-size:11.5px; font-weight:400; opacity:0.9; font-family:var(--font-mono); }
+  .manualrow{ margin-top:12px; }
+  .manualbtn{ width:100%; padding:13px; border-radius:12px; border:1px solid var(--line); background:var(--panel); color:var(--text-mute); font-size:13.5px; cursor:pointer; font-family:var(--font-body); }
+
+  /* result board - airport-gate style */
+  .resultboard{ margin-top:20px; background:#12213A; border-radius:16px; padding:22px 20px; color:#fff; display:none; }
+  .resultboard.show{ display:block; animation:fade .2s ease; }
+  @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+  .resultboard .boxno{ font-family:var(--font-mono); font-size:12px; color:#9FC2E0; letter-spacing:0.05em; }
+  .resultboard .zone{ font-family:var(--font-display); font-size:44px; font-weight:800; margin:6px 0; letter-spacing:0.02em; }
+  .resultboard .action{ display:inline-block; font-size:11.5px; font-family:var(--font-mono); padding:4px 10px; border-radius:20px; margin-bottom:10px; }
+  .resultboard .action.arrive{ background:rgba(58,174,114,0.25); color:#7BE0A8; }
+  .resultboard .action.depart{ background:rgba(139,127,239,0.25); color:#C6BBFF; }
+  .resultboard .action.done{ background:rgba(217,96,75,0.25); color:#FF9C87; }
+  .resultboard .meta{ font-size:12.5px; color:#B9CFE3; line-height:1.8; font-family:var(--font-mono); }
+
+  .section-label{ font-family:var(--font-mono); font-size:11.5px; color:var(--text-mute); text-transform:uppercase; letter-spacing:0.06em; margin:24px 0 10px; }
+  .searchbox{ width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-size:14px; margin-bottom:12px; }
+
+  .rec{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .rec .top{ display:flex; justify-content:space-between; align-items:center; }
+  .rec .box{ font-family:var(--font-mono); font-weight:700; font-size:13.5px; }
+  .rec .zone{ font-family:var(--font-display); font-weight:700; color:var(--accent); font-size:13px; }
+  .rec .times{ margin-top:6px; font-size:11.5px; color:var(--text-mute); font-family:var(--font-mono); display:flex; justify-content:space-between; }
+  .rec .st{ font-size:10.5px; padding:3px 8px; border-radius:20px; font-family:var(--font-mono); }
+  .rec .st.pending{ background:rgba(217,96,75,0.12); color:var(--red); }
+  .rec .st.done{ background:rgba(58,174,114,0.14); color:var(--green); }
+
+  .placeholder{ text-align:center; color:var(--text-mute); padding:40px 20px; font-size:13.5px; line-height:1.8; }
+
+  .cards4{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; }
+  .kpi{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .kpi .v{ font-family:var(--font-display); font-size:24px; font-weight:700; }
+  .kpi .l{ font-size:11px; color:var(--text-mute); margin-top:3px; }
+  .datepicker{ display:flex; gap:8px; margin-bottom:16px; }
+  .datepicker input[type=date]{ flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); }
+  .refreshsmall{ padding:10px 12px; border-radius:8px; background:var(--panel-2); border:1px solid var(--line); color:var(--text); font-size:12.5px; cursor:pointer; }
+
+  .modal-bg{ position:fixed; inset:0; background:rgba(20,30,50,0.6); z-index:100; display:none; align-items:center; justify-content:center; padding:24px; }
+  .modal-bg.active{ display:flex; }
+  .modal{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; width:100%; max-width:360px; max-height:88vh; overflow-y:auto; }
+  .modal h3{ margin:0 0 14px; font-family:var(--font-display); font-size:16px; }
+  .field label{ display:block; font-size:11px; font-weight:600; color:var(--text-mute); margin-bottom:6px; font-family:var(--font-mono); text-transform:uppercase; }
+  .field{ margin-bottom:14px; }
+  .field input[type=text]{ width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:14.5px; }
+  .btn{ display:block; width:100%; padding:12px; border-radius:10px; border:none; font-size:14px; font-weight:700; cursor:pointer; font-family:var(--font-display); text-align:center; }
+  .btn.accent{ background:var(--accent); color:#fff; }
+  .btn.ghost{ background:var(--panel-2); color:var(--text); border:1px solid var(--line); }
+  .btnrow{ display:flex; gap:8px; }
+  .btnrow .btn{ flex:1; }
+
+  #scanReaderDiv{ width:100%; border-radius:10px; overflow:hidden; background:#000; min-height:220px; position:relative; margin-bottom:10px; }
+  .scanhint{ text-align:center; font-size:11.5px; color:var(--text-mute); margin-bottom:10px; }
+  .note{ font-size:11px; color:var(--text-mute); margin-top:8px; line-height:1.5; }
+
+  .appfooter{ margin-top:30px; padding-top:14px; border-top:1px solid var(--line); text-align:center; font-size:11px; color:var(--text-mute); font-family:var(--font-mono); line-height:1.8; }
+  .clearlocal{ color:var(--accent); text-decoration:underline; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="watermark">POINT <span style="color:var(--accent-2);">CHECK</span></div>
+
+  <!-- HOME -->
+  <div class="view active" id="view-home">
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">AIR SPACE</div>
+        <h1>點貨系統</h1>
+      </div>
+      <div class="opbadge" id="opBadge">設定人員</div>
+    </div>
+    <main>
+      <div class="tabs">
+        <div class="tab active" data-tab="scan">掃描點貨</div>
+        <div class="tab" data-tab="log">今日紀錄</div>
+        <div class="tab" data-tab="admin">管理端</div>
+      </div>
+
+      <!-- SCAN TAB -->
+      <div id="tab-scan">
+        <button class="bigscanbtn" id="scanMainBtn">
+          📦 掃描箱號
+          <span class="sub">第一次掃描 = 到貨　·　第二次掃描 = 出艙</span>
+        </button>
+        <div class="manualrow">
+          <button class="manualbtn" id="manualMainBtn">✏️ 手動輸入箱號</button>
+        </div>
+        <div class="resultboard" id="resultBoard"></div>
+      </div>
+
+      <!-- LOG TAB -->
+      <div id="tab-log" style="display:none;">
+        <input type="text" class="searchbox" id="logSearch" placeholder="搜尋箱號 / 儲位">
+        <div id="logList"><div class="placeholder">載入中...</div></div>
+      </div>
+
+      <!-- ADMIN TAB -->
+      <div id="tab-admin" style="display:none;">
+        <div class="datepicker">
+          <input type="date" id="adminDate">
+          <button class="refreshsmall" id="adminRefresh">重新整理</button>
+        </div>
+        <div class="cards4" id="adminCards"></div>
+        <div id="adminList"></div>
+      </div>
+
+      <div class="appfooter" id="footerInfo"></div>
+    </main>
+  </div>
+
+  <!-- SCAN MODAL -->
+  <div class="modal-bg" id="scanModalBg">
+    <div class="modal">
+      <h3 id="scanModalTitle">掃描箱號</h3>
+      <div id="scanReaderDiv"></div>
+      <div class="scanhint" id="scanHintText">將條碼對準框框內</div>
+      <div class="field" id="manualCodeWrap" style="display:none;">
+        <label>箱號（可修改）</label>
+        <input type="text" id="scanCodeInput" placeholder="輸入或掃描箱號">
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost" id="scanCancelBtn">取消</button>
+        <button class="btn accent" id="scanConfirmBtn">確認</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPERATOR MODAL -->
+  <div class="modal-bg" id="opModalBg">
+    <div class="modal">
+      <h3>設定操作人員</h3>
+      <div class="field">
+        <label>姓名</label>
+        <input type="text" id="opNameInput" placeholder="輸入你的姓名">
+      </div>
+      <button class="btn accent" id="opSaveBtn">儲存</button>
+      <div class="note">姓名只存在你自己的裝置上，方便下次不用重打。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyWAFReBgQilooVgI_J1VQz4bf_Z-ZVU08bDevC6aqFbjZMT4knH5sq-3CEFPl48lCp/exec';
+
+  let allRecords = [];
+  let allZones = {}; // boxCode -> zone, from backend reference sheet
+  let lastLoadedAt = null;
+  let operatorName = '';
+
+  function todayDateStr(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmtTime(iso){ if(!iso) return ''; const d = new Date(iso); return d.toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+  function fmtDuration(startIso, endIso){
+    if(!startIso || !endIso) return '';
+    const mins = Math.round((new Date(endIso) - new Date(startIso))/60000);
+    if(mins < 60) return `${mins} 分鐘`;
+    return `${Math.floor(mins/60)} 小時 ${mins%60} 分`;
+  }
+
+  // ---- operator identity ----
+  function loadOperator(){
+    try{ operatorName = localStorage.getItem('gc-operator') || ''; }catch(e){}
+    $('opBadge').textContent = operatorName || '設定人員';
+  }
+  $('opBadge').addEventListener('click', ()=>{
+    $('opNameInput').value = operatorName;
+    $('opModalBg').classList.add('active');
+  });
+  $('opSaveBtn').addEventListener('click', ()=>{
+    const v = $('opNameInput').value.trim();
+    if(!v) return;
+    operatorName = v;
+    try{ localStorage.setItem('gc-operator', v); }catch(e){}
+    $('opBadge').textContent = v;
+    $('opModalBg').classList.remove('active');
+  });
+  $('opModalBg').addEventListener('click', (e)=>{ if(e.target===$('opModalBg')) $('opModalBg').classList.remove('active'); });
+
+  // ---- tabs ----
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      ['scan','log','admin'].forEach(name=>{
+        $('tab-'+name).style.display = (name===t.dataset.tab) ? 'block' : 'none';
+      });
+      if(t.dataset.tab==='log') renderLog();
+      if(t.dataset.tab==='admin') renderAdmin();
+    });
+  });
+
+  // ---- backend ----
+  async function refreshData(){
+    try{
+      const res = await fetch(APPS_SCRIPT_URL);
+      const data = await res.json();
+      allRecords = Array.isArray(data.records) ? data.records : [];
+      allZones = data.zones || {};
+      lastLoadedAt = new Date();
+      renderFooter();
+    }catch(e){ console.error(e); }
+  }
+  function renderFooter(){
+    const timeStr = lastLoadedAt ? lastLoadedAt.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '尚未載入';
+    $('footerInfo').innerHTML = `資料來源：Google Sheets 雲端　·　上次載入時間：${timeStr}<br><span class="clearlocal" id="clearLocalBtn">清除本機資料</span>`;
+    const btn = $('clearLocalBtn');
+    if(btn) btn.addEventListener('click', ()=>{
+      if(confirm('確定要清除本機儲存的人員設定嗎？（不會影響雲端已送出的點貨資料）')){
+        try{ localStorage.clear(); }catch(e){}
+        location.reload();
+      }
+    });
+  }
+
+  async function submitScan(boxCode){
+    if(!operatorName){
+      $('opNameInput').value='';
+      $('opModalBg').classList.add('active');
+      return null;
+    }
+    try{
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method:'POST',
+        headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action:'record', boxCode, operator: operatorName, ts: new Date().toISOString() })
+      });
+      const json = await res.json();
+      if(json && json.record){
+        const idx = allRecords.findIndex(r=>r.boxCode===json.record.boxCode);
+        if(idx>=0) allRecords[idx] = json.record; else allRecords.push(json.record);
+      }
+      return json;
+    }catch(e){ console.error(e); return { success:false }; }
+  }
+
+  function renderResultBoard(json, boxCode){
+    const board = $('resultBoard');
+    if(!json || !json.success){
+      board.className = 'resultboard show';
+      board.innerHTML = `<div class="boxno">${escapeHtml(boxCode)}</div><div class="zone">送出失敗</div><div class="meta">請檢查網路連線後再試一次</div>`;
+      return;
+    }
+    const r = json.record;
+    const zone = r.zone || '查無儲位資料';
+    let actionHtml, metaHtml;
+    if(json.stage === 'arrive'){
+      actionHtml = `<span class="action arrive">✓ 已記錄到貨</span>`;
+      metaHtml = `到貨時間　${fmtTime(r.arrivedAt)}`;
+    }else if(json.stage === 'depart'){
+      actionHtml = `<span class="action depart">✓ 已記錄出艙</span>`;
+      metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}`;
+    }else{
+      actionHtml = `<span class="action done">此箱已完成到貨與出艙</span>`;
+      metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}`;
+    }
+    board.className = 'resultboard show';
+    board.innerHTML = `<div class="boxno">${escapeHtml(r.boxCode)}</div><div class="zone">${escapeHtml(zone)}</div>${actionHtml}<div class="meta">${metaHtml}</div>`;
+  }
+
+  // ---- log tab ----
+  function renderLog(){
+    const q = ($('logSearch').value||'').trim().toLowerCase();
+    const list = allRecords
+      .slice()
+      .sort((a,b)=> new Date(b.updatedAt||b.arrivedAt) - new Date(a.updatedAt||a.arrivedAt))
+      .filter(r=> !q || (r.boxCode||'').toLowerCase().includes(q) || (r.zone||'').toLowerCase().includes(q));
+    if(list.length===0){ $('logList').innerHTML = '<div class="placeholder">還沒有任何點貨紀錄</div>'; return; }
+    $('logList').innerHTML = list.map(r=>{
+      const pending = r.arrivedAt && !r.departedAt;
+      return `<div class="rec">
+        <div class="top"><span class="box">${escapeHtml(r.boxCode)}</span><span class="st ${pending?'pending':'done'}">${pending?'待出艙':'已完成'}</span></div>
+        <div class="zone">${escapeHtml(r.zone||'查無儲位')}</div>
+        <div class="times"><span>到貨 ${fmtTime(r.arrivedAt)}</span><span>出艙 ${fmtTime(r.departedAt)||'—'}</span></div>
+      </div>`;
+    }).join('');
+  }
+  $('logSearch').addEventListener('input', renderLog);
+
+  // ---- admin tab ----
+  function renderAdmin(){
+    if(!$('adminDate').value) $('adminDate').value = todayDateStr();
+    const day = $('adminDate').value;
+    const dayRecords = allRecords.filter(r=> (r.arrivedAt||'').slice(0,10)===day );
+    const arrivedCount = dayRecords.length;
+    const doneCount = dayRecords.filter(r=>r.departedAt).length;
+    const pendingCount = arrivedCount - doneCount;
+    const durations = dayRecords.filter(r=>r.departedAt).map(r=> (new Date(r.departedAt)-new Date(r.arrivedAt))/60000 );
+    const avgMin = durations.length ? Math.round(durations.reduce((a,b)=>a+b,0)/durations.length) : 0;
+
+    $('adminCards').innerHTML = `
+      <div class="kpi"><div class="v">${arrivedCount}</div><div class="l">今日到貨箱數</div></div>
+      <div class="kpi"><div class="v">${doneCount}</div><div class="l">已出艙</div></div>
+      <div class="kpi"><div class="v">${pendingCount}</div><div class="l">待出艙</div></div>
+      <div class="kpi"><div class="v">${avgMin}</div><div class="l">平均停留（分鐘）</div></div>
+    `;
+    $('adminList').innerHTML = dayRecords.length ? dayRecords
+      .sort((a,b)=> new Date(b.arrivedAt)-new Date(a.arrivedAt))
+      .map(r=>{
+        const pending = r.arrivedAt && !r.departedAt;
+        return `<div class="rec">
+          <div class="top"><span class="box">${escapeHtml(r.boxCode)}</span><span class="st ${pending?'pending':'done'}">${pending?'待出艙':'已完成'}</span></div>
+          <div class="zone">${escapeHtml(r.zone||'查無儲位')} · ${escapeHtml(r.operator||'')}</div>
+          <div class="times"><span>到貨 ${fmtTime(r.arrivedAt)}</span><span>出艙 ${fmtTime(r.departedAt)||'—'}</span></div>
+        </div>`;
+      }).join('') : '<div class="placeholder">這天還沒有任何點貨紀錄</div>';
+  }
+  $('adminDate').addEventListener('change', renderAdmin);
+  $('adminRefresh').addEventListener('click', async ()=>{ await refreshData(); renderAdmin(); });
+
+  // ============ SCAN / MANUAL ENTRY ============
+  let scannerActive = false;
+  let scannerPaused = false;
+  let quaggaDetectedHandler = null;
+  let manualMode = false;
+
+  function openScanModal(manual){
+    manualMode = manual;
+    $('scanModalTitle').textContent = manual ? '手動輸入箱號' : '掃描箱號';
+    $('scanReaderDiv').style.display = manual ? 'none' : 'block';
+    $('scanReaderDiv').innerHTML = '';
+    $('scanHintText').style.display = manual ? 'none' : 'block';
+    $('scanHintText').textContent = '將條碼對準框框內';
+    $('manualCodeWrap').style.display = manual ? 'block' : 'none';
+    $('scanCodeInput').value = '';
+    $('scanModalBg').classList.add('active');
+    scannerPaused = manual;
+    if(!manual) startCamera();
+    else setTimeout(()=> $('scanCodeInput').focus(), 50);
+  }
+  function startCamera(){
+    if(typeof Quagga === 'undefined'){
+      $('scanReaderDiv').innerHTML = '<div style="color:#fff; padding:24px; text-align:center; font-size:12.5px;">相機掃描功能載入失敗，請改用手動輸入</div>';
+      return;
+    }
+    Quagga.init({
+      inputStream: {
+        name: 'Live', type: 'LiveStream', target: document.getElementById('scanReaderDiv'),
+        constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      },
+      numOfWorkers: 0,
+      locate: true,
+      locator: { patchSize: 'medium', halfSample: true },
+      frequency: 10,
+      decoder: { readers: ['code_128_reader','i2of5_reader'], multiple: false }
+    }, function(err){
+      if(err){
+        $('scanReaderDiv').innerHTML = '<div style="color:#fff; padding:24px; text-align:center; font-size:12.5px;">無法開啟相機，請確認已允許相機權限</div>';
+        return;
+      }
+      const videoEl = document.querySelector('#scanReaderDiv video');
+      if(videoEl){
+        videoEl.setAttribute('playsinline','true'); videoEl.setAttribute('webkit-playsinline','true');
+        videoEl.muted = true; videoEl.play().catch(()=>{});
+        videoEl.style.width = '100%'; videoEl.style.borderRadius = '10px';
+      }
+      Quagga.start();
+      scannerActive = true;
+      const canvasEl = document.querySelector('#scanReaderDiv canvas');
+      if(canvasEl){ canvasEl.style.width='100%'; canvasEl.style.position='absolute'; canvasEl.style.top='0'; }
+    });
+
+    let recentReads = [];
+    const REQUIRED_CONSENSUS = 3, WINDOW_MS = 3000;
+    quaggaDetectedHandler = function(result){
+      if(scannerPaused) return;
+      const code = result && result.codeResult && result.codeResult.code;
+      if(!code || code.length < 4) return;
+      const now = Date.now();
+      recentReads = recentReads.filter(r=> now - r.time < WINDOW_MS);
+      recentReads.push({ code, time: now });
+      const matches = recentReads.filter(r=>r.code===code).length;
+      $('scanHintText').textContent = `辨識中...（${matches}/${REQUIRED_CONSENSUS}）`;
+      if(matches < REQUIRED_CONSENSUS) return;
+      recentReads = [];
+      scannerPaused = true;
+      if(navigator.vibrate) navigator.vibrate(80);
+      $('scanCodeInput').value = code;
+      $('manualCodeWrap').style.display = 'block';
+      $('scanHintText').textContent = '掃描成功，請確認箱號後按確認';
+    };
+    Quagga.onDetected(quaggaDetectedHandler);
+  }
+  function stopCamera(){
+    if(scannerActive){
+      try{ if(quaggaDetectedHandler) Quagga.offDetected(quaggaDetectedHandler); Quagga.stop(); }catch(e){}
+      scannerActive = false; quaggaDetectedHandler = null;
+    }
+  }
+  function closeScanModal(){
+    $('scanModalBg').classList.remove('active');
+    stopCamera();
+    scannerPaused = false;
+  }
+  $('scanCancelBtn').addEventListener('click', closeScanModal);
+  $('scanModalBg').addEventListener('click', (e)=>{ if(e.target===$('scanModalBg')) closeScanModal(); });
+  $('scanConfirmBtn').addEventListener('click', async ()=>{
+    const code = $('scanCodeInput').value.trim();
+    if(!code){ $('scanCodeInput').focus(); return; }
+    closeScanModal();
+    const json = await submitScan(code);
+    renderResultBoard(json, code);
+  });
+  $('scanMainBtn').addEventListener('click', ()=> openScanModal(false));
+  $('manualMainBtn').addEventListener('click', ()=> openScanModal(true));
+
+  // init
+  loadOperator();
+  refreshData();
+})();
+</script>
+</body>
+</html>
