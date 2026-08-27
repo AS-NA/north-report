@@ -55,6 +55,9 @@
 
   .section-label{ font-family:var(--font-mono); font-size:11.5px; color:var(--text-mute); text-transform:uppercase; letter-spacing:0.06em; margin:24px 0 10px; }
   .searchbox{ width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-size:14px; margin-bottom:12px; }
+  .filterrow{ display:flex; gap:8px; margin-bottom:14px; }
+  .filterchip{ flex:1; padding:8px 0; border-radius:20px; border:1px solid var(--line); background:var(--panel); color:var(--text-mute); font-size:12.5px; cursor:pointer; font-family:var(--font-body); }
+  .filterchip.active{ background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
 
   .rec{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
   .rec .top{ display:flex; justify-content:space-between; align-items:center; }
@@ -150,7 +153,16 @@
           <button class="refreshsmall" id="adminRefresh">重新整理</button>
         </div>
         <div class="cards4" id="adminCards"></div>
+        <input type="text" class="searchbox" id="adminSearch" placeholder="搜尋箱號 / 儲位 / 人員">
+        <div class="filterrow" id="adminStatusFilter">
+          <button class="filterchip active" data-status="all">全部</button>
+          <button class="filterchip" data-status="pending">待出艙</button>
+          <button class="filterchip" data-status="done">已完成</button>
+        </div>
         <div id="adminList"></div>
+        <div id="adminMoreWrap" style="display:none; margin-top:12px;">
+          <button class="refreshsmall" id="adminLoadMore" style="width:100%;">顯示更多</button>
+        </div>
       </div>
 
       <div class="appfooter" id="footerInfo"></div>
@@ -170,6 +182,13 @@
       <div class="field" id="qtyWrap">
         <label>件數</label>
         <input type="text" id="scanQtyInput" inputmode="numeric" value="1" placeholder="這箱有幾件">
+      </div>
+      <div class="field" id="typeWrap">
+        <label>類型</label>
+        <div class="filterrow">
+          <button class="filterchip active" type="button" data-type="新品">新品</button>
+          <button class="filterchip" type="button" data-type="追加">追加</button>
+        </div>
       </div>
       <div class="btnrow">
         <button class="btn ghost" id="scanCancelBtn">取消</button>
@@ -195,7 +214,7 @@
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-NpVIk2c8_-5DkYbIA9grEqW84IW2WrK5vVQEW3gXGHdnj3RKq8BgZKfRmcDqM0zC/exec';
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxM9p10IX5RkqXDUxEXHB8wFAkLToZfm3CQcFIA-YcJWX8ph_f5WW1gYRYEcmgZkfjv/exec';
 
   let allRecords = [];
   let allZones = {}; // boxCode -> zone, from backend reference sheet
@@ -275,7 +294,7 @@
     });
   }
 
-  async function submitScan(boxCode, qty, mode){
+  async function submitScan(boxCode, qty, mode, type){
     if(!operatorName){
       $('opNameInput').value='';
       $('opModalBg').classList.add('active');
@@ -285,7 +304,7 @@
       const res = await fetch(APPS_SCRIPT_URL, {
         method:'POST',
         headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action:'record', mode, boxCode, qty: qty||1, operator: operatorName, ts: new Date().toISOString() })
+        body: JSON.stringify({ action:'record', mode, boxCode, qty: qty||1, type: type||'', operator: operatorName, ts: new Date().toISOString() })
       });
       const json = await res.json();
       if(json && json.record){
@@ -313,7 +332,7 @@
     let actionHtml, metaHtml;
     if(json.stage === 'arrive'){
       actionHtml = `<span class="action arrive">✓ 已記錄到貨</span>`;
-      metaHtml = `到貨時間　${fmtTime(r.arrivedAt)}<br>件數　${r.qty||1} 件`;
+      metaHtml = `到貨時間　${fmtTime(r.arrivedAt)}<br>件數　${r.qty||1} 件<br>類型　${escapeHtml(r.type||'—')}`;
     }else if(json.stage === 'depart'){
       actionHtml = `<span class="action depart">✓ 已記錄出艙</span>`;
       metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}<br>件數　${r.qty||1} 件`;
@@ -354,6 +373,10 @@
   $('logSearch').addEventListener('input', renderLog);
 
   // ---- admin tab ----
+  let adminVisibleCount = 20;
+  const ADMIN_PAGE_SIZE = 20;
+  let adminStatusFilter = 'all';
+
   function renderAdmin(){
     if(!$('adminDate').value) $('adminDate').value = todayDateStr();
     const day = $('adminDate').value;
@@ -365,26 +388,61 @@
     const durations = dayRecords.filter(r=>r.departedAt).map(r=> (new Date(r.departedAt)-new Date(r.arrivedAt))/60000 );
     const avgMin = durations.length ? Math.round(durations.reduce((a,b)=>a+b,0)/durations.length) : 0;
 
+    const newRecs = dayRecords.filter(r=> (r.type||'')==='新品');
+    const addRecs = dayRecords.filter(r=> (r.type||'')==='追加');
+    const newQty = newRecs.reduce((s,r)=> s+(parseInt(r.qty,10)||0), 0);
+    const addQty = addRecs.reduce((s,r)=> s+(parseInt(r.qty,10)||0), 0);
+
     $('adminCards').innerHTML = `
       <div class="kpi"><div class="v">${arrivedCount}</div><div class="l">今日到貨箱數</div></div>
       <div class="kpi"><div class="v">${totalQty}</div><div class="l">統計總件數</div></div>
       <div class="kpi"><div class="v">${doneCount}</div><div class="l">已出艙</div></div>
       <div class="kpi"><div class="v">${pendingCount}</div><div class="l">待出艙</div></div>
+      <div class="kpi"><div class="v">${newRecs.length}</div><div class="l">新品箱數（${newQty} 件）</div></div>
+      <div class="kpi"><div class="v">${addRecs.length}</div><div class="l">追加箱數（${addQty} 件）</div></div>
       <div class="kpi" style="grid-column:1 / -1;"><div class="v">${avgMin}</div><div class="l">平均停留（分鐘）</div></div>
     `;
-    $('adminList').innerHTML = dayRecords.length ? dayRecords
+
+    const q = ($('adminSearch').value||'').trim().toLowerCase();
+    let filtered = dayRecords
       .sort((a,b)=> new Date(b.arrivedAt)-new Date(a.arrivedAt))
-      .map(r=>{
-        const pending = r.arrivedAt && !r.departedAt;
-        return `<div class="rec">
-          <div class="top"><span class="box">${escapeHtml(r.boxCode)}</span><span class="st ${pending?'pending':'done'}">${pending?'待出艙':'已完成'}</span></div>
-          <div class="zone">${escapeHtml(r.zone||'查無儲位')} · ${escapeHtml(r.operator||'')} · ${r.qty||1} 件</div>
-          <div class="times"><span>到貨 ${fmtTime(r.arrivedAt)}</span><span>出艙 ${fmtTime(r.departedAt)||'—'}</span></div>
-        </div>`;
-      }).join('') : '<div class="placeholder">這天還沒有任何點貨紀錄</div>';
+      .filter(r=>{
+        if(adminStatusFilter==='pending' && r.departedAt) return false;
+        if(adminStatusFilter==='done' && !r.departedAt) return false;
+        if(!q) return true;
+        return (r.boxCode||'').toLowerCase().includes(q) || (r.zone||'').toLowerCase().includes(q) || (r.operator||'').toLowerCase().includes(q);
+      });
+
+    if(filtered.length===0){
+      $('adminList').innerHTML = '<div class="placeholder">找不到符合條件的紀錄</div>';
+      $('adminMoreWrap').style.display = 'none';
+      return;
+    }
+    const visible = filtered.slice(0, adminVisibleCount);
+    $('adminList').innerHTML = visible.map(r=>{
+      const pending = r.arrivedAt && !r.departedAt;
+      const typeTag = r.type ? ` · ${escapeHtml(r.type)}` : '';
+      return `<div class="rec">
+        <div class="top"><span class="box">${escapeHtml(r.boxCode)}</span><span class="st ${pending?'pending':'done'}">${pending?'待出艙':'已完成'}</span></div>
+        <div class="zone">${escapeHtml(r.zone||'查無儲位')} · ${escapeHtml(r.operator||'')} · ${r.qty||1} 件${typeTag}</div>
+        <div class="times"><span>到貨 ${fmtTime(r.arrivedAt)}</span><span>出艙 ${fmtTime(r.departedAt)||'—'}</span></div>
+      </div>`;
+    }).join('');
+    $('adminMoreWrap').style.display = filtered.length > adminVisibleCount ? 'block' : 'none';
   }
-  $('adminDate').addEventListener('change', renderAdmin);
+  $('adminDate').addEventListener('change', ()=>{ adminVisibleCount = ADMIN_PAGE_SIZE; renderAdmin(); });
   $('adminRefresh').addEventListener('click', async ()=>{ await refreshData(); renderAdmin(); });
+  $('adminSearch').addEventListener('input', ()=>{ adminVisibleCount = ADMIN_PAGE_SIZE; renderAdmin(); });
+  $('adminLoadMore').addEventListener('click', ()=>{ adminVisibleCount += ADMIN_PAGE_SIZE; renderAdmin(); });
+  document.querySelectorAll('#adminStatusFilter .filterchip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('#adminStatusFilter .filterchip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      adminStatusFilter = chip.dataset.status;
+      adminVisibleCount = ADMIN_PAGE_SIZE;
+      renderAdmin();
+    });
+  });
 
   // ============ SCAN / MANUAL ENTRY ============
   let scannerActive = false;
@@ -393,6 +451,14 @@
   let manualMode = false;
 
   let currentScanMode = 'arrive';
+  let currentBoxType = '新品';
+  document.querySelectorAll('#typeWrap .filterchip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('#typeWrap .filterchip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      currentBoxType = chip.dataset.type;
+    });
+  });
   function openScanModal(manual, mode){
     manualMode = manual;
     currentScanMode = mode;
@@ -406,6 +472,9 @@
     $('scanCodeInput').value = '';
     $('scanQtyInput').value = '1';
     $('qtyWrap').style.display = mode==='arrive' ? 'block' : 'none';
+    $('typeWrap').style.display = mode==='arrive' ? 'block' : 'none';
+    currentBoxType = '新品';
+    document.querySelectorAll('#typeWrap .filterchip').forEach(c=> c.classList.toggle('active', c.dataset.type==='新品'));
     $('scanModalBg').classList.add('active');
     scannerPaused = manual;
     if(!manual) startCamera();
@@ -482,9 +551,10 @@
     if(!code){ $('scanCodeInput').focus(); return; }
     const qty = Math.max(1, parseInt($('scanQtyInput').value,10) || 1);
     const mode = currentScanMode;
+    const type = mode==='arrive' ? currentBoxType : '';
     closeScanModal();
     showLoadingBoard(code);
-    const json = await submitScan(code, qty, mode);
+    const json = await submitScan(code, qty, mode, type);
     renderResultBoard(json, code);
   });
   $('scanArriveBtn').addEventListener('click', ()=> openScanModal(false, 'arrive'));
