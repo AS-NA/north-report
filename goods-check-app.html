@@ -34,7 +34,9 @@
   .tab{ flex:1; text-align:center; padding:9px 0; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--text-mute); cursor:pointer; user-select:none; }
   .tab.active{ background:var(--accent); color:#fff; }
 
-  .bigscanbtn{ width:100%; padding:26px 20px; border-radius:16px; border:none; background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#fff; font-family:var(--font-display); font-weight:700; font-size:18px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; box-shadow:0 10px 24px rgba(47,165,214,0.28); }
+  .bigscanbtn{ width:100%; padding:22px 20px; border-radius:16px; border:none; color:#fff; font-family:var(--font-display); font-weight:700; font-size:18px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .bigscanbtn.arrive{ background:linear-gradient(135deg,#3AAE72,#2FA39A); box-shadow:0 10px 24px rgba(58,174,114,0.28); }
+  .bigscanbtn.depart{ background:linear-gradient(135deg,#8B7FEF,#2FA5D6); box-shadow:0 10px 24px rgba(139,127,239,0.28); }
   .bigscanbtn .sub{ font-size:11.5px; font-weight:400; opacity:0.9; font-family:var(--font-mono); }
   .manualrow{ margin-top:12px; }
   .manualbtn{ width:100%; padding:13px; border-radius:12px; border:1px solid var(--line); background:var(--panel); color:var(--text-mute); font-size:13.5px; cursor:pointer; font-family:var(--font-body); }
@@ -116,13 +118,22 @@
 
       <!-- SCAN TAB -->
       <div id="tab-scan">
-        <button class="bigscanbtn" id="scanMainBtn">
-          📦 掃描箱號
-          <span class="sub">第一次掃描 = 到貨　·　第二次掃描 = 出艙</span>
+        <button class="bigscanbtn arrive" id="scanArriveBtn">
+          📥 進倉登記
+          <span class="sub">掃描或輸入箱號，記錄到貨並顯示儲位</span>
         </button>
         <div class="manualrow">
-          <button class="manualbtn" id="manualMainBtn">✏️ 手動輸入箱號</button>
+          <button class="manualbtn" id="manualArriveBtn">✏️ 手動輸入（進倉）</button>
         </div>
+
+        <button class="bigscanbtn depart" id="scanDepartBtn" style="margin-top:16px;">
+          📤 出艙登記
+          <span class="sub">掃描或輸入箱號，記錄離開儲區的時間</span>
+        </button>
+        <div class="manualrow">
+          <button class="manualbtn" id="manualDepartBtn">✏️ 手動輸入（出艙）</button>
+        </div>
+
         <div class="resultboard" id="resultBoard"></div>
       </div>
 
@@ -259,7 +270,7 @@
     });
   }
 
-  async function submitScan(boxCode, qty){
+  async function submitScan(boxCode, qty, mode){
     if(!operatorName){
       $('opNameInput').value='';
       $('opModalBg').classList.add('active');
@@ -269,7 +280,7 @@
       const res = await fetch(APPS_SCRIPT_URL, {
         method:'POST',
         headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action:'record', boxCode, qty: qty||1, operator: operatorName, ts: new Date().toISOString() })
+        body: JSON.stringify({ action:'record', mode, boxCode, qty: qty||1, operator: operatorName, ts: new Date().toISOString() })
       });
       const json = await res.json();
       if(json && json.record){
@@ -287,7 +298,7 @@
       board.innerHTML = `<div class="boxno">${escapeHtml(boxCode)}</div><div class="zone">送出失敗</div><div class="meta">請檢查網路連線後再試一次</div>`;
       return;
     }
-    const r = json.record;
+    const r = json.record || {};
     const zone = r.zone || '查無儲位資料';
     let actionHtml, metaHtml;
     if(json.stage === 'arrive'){
@@ -296,12 +307,21 @@
     }else if(json.stage === 'depart'){
       actionHtml = `<span class="action depart">✓ 已記錄出艙</span>`;
       metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}<br>件數　${r.qty||1} 件`;
+    }else if(json.stage === 'already_arrived'){
+      actionHtml = `<span class="action done">⚠ 這箱已經進倉過了</span>`;
+      metaHtml = `原本的到貨時間　${fmtTime(r.arrivedAt)}<br>件數　${r.qty||1} 件<br>沒有重複建立紀錄`;
+    }else if(json.stage === 'not_arrived'){
+      actionHtml = `<span class="action done">⚠ 這箱還沒有進倉紀錄</span>`;
+      metaHtml = `請先用「進倉登記」掃描這箱，再進行出艙`;
+    }else if(json.stage === 'already_departed'){
+      actionHtml = `<span class="action done">⚠ 這箱已經出艙過了</span>`;
+      metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}<br>沒有重複建立紀錄`;
     }else{
       actionHtml = `<span class="action done">此箱已完成到貨與出艙</span>`;
       metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}<br>件數　${r.qty||1} 件`;
     }
     board.className = 'resultboard show';
-    board.innerHTML = `<div class="boxno">${escapeHtml(r.boxCode)}</div><div class="zone">${escapeHtml(zone)}</div>${actionHtml}<div class="meta">${metaHtml}</div>`;
+    board.innerHTML = `<div class="boxno">${escapeHtml(r.boxCode||boxCode)}</div><div class="zone">${escapeHtml(zone)}</div>${actionHtml}<div class="meta">${metaHtml}</div>`;
   }
 
   // ---- log tab ----
@@ -362,9 +382,12 @@
   let quaggaDetectedHandler = null;
   let manualMode = false;
 
-  function openScanModal(manual){
+  let currentScanMode = 'arrive';
+  function openScanModal(manual, mode){
     manualMode = manual;
-    $('scanModalTitle').textContent = manual ? '手動輸入箱號' : '掃描箱號';
+    currentScanMode = mode;
+    const modeLabel = mode==='arrive' ? '進倉' : '出艙';
+    $('scanModalTitle').textContent = (manual ? '手動輸入箱號 - ' : '掃描箱號 - ') + modeLabel;
     $('scanReaderDiv').style.display = manual ? 'none' : 'block';
     $('scanReaderDiv').innerHTML = '';
     $('scanHintText').style.display = manual ? 'none' : 'block';
@@ -372,6 +395,7 @@
     $('manualCodeWrap').style.display = manual ? 'block' : 'none';
     $('scanCodeInput').value = '';
     $('scanQtyInput').value = '1';
+    $('qtyWrap').style.display = mode==='arrive' ? 'block' : 'none';
     $('scanModalBg').classList.add('active');
     scannerPaused = manual;
     if(!manual) startCamera();
@@ -447,12 +471,15 @@
     const code = $('scanCodeInput').value.trim();
     if(!code){ $('scanCodeInput').focus(); return; }
     const qty = Math.max(1, parseInt($('scanQtyInput').value,10) || 1);
+    const mode = currentScanMode;
     closeScanModal();
-    const json = await submitScan(code, qty);
+    const json = await submitScan(code, qty, mode);
     renderResultBoard(json, code);
   });
-  $('scanMainBtn').addEventListener('click', ()=> openScanModal(false));
-  $('manualMainBtn').addEventListener('click', ()=> openScanModal(true));
+  $('scanArriveBtn').addEventListener('click', ()=> openScanModal(false, 'arrive'));
+  $('manualArriveBtn').addEventListener('click', ()=> openScanModal(true, 'arrive'));
+  $('scanDepartBtn').addEventListener('click', ()=> openScanModal(false, 'depart'));
+  $('manualDepartBtn').addEventListener('click', ()=> openScanModal(true, 'depart'));
 
   // init
   loadOperator();
