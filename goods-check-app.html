@@ -195,7 +195,7 @@
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyWAFReBgQilooVgI_J1VQz4bf_Z-ZVU08bDevC6aqFbjZMT4knH5sq-3CEFPl48lCp/exec';
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-NpVIk2c8_-5DkYbIA9grEqW84IW2WrK5vVQEW3gXGHdnj3RKq8BgZKfRmcDqM0zC/exec';
 
   let allRecords = [];
   let allZones = {}; // boxCode -> zone, from backend reference sheet
@@ -296,6 +296,11 @@
     }catch(e){ console.error(e); return { success:false }; }
   }
 
+  function showLoadingBoard(boxCode){
+    const board = $('resultBoard');
+    board.className = 'resultboard show';
+    board.innerHTML = `<div class="boxno">${escapeHtml(boxCode)}</div><div class="zone" style="font-size:20px; opacity:0.7;">查詢儲位中...</div>`;
+  }
   function renderResultBoard(json, boxCode){
     const board = $('resultBoard');
     if(!json || !json.success){
@@ -478,6 +483,7 @@
     const qty = Math.max(1, parseInt($('scanQtyInput').value,10) || 1);
     const mode = currentScanMode;
     closeScanModal();
+    showLoadingBoard(code);
     const json = await submitScan(code, qty, mode);
     renderResultBoard(json, code);
   });
