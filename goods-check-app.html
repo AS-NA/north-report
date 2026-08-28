@@ -105,8 +105,8 @@
 
   .weekhead{ font-size:14px; color:var(--text-mute); font-family:var(--font-mono); margin-bottom:14px; }
   .weektablewrap{ overflow-x:auto; border:1px solid var(--line); border-radius:18px; background:var(--panel); margin-bottom:16px; }
-  .weektable{ border-collapse:collapse; width:100%; min-width:560px; }
-  .weektable th, .weektable td{ padding:12px 14px; text-align:center; white-space:nowrap; border-bottom:1px solid var(--line); font-size:14px; }
+  .weektable{ border-collapse:collapse; width:100%; min-width:0; table-layout:fixed; }
+  .weektable th, .weektable td{ padding:12px 10px; text-align:center; white-space:normal; word-break:break-word; border-bottom:1px solid var(--line); font-size:14px; }
   .weektable th{ font-family:var(--font-mono); font-size:12.5px; color:var(--text-mute); text-transform:uppercase; background:var(--panel-2); }
   .weektable td:first-child, .weektable th:first-child{ text-align:left; }
   .weektable tr:last-child td{ border-bottom:none; font-weight:800; background:var(--panel-2); }
@@ -404,55 +404,71 @@
   }
 
   // ---- week progress tab ----
-  function mondayOfWeek(dateStr){
+  function fridayAnchorDate(dateStr){
     const [y,m,d] = dateStr.split('-').map(Number);
     const date = new Date(y,m-1,d);
-    const day = date.getDay();
-    const diffToMonday = day===0 ? -6 : 1-day;
-    date.setDate(date.getDate()+diffToMonday);
+    const day = date.getDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+    let diff;
+    if(day===5) diff=0;
+    else if(day===6) diff=1;
+    else if(day===0) diff=2;
+    else diff = day+2; // Mon(1)->3, Tue(2)->4, Wed(3)->5, Thu(4)->6
+    date.setDate(date.getDate()-diff);
     return date;
   }
   function dateStrFromDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-  function buildWeekDates(dateStr){
-    const monday = mondayOfWeek(dateStr);
-    const dates = [];
-    for(let i=0;i<5;i++){ const dt = new Date(monday); dt.setDate(monday.getDate()+i); dates.push(dateStrFromDate(dt)); }
+  function buildCycleDates(dateStr){
+    // cycle = [this Friday, next Monday, next Tuesday, next Wednesday, next Thursday]
+    const fri = fridayAnchorDate(dateStr);
+    const dates = [dateStrFromDate(fri)];
+    for(let i=3;i<=6;i++){ const dt = new Date(fri); dt.setDate(fri.getDate()+i); dates.push(dateStrFromDate(dt)); }
     return dates;
   }
   function renderWeek(){
     if(!$('weekDate').value) $('weekDate').value = todayDateStr();
-    const weekDates = buildWeekDates($('weekDate').value);
-    const dayNames = ['週一','週二','週三','週四','週五'];
-    $('weekHead').innerHTML = `<div class="weekhead">本週 ${weekDates[0]} ～ ${weekDates[4]}</div>`;
+    const cycleDates = buildCycleDates($('weekDate').value); // [Fri, Mon, Tue, Wed, Thu]
+    const weekdayOrder = [5,1,2,3,4];
+    const dayLabels = ['週五','週一','週二','週三','週四'];
+    $('weekHead').innerHTML = `<div class="weekhead">本輪 ${cycleDates[0]}（五）～ ${cycleDates[4]}（四）</div>`;
 
     const storeList = Object.keys(allStores).map(code=>allStores[code]);
     if(storeList.length===0){
       $('weekTableWrap').innerHTML = '<div class="placeholder">尚未載入店櫃排程資料</div>';
       return;
     }
+    const cycleStart = cycleDates[0], cycleEnd = cycleDates[4];
 
     let html = '';
-    for(let wd=1; wd<=5; wd++){
-      const dateStr = weekDates[wd-1];
+    weekdayOrder.forEach((wd, idx)=>{
+      const dateStr = cycleDates[idx];
       const storesToday = storeList.filter(s=> s.weekday===wd);
-      html += `<div class="section-label" style="margin-top:20px;">${dayNames[wd-1]}（整${wd}）　${dateStr}</div>`;
+      html += `<div class="section-label" style="margin-top:20px;">${dayLabels[idx]}（整${wd}）　${dateStr}</div>`;
       if(storesToday.length===0){
         html += `<div class="placeholder" style="padding:16px;">這天沒有排定要整理的店櫃</div>`;
-        continue;
+        return;
       }
-      html += `<div class="weektablewrap"><table class="weektable"><thead><tr><th>店櫃</th><th>類型</th><th>箱數進度</th></tr></thead><tbody>`;
+      html += `<div class="weektablewrap"><table class="weektable"><thead><tr><th>店櫃</th><th>箱數進度</th></tr></thead><tbody>`;
       storesToday.forEach(store=>{
-        const boxes = allRecords.filter(r=> r.storeCode===store.code && localDateStr(r.arrivedAt)>=weekDates[0] && localDateStr(r.arrivedAt)<=weekDates[4]);
+        const boxes = allRecords.filter(r=> r.storeCode===store.code && localDateStr(r.arrivedAt)>=cycleStart && localDateStr(r.arrivedAt)<=cycleEnd);
         const total = boxes.length;
         const done = boxes.filter(r=>r.organizedAt).length;
-        html += `<tr><td><span class="wc">${escapeHtml(store.code)}</span><span class="wsmall">${escapeHtml(store.name)}</span></td><td>${escapeHtml(store.type||'')}</td><td>${total? `${done}/${total}` : '尚無到貨'}</td></tr>`;
+        html += `<tr><td><span class="wc">${escapeHtml(store.code)}</span><span class="wsmall">${escapeHtml(store.name)}・${escapeHtml(store.type||'')}</span></td><td>${total? `${done}/${total}` : '尚無到貨'}</td></tr>`;
       });
       html += `</tbody></table></div>`;
-    }
+    });
     $('weekTableWrap').innerHTML = html;
   }
   $('weekDate').addEventListener('change', renderWeek);
-  $('weekRefresh').addEventListener('click', async ()=>{ await refreshData(); renderWeek(); });
+  $('weekRefresh').addEventListener('click', async (e)=>{
+    const btn = e.currentTarget;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '更新中...';
+    await refreshData();
+    renderWeek();
+    btn.disabled = false;
+    btn.textContent = original;
+  });
 
 
   function renderLog(){
@@ -532,7 +548,16 @@
     $('adminMoreWrap').style.display = filtered.length > adminVisibleCount ? 'block' : 'none';
   }
   $('adminDate').addEventListener('change', ()=>{ adminVisibleCount = ADMIN_PAGE_SIZE; renderAdmin(); });
-  $('adminRefresh').addEventListener('click', async ()=>{ await refreshData(); renderAdmin(); });
+  $('adminRefresh').addEventListener('click', async (e)=>{
+    const btn = e.currentTarget;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '更新中...';
+    await refreshData();
+    renderAdmin();
+    btn.disabled = false;
+    btn.textContent = original;
+  });
   $('adminSearch').addEventListener('input', ()=>{ adminVisibleCount = ADMIN_PAGE_SIZE; renderAdmin(); });
   $('adminLoadMore').addEventListener('click', ()=>{ adminVisibleCount += ADMIN_PAGE_SIZE; renderAdmin(); });
   document.querySelectorAll('#adminStatusFilter .filterchip').forEach(chip=>{
