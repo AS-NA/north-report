@@ -359,13 +359,14 @@
     const arrivedToday = allRecords.filter(r=> localDateStr(r.arrivedAt)===today);
     const organizedToday = allRecords.filter(r=> localDateStr(r.organizedAt)===today);
     const departedToday = allRecords.filter(r=> localDateStr(r.departedAt)===today);
+    const pendingRecs = allRecords.filter(r=> r.arrivedAt && !r.departedAt);
     const pendingOrganize = allRecords.filter(r=> r.arrivedAt && !r.organizedAt).length;
-    const pendingDepart = allRecords.filter(r=> r.arrivedAt && !r.departedAt).length;
+    const pendingDepartQty = pendingRecs.reduce((s,r)=> s+(parseInt(r.qty,10)||0), 0);
 
     $('todayStrip').innerHTML = `
       <div class="tstripitem"><div class="n">${arrivedToday.length}</div><div class="l">今日到貨</div></div>
       <div class="tstripitem"><div class="n">${pendingOrganize}</div><div class="l">待整新</div></div>
-      <div class="tstripitem"><div class="n">${pendingDepart}</div><div class="l">待出艙</div></div>
+      <div class="tstripitem"><div class="n">${pendingRecs.length}</div><div class="l">待出艙（${pendingDepartQty}件）</div></div>
     `;
     if($('cntArrive')) $('cntArrive').textContent = arrivedToday.length;
     if($('cntOrganize')) $('cntOrganize').textContent = organizedToday.length;
@@ -549,8 +550,12 @@
     const day = $('adminDate').value;
     const dayRecords = allRecords.filter(r=> localDateStr(r.arrivedAt)===day );
     const arrivedCount = dayRecords.length;
-    const doneCount = dayRecords.filter(r=>r.departedAt).length;
-    const pendingCount = arrivedCount - doneCount;
+    const doneRecs = dayRecords.filter(r=>r.departedAt);
+    const pendingRecs = dayRecords.filter(r=>!r.departedAt);
+    const doneCount = doneRecs.length;
+    const pendingCount = pendingRecs.length;
+    const doneQty = doneRecs.reduce((s,r)=> s+(parseInt(r.qty,10)||0), 0);
+    const pendingQty = pendingRecs.reduce((s,r)=> s+(parseInt(r.qty,10)||0), 0);
     const totalQty = dayRecords.reduce((sum,r)=> sum + (parseInt(r.qty,10)||0), 0);
     const durations = dayRecords.filter(r=>r.departedAt).map(r=> (new Date(r.departedAt)-new Date(r.arrivedAt))/60000 );
     const avgMin = durations.length ? Math.round(durations.reduce((a,b)=>a+b,0)/durations.length) : 0;
@@ -563,8 +568,8 @@
     $('adminCards').innerHTML = `
       <div class="kpi"><div class="v">${arrivedCount}</div><div class="l">今日到貨箱數</div></div>
       <div class="kpi"><div class="v">${totalQty}</div><div class="l">統計總件數</div></div>
-      <div class="kpi"><div class="v">${doneCount}</div><div class="l">已出艙</div></div>
-      <div class="kpi"><div class="v">${pendingCount}</div><div class="l">待出艙</div></div>
+      <div class="kpi"><div class="v">${doneCount}</div><div class="l">已出艙（${doneQty} 件）</div></div>
+      <div class="kpi"><div class="v">${pendingCount}</div><div class="l">待出艙（${pendingQty} 件）</div></div>
       <div class="kpi"><div class="v">${newRecs.length}</div><div class="l">新品箱數（${newQty} 件）</div></div>
       <div class="kpi"><div class="v">${addRecs.length}</div><div class="l">追加箱數（${addQty} 件）</div></div>
       <div class="kpi" style="grid-column:1 / -1;"><div class="v">${avgMin}</div><div class="l">平均停留（分鐘）</div></div>
