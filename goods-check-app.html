@@ -148,11 +148,11 @@
         </div>
 
         <button class="bigscanbtn organize" id="scanOrganizeBtn" style="margin-top:16px;">
-          🗂️ 整理登記
-          <span class="sub">掃描或輸入箱號，記錄新品整理完成</span>
+          🗂️ 新品整新登記
+          <span class="sub">掃描或輸入箱號，記錄新品整新完成</span>
         </button>
         <div class="manualrow">
-          <button class="manualbtn" id="manualOrganizeBtn">✏️ 手動輸入（整理）</button>
+          <button class="manualbtn" id="manualOrganizeBtn">✏️ 手動輸入（整新）</button>
         </div>
 
         <button class="bigscanbtn depart" id="scanDepartBtn" style="margin-top:16px;">
@@ -376,16 +376,16 @@
       actionHtml = `<span class="action depart">✓ 已記錄出艙</span>`;
       metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}<br>件數　${r.qty||1} 件`;
     }else if(json.stage === 'organize'){
-      actionHtml = `<span class="action organize">✓ 已記錄整理完成</span>`;
+      actionHtml = `<span class="action organize">✓ 已記錄整新完成</span>`;
       const siblings = json.siblings || [];
       const doneCount = siblings.filter(s=>s.organizedAt).length;
-      metaHtml = `店櫃　${escapeHtml(r.storeCode||'—')} ${escapeHtml(r.storeName||'')}<br>整理完成　${fmtTime(r.organizedAt)}<br>此店櫃進度　${doneCount}/${siblings.length} 箱已整理`;
+      metaHtml = `店櫃　${escapeHtml(r.storeCode||'—')} ${escapeHtml(r.storeName||'')}<br>整新完成　${fmtTime(r.organizedAt)}<br>此店櫃進度　${doneCount}/${siblings.length} 箱已整新`;
       if(siblings.length){
         siblingHtml = `<div class="siblinglist">${siblings.map(s=>`<div class="siblingitem ${s.organizedAt?'done':''}">${s.organizedAt?'✓':'—'} ${escapeHtml(s.boxCode)}</div>`).join('')}</div>`;
       }
     }else if(json.stage === 'already_organized'){
-      actionHtml = `<span class="action done">⚠ 這箱已經整理過了</span>`;
-      metaHtml = `店櫃　${escapeHtml(r.storeCode||'—')} ${escapeHtml(r.storeName||'')}<br>整理完成時間　${fmtTime(r.organizedAt)}<br>沒有重複建立紀錄`;
+      actionHtml = `<span class="action done">⚠ 這箱已經整新過了</span>`;
+      metaHtml = `店櫃　${escapeHtml(r.storeCode||'—')} ${escapeHtml(r.storeName||'')}<br>整新完成時間　${fmtTime(r.organizedAt)}<br>沒有重複建立紀錄`;
     }else if(json.stage === 'already_arrived'){
       actionHtml = `<span class="action done">⚠ 這箱已經進倉過了</span>`;
       metaHtml = `原本的到貨時間　${fmtTime(r.arrivedAt)}<br>件數　${r.qty||1} 件<br>沒有重複建立紀錄`;
@@ -444,7 +444,7 @@
       const storesToday = storeList.filter(s=> s.weekday===wd);
       html += `<div class="section-label" style="margin-top:20px;">${dayLabels[idx]}（整${wd}）　${dateStr}</div>`;
       if(storesToday.length===0){
-        html += `<div class="placeholder" style="padding:16px;">這天沒有排定要整理的店櫃</div>`;
+        html += `<div class="placeholder" style="padding:16px;">這天沒有排定要整新的店櫃</div>`;
         return;
       }
       html += `<div class="weektablewrap"><table class="weektable"><thead><tr><th>店櫃</th><th>箱數進度</th></tr></thead><tbody>`;
@@ -588,7 +588,7 @@
   function openScanModal(manual, mode){
     manualMode = manual;
     currentScanMode = mode;
-    const modeLabel = mode==='arrive' ? '進倉' : (mode==='organize' ? '整理' : '出艙');
+    const modeLabel = mode==='arrive' ? '進倉' : (mode==='organize' ? '整新' : '出艙');
     $('scanModalTitle').textContent = (manual ? '手動輸入箱號 - ' : '掃描箱號 - ') + modeLabel;
     $('scanReaderDiv').style.display = manual ? 'none' : 'block';
     $('scanReaderDiv').innerHTML = '';
