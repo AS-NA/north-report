@@ -37,11 +37,22 @@
   .tab{ flex:1; text-align:center; padding:9px 0; border-radius:13px; font-size:15px; font-weight:600; color:var(--text-mute); cursor:pointer; user-select:none; }
   .tab.active{ background:var(--accent); color:#fff; }
 
-  .bigscanbtn{ width:100%; padding:22px 20px; border-radius:20px; border:none; color:#fff; font-family:var(--font-display); font-weight:700; font-size:19.5px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; }
-  .bigscanbtn.arrive{ background:linear-gradient(135deg,#3AAE72,#2FA39A); box-shadow:0 10px 24px rgba(58,174,114,0.28); }
-  .bigscanbtn.depart{ background:linear-gradient(135deg,#8B7FEF,#2FA5D6); box-shadow:0 10px 24px rgba(139,127,239,0.28); }
-  .bigscanbtn.organize{ background:linear-gradient(135deg,#F2A93A,#E8804A); box-shadow:0 10px 24px rgba(242,169,58,0.28); }
-  .bigscanbtn .sub{ font-size:13px; font-weight:400; opacity:0.9; font-family:var(--font-mono); }
+  .bigscanbtn{ width:100%; padding:18px 20px; border-radius:22px; border:none; color:#fff; font-family:var(--font-display); font-weight:700; font-size:19.5px; cursor:pointer; position:relative; overflow:hidden; transition:transform .15s ease; }
+  .bigscanbtn:active{ transform:scale(0.98); }
+  .bigscanbtn::after{ content:''; position:absolute; top:-40%; right:-20%; width:70%; height:180%; background:rgba(255,255,255,0.12); transform:rotate(20deg); pointer-events:none; }
+  .bigscanbtn.arrive{ background:linear-gradient(135deg,#3AAE72,#2FA39A); box-shadow:0 12px 28px rgba(58,174,114,0.32); }
+  .bigscanbtn.depart{ background:linear-gradient(135deg,#8B7FEF,#2FA5D6); box-shadow:0 12px 28px rgba(139,127,239,0.32); }
+  .bigscanbtn.organize{ background:linear-gradient(135deg,#F2A93A,#E8804A); box-shadow:0 12px 28px rgba(242,169,58,0.32); }
+  .btnrow2{ display:flex; align-items:center; gap:14px; text-align:left; position:relative; z-index:1; }
+  .iconbadge{ flex-shrink:0; width:52px; height:52px; border-radius:16px; background:rgba(255,255,255,0.22); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow:inset 0 1px 0 rgba(255,255,255,0.3); }
+  .btntext{ flex:1; min-width:0; }
+  .btitle{ font-size:19.5px; font-weight:800; }
+  .todaycount{ flex-shrink:0; font-family:var(--font-mono); font-size:22px; font-weight:800; background:rgba(255,255,255,0.18); border-radius:14px; padding:6px 12px; min-width:44px; text-align:center; }
+  .bigscanbtn .sub{ font-size:12.5px; font-weight:400; opacity:0.9; font-family:var(--font-mono); display:block; margin-top:2px; }
+  .todaystrip{ display:flex; gap:10px; margin-bottom:16px; }
+  .tstripitem{ flex:1; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:12px 10px; text-align:center; }
+  .tstripitem .n{ font-family:var(--font-display); font-size:24px; font-weight:800; }
+  .tstripitem .l{ font-size:11.5px; color:var(--text-mute); margin-top:2px; font-weight:600; }
   .manualrow{ margin-top:12px; }
   .manualbtn{ width:100%; padding:13px; border-radius:16px; border:1px solid var(--line); background:var(--panel); color:var(--text-mute); font-size:15px; cursor:pointer; font-family:var(--font-body); }
 
@@ -139,25 +150,45 @@
 
       <!-- SCAN TAB -->
       <div id="tab-scan">
+        <div class="todaystrip" id="todayStrip"></div>
+
         <button class="bigscanbtn arrive" id="scanArriveBtn">
-          📥 進倉登記
-          <span class="sub">掃描或輸入箱號，記錄到貨並顯示儲位</span>
+          <div class="btnrow2">
+            <div class="iconbadge">📥</div>
+            <div class="btntext">
+              <div class="btitle">進倉登記</div>
+              <span class="sub">掃描或輸入箱號，記錄到貨並顯示儲位</span>
+            </div>
+            <div class="todaycount" id="cntArrive">0</div>
+          </div>
         </button>
         <div class="manualrow">
           <button class="manualbtn" id="manualArriveBtn">✏️ 手動輸入（進倉）</button>
         </div>
 
         <button class="bigscanbtn organize" id="scanOrganizeBtn" style="margin-top:16px;">
-          🗂️ 新品整新登記
-          <span class="sub">掃描或輸入箱號，記錄新品整新完成</span>
+          <div class="btnrow2">
+            <div class="iconbadge">🗂️</div>
+            <div class="btntext">
+              <div class="btitle">新品整新登記</div>
+              <span class="sub">掃描或輸入箱號，記錄新品整新完成</span>
+            </div>
+            <div class="todaycount" id="cntOrganize">0</div>
+          </div>
         </button>
         <div class="manualrow">
           <button class="manualbtn" id="manualOrganizeBtn">✏️ 手動輸入（整新）</button>
         </div>
 
         <button class="bigscanbtn depart" id="scanDepartBtn" style="margin-top:16px;">
-          📤 出艙登記
-          <span class="sub">掃描或輸入箱號，記錄離開儲區的時間</span>
+          <div class="btnrow2">
+            <div class="iconbadge">📤</div>
+            <div class="btntext">
+              <div class="btitle">出艙登記</div>
+              <span class="sub">掃描或輸入箱號，記錄離開儲區的時間</span>
+            </div>
+            <div class="todaycount" id="cntDepart">0</div>
+          </div>
         </button>
         <div class="manualrow">
           <button class="manualbtn" id="manualDepartBtn">✏️ 手動輸入（出艙）</button>
@@ -319,7 +350,26 @@
       allStores = data.stores || {};
       lastLoadedAt = new Date();
       renderFooter();
+      renderHomeStats();
     }catch(e){ console.error(e); }
+  }
+  function renderHomeStats(){
+    if(!$('todayStrip')) return;
+    const today = todayDateStr();
+    const arrivedToday = allRecords.filter(r=> localDateStr(r.arrivedAt)===today);
+    const organizedToday = allRecords.filter(r=> localDateStr(r.organizedAt)===today);
+    const departedToday = allRecords.filter(r=> localDateStr(r.departedAt)===today);
+    const pendingOrganize = allRecords.filter(r=> r.arrivedAt && !r.organizedAt).length;
+    const pendingDepart = allRecords.filter(r=> r.arrivedAt && !r.departedAt).length;
+
+    $('todayStrip').innerHTML = `
+      <div class="tstripitem"><div class="n">${arrivedToday.length}</div><div class="l">今日到貨</div></div>
+      <div class="tstripitem"><div class="n">${pendingOrganize}</div><div class="l">待整新</div></div>
+      <div class="tstripitem"><div class="n">${pendingDepart}</div><div class="l">待出艙</div></div>
+    `;
+    if($('cntArrive')) $('cntArrive').textContent = arrivedToday.length;
+    if($('cntOrganize')) $('cntOrganize').textContent = organizedToday.length;
+    if($('cntDepart')) $('cntDepart').textContent = departedToday.length;
   }
   function renderFooter(){
     const timeStr = lastLoadedAt ? lastLoadedAt.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '尚未載入';
@@ -682,6 +732,7 @@
     showLoadingBoard(code);
     const json = await submitScan(code, qty, mode, type);
     renderResultBoard(json, code);
+    renderHomeStats();
   });
   $('scanArriveBtn').addEventListener('click', ()=> openScanModal(false, 'arrive'));
   $('manualArriveBtn').addEventListener('click', ()=> openScanModal(true, 'arrive'));
