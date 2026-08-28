@@ -40,6 +40,7 @@
   .bigscanbtn{ width:100%; padding:22px 20px; border-radius:20px; border:none; color:#fff; font-family:var(--font-display); font-weight:700; font-size:19.5px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; }
   .bigscanbtn.arrive{ background:linear-gradient(135deg,#3AAE72,#2FA39A); box-shadow:0 10px 24px rgba(58,174,114,0.28); }
   .bigscanbtn.depart{ background:linear-gradient(135deg,#8B7FEF,#2FA5D6); box-shadow:0 10px 24px rgba(139,127,239,0.28); }
+  .bigscanbtn.organize{ background:linear-gradient(135deg,#F2A93A,#E8804A); box-shadow:0 10px 24px rgba(242,169,58,0.28); }
   .bigscanbtn .sub{ font-size:13px; font-weight:400; opacity:0.9; font-family:var(--font-mono); }
   .manualrow{ margin-top:12px; }
   .manualbtn{ width:100%; padding:13px; border-radius:16px; border:1px solid var(--line); background:var(--panel); color:var(--text-mute); font-size:15px; cursor:pointer; font-family:var(--font-body); }
@@ -54,6 +55,10 @@
   .resultboard .action.arrive{ background:rgba(58,174,114,0.25); color:#7BE0A8; }
   .resultboard .action.depart{ background:rgba(139,127,239,0.25); color:#C6BBFF; }
   .resultboard .action.done{ background:rgba(217,96,75,0.25); color:#FF9C87; }
+  .resultboard .action.organize{ background:rgba(242,169,58,0.25); color:#FFCE85; }
+  .siblinglist{ margin-top:14px; display:flex; flex-wrap:wrap; gap:6px; }
+  .siblingitem{ font-family:var(--font-mono); font-size:12.5px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#B9CFE3; padding:5px 10px; border-radius:16px; }
+  .siblingitem.done{ background:rgba(58,174,114,0.22); border-color:rgba(58,174,114,0.4); color:#7BE0A8; }
   .resultboard .meta{ font-size:14px; color:#B9CFE3; line-height:1.8; font-family:var(--font-mono); }
 
   .section-label{ font-family:var(--font-mono); font-size:13px; color:var(--text-mute); text-transform:uppercase; letter-spacing:0.06em; margin:24px 0 10px; }
@@ -98,6 +103,15 @@
   .scanhint{ text-align:center; font-size:13px; color:var(--text-mute); margin-bottom:10px; }
   .note{ font-size:12.5px; color:var(--text-mute); margin-top:8px; line-height:1.5; }
 
+  .weekhead{ font-size:14px; color:var(--text-mute); font-family:var(--font-mono); margin-bottom:14px; }
+  .weektablewrap{ overflow-x:auto; border:1px solid var(--line); border-radius:18px; background:var(--panel); margin-bottom:16px; }
+  .weektable{ border-collapse:collapse; width:100%; min-width:560px; }
+  .weektable th, .weektable td{ padding:12px 14px; text-align:center; white-space:nowrap; border-bottom:1px solid var(--line); font-size:14px; }
+  .weektable th{ font-family:var(--font-mono); font-size:12.5px; color:var(--text-mute); text-transform:uppercase; background:var(--panel-2); }
+  .weektable td:first-child, .weektable th:first-child{ text-align:left; }
+  .weektable tr:last-child td{ border-bottom:none; font-weight:800; background:var(--panel-2); }
+  .weektable .wc{ font-family:var(--font-display); font-weight:700; }
+  .weektable .wsmall{ font-size:11.5px; color:var(--text-mute); display:block; }
   .appfooter{ margin-top:30px; padding-top:14px; border-top:1px solid var(--line); text-align:center; font-size:12.5px; color:var(--text-mute); font-family:var(--font-mono); line-height:1.8; }
   .clearlocal{ color:var(--accent); text-decoration:underline; cursor:pointer; }
 </style>
@@ -120,6 +134,7 @@
         <div class="tab active" data-tab="scan">掃描點貨</div>
         <div class="tab" data-tab="log">今日紀錄</div>
         <div class="tab" data-tab="admin">管理端</div>
+        <div class="tab" data-tab="week">週進度</div>
       </div>
 
       <!-- SCAN TAB -->
@@ -130,6 +145,14 @@
         </button>
         <div class="manualrow">
           <button class="manualbtn" id="manualArriveBtn">✏️ 手動輸入（進倉）</button>
+        </div>
+
+        <button class="bigscanbtn organize" id="scanOrganizeBtn" style="margin-top:16px;">
+          🗂️ 整理登記
+          <span class="sub">掃描或輸入箱號，記錄新品整理完成</span>
+        </button>
+        <div class="manualrow">
+          <button class="manualbtn" id="manualOrganizeBtn">✏️ 手動輸入（整理）</button>
         </div>
 
         <button class="bigscanbtn depart" id="scanDepartBtn" style="margin-top:16px;">
@@ -166,6 +189,16 @@
         <div id="adminMoreWrap" style="display:none; margin-top:12px;">
           <button class="refreshsmall" id="adminLoadMore" style="width:100%;">顯示更多</button>
         </div>
+      </div>
+
+      <!-- WEEK PROGRESS TAB -->
+      <div id="tab-week" style="display:none;">
+        <div class="datepicker">
+          <input type="date" id="weekDate">
+          <button class="refreshsmall" id="weekRefresh">重新整理</button>
+        </div>
+        <div id="weekHead"></div>
+        <div id="weekTableWrap"></div>
       </div>
 
       <div class="appfooter" id="footerInfo"></div>
@@ -217,10 +250,11 @@
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxM9p10IX5RkqXDUxEXHB8wFAkLToZfm3CQcFIA-YcJWX8ph_f5WW1gYRYEcmgZkfjv/exec';
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyFmPFL7HpUcj33tUViRSaJj9AZPP4VEJSGhZsYpwNHbJJoXYsFgkL9kk6-h85qKCUT/exec';
 
   let allRecords = [];
   let allZones = {}; // boxCode -> zone, from backend reference sheet
+  let allStores = {}; // storeCode -> {code,name,type,weekday}
   let lastLoadedAt = null;
   let operatorName = '';
 
@@ -266,11 +300,12 @@
     t.addEventListener('click', ()=>{
       document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
       t.classList.add('active');
-      ['scan','log','admin'].forEach(name=>{
+      ['scan','log','admin','week'].forEach(name=>{
         $('tab-'+name).style.display = (name===t.dataset.tab) ? 'block' : 'none';
       });
       if(t.dataset.tab==='log') renderLog();
       if(t.dataset.tab==='admin') renderAdmin();
+      if(t.dataset.tab==='week') renderWeek();
     });
   });
 
@@ -281,6 +316,7 @@
       const data = await res.json();
       allRecords = Array.isArray(data.records) ? data.records : [];
       allZones = data.zones || {};
+      allStores = data.stores || {};
       lastLoadedAt = new Date();
       renderFooter();
     }catch(e){ console.error(e); }
@@ -332,19 +368,30 @@
     }
     const r = json.record || {};
     const zone = r.zone || '查無儲位資料';
-    let actionHtml, metaHtml;
+    let actionHtml, metaHtml, siblingHtml = '';
     if(json.stage === 'arrive'){
       actionHtml = `<span class="action arrive">✓ 已記錄到貨</span>`;
-      metaHtml = `到貨時間　${fmtTime(r.arrivedAt)}<br>件數　${r.qty||1} 件<br>類型　${escapeHtml(r.type||'—')}`;
+      metaHtml = `到貨時間　${fmtTime(r.arrivedAt)}<br>件數　${r.qty||1} 件<br>類型　${escapeHtml(r.type||'—')}${r.storeCode?`<br>店櫃　${escapeHtml(r.storeCode)} ${escapeHtml(r.storeName||'')}`:''}`;
     }else if(json.stage === 'depart'){
       actionHtml = `<span class="action depart">✓ 已記錄出艙</span>`;
       metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}<br>件數　${r.qty||1} 件`;
+    }else if(json.stage === 'organize'){
+      actionHtml = `<span class="action organize">✓ 已記錄整理完成</span>`;
+      const siblings = json.siblings || [];
+      const doneCount = siblings.filter(s=>s.organizedAt).length;
+      metaHtml = `店櫃　${escapeHtml(r.storeCode||'—')} ${escapeHtml(r.storeName||'')}<br>整理完成　${fmtTime(r.organizedAt)}<br>此店櫃進度　${doneCount}/${siblings.length} 箱已整理`;
+      if(siblings.length){
+        siblingHtml = `<div class="siblinglist">${siblings.map(s=>`<div class="siblingitem ${s.organizedAt?'done':''}">${s.organizedAt?'✓':'—'} ${escapeHtml(s.boxCode)}</div>`).join('')}</div>`;
+      }
+    }else if(json.stage === 'already_organized'){
+      actionHtml = `<span class="action done">⚠ 這箱已經整理過了</span>`;
+      metaHtml = `店櫃　${escapeHtml(r.storeCode||'—')} ${escapeHtml(r.storeName||'')}<br>整理完成時間　${fmtTime(r.organizedAt)}<br>沒有重複建立紀錄`;
     }else if(json.stage === 'already_arrived'){
       actionHtml = `<span class="action done">⚠ 這箱已經進倉過了</span>`;
       metaHtml = `原本的到貨時間　${fmtTime(r.arrivedAt)}<br>件數　${r.qty||1} 件<br>沒有重複建立紀錄`;
     }else if(json.stage === 'not_arrived'){
       actionHtml = `<span class="action done">⚠ 這箱還沒有進倉紀錄</span>`;
-      metaHtml = `請先用「進倉登記」掃描這箱，再進行出艙`;
+      metaHtml = `請先用「進倉登記」掃描這箱，再進行後續動作`;
     }else if(json.stage === 'already_departed'){
       actionHtml = `<span class="action done">⚠ 這箱已經出艙過了</span>`;
       metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}<br>沒有重複建立紀錄`;
@@ -353,10 +400,61 @@
       metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}<br>件數　${r.qty||1} 件`;
     }
     board.className = 'resultboard show';
-    board.innerHTML = `<div class="boxno">${escapeHtml(r.boxCode||boxCode)}</div><div class="zone">${escapeHtml(zone)}</div>${actionHtml}<div class="meta">${metaHtml}</div>`;
+    board.innerHTML = `<div class="boxno">${escapeHtml(r.boxCode||boxCode)}</div><div class="zone">${escapeHtml(zone)}</div>${actionHtml}<div class="meta">${metaHtml}</div>${siblingHtml}`;
   }
 
-  // ---- log tab ----
+  // ---- week progress tab ----
+  function mondayOfWeek(dateStr){
+    const [y,m,d] = dateStr.split('-').map(Number);
+    const date = new Date(y,m-1,d);
+    const day = date.getDay();
+    const diffToMonday = day===0 ? -6 : 1-day;
+    date.setDate(date.getDate()+diffToMonday);
+    return date;
+  }
+  function dateStrFromDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function buildWeekDates(dateStr){
+    const monday = mondayOfWeek(dateStr);
+    const dates = [];
+    for(let i=0;i<5;i++){ const dt = new Date(monday); dt.setDate(monday.getDate()+i); dates.push(dateStrFromDate(dt)); }
+    return dates;
+  }
+  function renderWeek(){
+    if(!$('weekDate').value) $('weekDate').value = todayDateStr();
+    const weekDates = buildWeekDates($('weekDate').value);
+    const dayNames = ['週一','週二','週三','週四','週五'];
+    $('weekHead').innerHTML = `<div class="weekhead">本週 ${weekDates[0]} ～ ${weekDates[4]}</div>`;
+
+    const storeList = Object.keys(allStores).map(code=>allStores[code]);
+    if(storeList.length===0){
+      $('weekTableWrap').innerHTML = '<div class="placeholder">尚未載入店櫃排程資料</div>';
+      return;
+    }
+
+    let html = '';
+    for(let wd=1; wd<=5; wd++){
+      const dateStr = weekDates[wd-1];
+      const storesToday = storeList.filter(s=> s.weekday===wd);
+      html += `<div class="section-label" style="margin-top:20px;">${dayNames[wd-1]}（整${wd}）　${dateStr}</div>`;
+      if(storesToday.length===0){
+        html += `<div class="placeholder" style="padding:16px;">這天沒有排定要整理的店櫃</div>`;
+        continue;
+      }
+      html += `<div class="weektablewrap"><table class="weektable"><thead><tr><th>店櫃</th><th>類型</th><th>箱數進度</th></tr></thead><tbody>`;
+      storesToday.forEach(store=>{
+        const boxes = allRecords.filter(r=> r.storeCode===store.code && localDateStr(r.arrivedAt)>=weekDates[0] && localDateStr(r.arrivedAt)<=weekDates[4]);
+        const total = boxes.length;
+        const done = boxes.filter(r=>r.organizedAt).length;
+        html += `<tr><td><span class="wc">${escapeHtml(store.code)}</span><span class="wsmall">${escapeHtml(store.name)}</span></td><td>${escapeHtml(store.type||'')}</td><td>${total? `${done}/${total}` : '尚無到貨'}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+    $('weekTableWrap').innerHTML = html;
+  }
+  $('weekDate').addEventListener('change', renderWeek);
+  $('weekRefresh').addEventListener('click', async ()=>{ await refreshData(); renderWeek(); });
+
+
   function renderLog(){
     const q = ($('logSearch').value||'').trim().toLowerCase();
     const list = allRecords
@@ -465,7 +563,7 @@
   function openScanModal(manual, mode){
     manualMode = manual;
     currentScanMode = mode;
-    const modeLabel = mode==='arrive' ? '進倉' : '出艙';
+    const modeLabel = mode==='arrive' ? '進倉' : (mode==='organize' ? '整理' : '出艙');
     $('scanModalTitle').textContent = (manual ? '手動輸入箱號 - ' : '掃描箱號 - ') + modeLabel;
     $('scanReaderDiv').style.display = manual ? 'none' : 'block';
     $('scanReaderDiv').innerHTML = '';
@@ -562,6 +660,8 @@
   });
   $('scanArriveBtn').addEventListener('click', ()=> openScanModal(false, 'arrive'));
   $('manualArriveBtn').addEventListener('click', ()=> openScanModal(true, 'arrive'));
+  $('scanOrganizeBtn').addEventListener('click', ()=> openScanModal(false, 'organize'));
+  $('manualOrganizeBtn').addEventListener('click', ()=> openScanModal(true, 'organize'));
   $('scanDepartBtn').addEventListener('click', ()=> openScanModal(false, 'depart'));
   $('manualDepartBtn').addEventListener('click', ()=> openScanModal(true, 'depart'));
 
