@@ -565,6 +565,11 @@
     showView('view-driver');
     setSyncBadge('ok');
     await ensureCheckinsThen(()=>{ loadCurrentState(); renderDriverView(); }, $('stopList'));
+    // if a local safety-net copy exists (e.g. an earlier save failed), try pushing it to the cloud now
+    const key = driverKey(currentDriver)+'|'+todayDateStr();
+    try{
+      if(localStorage.getItem(localStateKey(key))){ await saveCurrentState(); renderDriverView(); }
+    }catch(e){}
   }
 
   async function refreshCheckins(){
@@ -609,16 +614,32 @@
     renderFn();
   }
 
+  function localStateKey(key){ return 'dispatch-localstate-' + key; }
+
   function loadCurrentState(){
     const key = driverKey(currentDriver)+'|'+todayDateStr();
-    const rec = allCheckins.find(r=>r.key===key);
     const weekday = new Date().getDay();
     const stops = getStopsFor(currentDriver, weekday);
     let base = null;
-    if(rec && rec.state){
-      let parsed = null;
-      try{ parsed = typeof rec.state==='string' ? JSON.parse(rec.state) : rec.state; }catch(e){}
-      if(parsed && parsed.stops){ base = parsed; }
+
+    // Prefer a local, not-yet-synced copy on this device first — this protects
+    // against losing progress if a previous save to the cloud failed (bad signal,
+    // Apps Script hiccup, etc.) and the person then reloaded the page.
+    try{
+      const localRaw = localStorage.getItem(localStateKey(key));
+      if(localRaw){
+        const parsedLocal = JSON.parse(localRaw);
+        if(parsedLocal && parsedLocal.stops) base = parsedLocal;
+      }
+    }catch(e){}
+
+    if(!base){
+      const rec = allCheckins.find(r=>r.key===key);
+      if(rec && rec.state){
+        let parsed = null;
+        try{ parsed = typeof rec.state==='string' ? JSON.parse(rec.state) : rec.state; }catch(e){}
+        if(parsed && parsed.stops){ base = parsed; }
+      }
     }
     if(!base){
       base = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})) };
@@ -632,13 +653,18 @@
     const b = $('syncBadge');
     if(!b) return;
     if(state==='ok'){ b.textContent='已同步'; b.style.background='rgba(63,191,127,0.18)'; b.style.color='var(--green)'; }
-    else if(state==='err'){ b.textContent='同步失敗'; b.style.background='rgba(224,101,79,0.18)'; b.style.color='var(--red)'; }
+    else if(state==='err'){ b.textContent='同步失敗（已存在本機）'; b.style.background='rgba(224,101,79,0.18)'; b.style.color='var(--red)'; }
     else{ b.textContent='同步中...'; b.style.background='rgba(154,156,163,0.18)'; b.style.color='var(--text-mute)'; }
   }
 
   async function saveCurrentState(){
-    setSyncBadge('saving');
     const key = driverKey(currentDriver)+'|'+todayDateStr();
+    // Persist locally FIRST, before attempting the network call. Even if the
+    // fetch below fails or the page is reloaded mid-request, this local copy
+    // means the person's entries are never silently lost.
+    try{ localStorage.setItem(localStateKey(key), JSON.stringify(currentState)); }catch(e){}
+
+    setSyncBadge('saving');
     const payload = { action:'checkin', key, region:currentDriver.region, name:currentDriver.name, date:todayDateStr(), state: JSON.stringify(currentState) };
     try{
       const res = await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
@@ -647,6 +673,8 @@
       const idx = allCheckins.findIndex(r=>r.key===key);
       if(idx>=0) allCheckins[idx].state = payload.state; else allCheckins.push({key, region:payload.region, name:payload.name, date:payload.date, state:payload.state});
       setSyncBadge('ok');
+      // successfully synced to the cloud — the local safety-net copy is no longer needed
+      try{ localStorage.removeItem(localStateKey(key)); }catch(e){}
       return true;
     }catch(e){ console.error(e); setSyncBadge('err'); return false; }
   }
