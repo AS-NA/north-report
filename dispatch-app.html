@@ -619,30 +619,57 @@
 
   function localStateKey(key){ return 'dispatch-localstate-' + key; }
 
+  function stopCompleteness(s){
+    if(!s) return -1;
+    let score = 0;
+    if(s.arrivedAt) score += 2;
+    if(s.departedAt) score += 2;
+    if(s.note) score += 1;
+    if(s.photo) score += 1;
+    if(s.tasks){ score += Object.keys(s.tasks).filter(k=> s.tasks[k] && s.tasks[k].status).length; }
+    return score;
+  }
+
   function loadCurrentState(){
     const key = driverKey(currentDriver)+'|'+todayDateStr();
     const weekday = new Date().getDay();
     const stops = getStopsFor(currentDriver, weekday);
-    let base = null;
 
-    // Prefer a local, not-yet-synced copy on this device first — this protects
-    // against losing progress if a previous save to the cloud failed (bad signal,
-    // Apps Script hiccup, etc.) and the person then reloaded the page.
+    // Read both sources — a local, possibly-not-yet-synced copy on this device,
+    // and whatever the cloud currently has (which may be newer, e.g. saved from
+    // another device, or synced successfully after this device's cache went stale).
+    let localState = null;
     try{
       const localRaw = localStorage.getItem(localStateKey(key));
       if(localRaw){
         const parsedLocal = JSON.parse(localRaw);
-        if(parsedLocal && parsedLocal.stops) base = parsedLocal;
+        if(parsedLocal && parsedLocal.stops) localState = parsedLocal;
       }
     }catch(e){}
 
-    if(!base){
-      const rec = allCheckins.find(r=>r.key===key);
-      if(rec && rec.state){
-        let parsed = null;
-        try{ parsed = typeof rec.state==='string' ? JSON.parse(rec.state) : rec.state; }catch(e){}
-        if(parsed && parsed.stops){ base = parsed; }
+    let cloudState = null;
+    const rec = allCheckins.find(r=>r.key===key);
+    if(rec && rec.state){
+      let parsed = null;
+      try{ parsed = typeof rec.state==='string' ? JSON.parse(rec.state) : rec.state; }catch(e){}
+      if(parsed && parsed.stops){ cloudState = parsed; }
+    }
+
+    let base;
+    if(localState && cloudState){
+      // Merge stop-by-stop: for each stop, keep whichever side (local vs cloud)
+      // has more filled in, so neither an unsynced local edit nor a newer cloud
+      // update (from another device) gets silently discarded.
+      const stopCount = Math.max(localState.stops.length, cloudState.stops.length, stops.length);
+      const mergedStops = [];
+      for(let i=0;i<stopCount;i++){
+        const ls = localState.stops[i];
+        const cs = cloudState.stops[i];
+        mergedStops.push( stopCompleteness(cs) > stopCompleteness(ls) ? cs : (ls || cs) );
       }
+      base = { stops: mergedStops };
+    }else{
+      base = localState || cloudState;
     }
     if(!base){
       base = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})) };
