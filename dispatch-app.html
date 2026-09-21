@@ -768,6 +768,10 @@
     const weekday = new Date().getDay();
     const stops = getStopsFor(currentDriver, weekday);
     const stop = stops[idx];
+    if(!currentState.stops[idx]){
+      // defensive: schedule may have gained more stops than what's cached locally
+      currentState.stops[idx] = {arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}};
+    }
     const st = currentState.stops[idx];
     const locked = !!st.departedAt;
     stopPhotoData = null;
