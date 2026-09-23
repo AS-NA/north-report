@@ -12,9 +12,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
-    --bg:#0F1826; --panel:#182437; --panel-2:#1F2E45; --line:#2C3D56;
-    --gold:#E8A33D; --teal:#3BC4B8; --green:#4CC985; --red:#E8674F; --grey:#8592A8;
-    --text:#EAF1FB; --text-mute:#8F9FB8;
+    --bg:#F4FAF6; --panel:#FFFFFF; --panel-2:#EEF7F1; --line:#D9EBE0;
+    --gold:#2FAE72; --teal:#3BC4B8; --green:#2FAE72; --red:#E0654F; --grey:#8592A8;
+    --text:#1B2B22; --text-mute:#6B8577;
     --font-display:'Noto Sans TC',sans-serif;
     --font-body:'Noto Sans TC',sans-serif;
     --font-mono:'JetBrains Mono','Courier New',monospace;
@@ -29,10 +29,10 @@
     .kpirow{ grid-template-columns:repeat(4, 1fr); }
     .chartcard canvas{ max-height:280px; }
   }
-  .watermark{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-24deg); z-index:1; pointer-events:none; font-family:var(--font-display); font-weight:900; font-size:14vw; letter-spacing:0.05em; color:var(--gold); opacity:0.07; text-transform:uppercase; white-space:nowrap; }
+  .watermark{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-24deg); z-index:1; pointer-events:none; font-family:var(--font-display); font-weight:900; font-size:14vw; letter-spacing:0.05em; color:var(--gold); opacity:0.12; text-transform:uppercase; white-space:nowrap; }
   .view{ position:relative; z-index:2; }
 
-  .topbar{ padding:22px 20px 18px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#152238,#0F1826); }
+  .topbar{ padding:22px 20px 18px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#EAF7EF,#F4FAF6); }
   .topbar .eyebrow{ font-family:var(--font-mono); font-size:12px; letter-spacing:0.15em; color:var(--gold); text-transform:uppercase; }
   .topbar h1{ font-family:var(--font-display); font-size:25px; margin:6px 0 0; font-weight:900; }
   .topbar .dateline{ font-family:var(--font-mono); font-size:12.5px; color:var(--text-mute); margin-top:4px; }
@@ -40,7 +40,7 @@
   main{ padding:18px 20px 60px; }
   .tabs{ display:flex; margin-bottom:18px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:4px; gap:4px; }
   .tab{ flex:1; text-align:center; padding:11px 0; border-radius:10px; font-size:14px; font-weight:700; color:var(--text-mute); cursor:pointer; user-select:none; }
-  .tab.active{ background:var(--gold); color:#241804; }
+  .tab.active{ background:var(--gold); color:#0C2417; }
 
   .manifest{ background:var(--panel); border:1px solid var(--line); border-radius:4px; position:relative; margin-bottom:16px; }
   .manifest::before{ content:'進出貨登錄單'; position:absolute; top:-11px; left:16px; background:var(--bg); padding:0 8px; font-family:var(--font-mono); font-size:11px; color:var(--gold); letter-spacing:0.1em; }
@@ -65,7 +65,7 @@
   .totaldial .l{ font-size:12px; color:var(--text-mute); }
 
   .btn{ display:block; width:100%; padding:15px; border-radius:12px; border:none; font-size:16px; font-weight:800; cursor:pointer; font-family:var(--font-display); text-align:center; }
-  .btn.gold{ background:var(--gold); color:#241804; }
+  .btn.gold{ background:var(--gold); color:#0C2417; }
   .btn:disabled{ opacity:0.5; }
   .statusline{ text-align:center; font-size:13px; font-family:var(--font-mono); margin-top:10px; min-height:16px; }
   .statusline.ok{ color:var(--green); } .statusline.err{ color:var(--red); }
@@ -79,7 +79,7 @@
   .chartcard canvas{ max-height:210px; }
   .rangepicker{ display:flex; gap:8px; margin-bottom:16px; }
   .rangepicker button{ flex:1; padding:9px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text-mute); font-size:13px; font-weight:700; cursor:pointer; }
-  .rangepicker button.active{ background:var(--gold); border-color:var(--gold); color:#241804; }
+  .rangepicker button.active{ background:var(--gold); border-color:var(--gold); color:#0C2417; }
   .placeholder{ text-align:center; color:var(--text-mute); padding:40px 20px; font-size:14px; }
   .refreshsmall{ padding:11px 12px; border-radius:10px; background:var(--panel-2); border:1px solid var(--line); color:var(--text); font-size:13px; cursor:pointer; width:100%; margin-bottom:14px; font-weight:700; }
 
@@ -326,8 +326,8 @@
     const labels = recent.map(r=>r.date.slice(5));
     Object.values(charts).forEach(c=>c && c.destroy());
 
-    Chart.defaults.color = '#8F9FB8';
-    Chart.defaults.borderColor = '#2C3D56';
+    Chart.defaults.color = '#6B8577';
+    Chart.defaults.borderColor = '#D9EBE0';
 
     charts.channels = new Chart($('chChannels'), {
       type:'bar',
