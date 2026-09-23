@@ -372,8 +372,12 @@
       dailyStops:[ {site:'岡山秀泰',time:'09:00-11:00',table:'A'}, {site:'左營新光',time:'11:55-12:50',table:'C'}, {site:'漢神',time:'14:25-15:55',table:'C'}, {site:'岡山門市',time:'17:00-18:00',table:'A'} ]
     },
     { region:'高雄', code:'南高2', name:'李尚鴻', hours:'07:00-16:00',
-      tables:{ A:[T('勻貨歸倉',[2,4,5]),T('補貨歸倉',[3,4,5]),T('追加歸倉',[3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])] },
-      dailyStops:[ {site:'夢時代(收貨)',time:'07:00-08:00',table:'A'}, {site:'岡山秀泰',time:'09:00-09:30',table:'A'}, {site:'三多',time:'10:30-11:00',table:'A'}, {site:'夢時代',time:'12:30-15:00',table:'A'} ]
+      tables:{
+        A:[T('勻貨歸倉',[2,4,5]),T('補貨歸倉',[3,4,5]),T('追加歸倉',[3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])],
+        B:[T('收送貨',[1,2,3,4,5])],
+        C:[T('勻貨歸倉',[2,4,5]),T('補貨歸倉',[3,4,5]),T('追加歸倉',[3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5]),T('收送貨',[1,2,3,4,5])]
+      },
+      dailyStops:[ {site:'夢時代(收貨)',time:'07:00-08:00',table:'B'}, {site:'岡山秀泰',time:'09:00-09:30',table:'C'}, {site:'三多',time:'10:30-11:00',table:'A'}, {site:'夢時代',time:'12:30-15:00',table:'A'} ]
     },
     { region:'台南', code:'南台1', name:'陳琮斌', hours:'12:00-21:00',
       tables:{ A:[T('勻貨歸倉',[2,3,4,5]),T('補貨歸倉',[4,5]),T('追加歸倉',[4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])] },
@@ -865,8 +869,17 @@
       else if(diff < -LATE_TOLERANCE_MIN) diffHtml = `<span class="diff ontime">提早 ${Math.abs(diff)} 分</span>`;
       else diffHtml = `<span class="diff ontime">準時</span>`;
     }
-    const gpsHtml = st.gps ? `<div class="gpsmeta">定位已記錄・<a href="https://maps.google.com/?q=${st.gps}" target="_blank" style="color:var(--teal);">在地圖上開啟</a></div>` : `<div class="gpsmeta">未附加定位</div>`;
-    $('stopInfoBox').innerHTML = `<div class="row1"><span class="arrived">到店 ${arrivedD.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}（預定 ${stop.time.split('-')[0]}）</span>${diffHtml}</div>${gpsHtml}`;
+    const gpsHtml = st.gps ? `<div class="gpsmeta">到店定位已記錄・<a href="https://maps.google.com/?q=${st.gps}" target="_blank" style="color:var(--teal);">在地圖上開啟</a></div>` : `<div class="gpsmeta">到店未附加定位</div>`;
+
+    let departHtml = '';
+    if(st.departedAt){
+      const departedD = new Date(st.departedAt);
+      const durMin = Math.round((departedD - arrivedD)/60000);
+      const departGpsHtml = st.departGps ? `<div class="gpsmeta">離店定位已記錄・<a href="https://maps.google.com/?q=${st.departGps}" target="_blank" style="color:var(--teal);">在地圖上開啟</a></div>` : `<div class="gpsmeta">離店未附加定位</div>`;
+      departHtml = `<div class="row1" style="margin-top:8px;"><span class="arrived">離店 ${departedD.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}</span><span style="color:var(--text-mute); font-family:var(--font-mono); font-size:12px;">停留 ${durMin} 分</span></div>${departGpsHtml}`;
+    }
+
+    $('stopInfoBox').innerHTML = `<div class="row1"><span class="arrived">到店 ${arrivedD.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}（預定 ${stop.time.split('-')[0]}）</span>${diffHtml}</div>${gpsHtml}${departHtml}`;
   }
 
   const NA_REASONS = [
@@ -1221,40 +1234,63 @@
   $('arriveBtn').addEventListener('click', ()=>{
     const st = currentState.stops[currentStopIdx];
     $('arriveBtn').disabled = true; $('arriveBtn').textContent='定位中...';
-    const finish = async (gpsStr)=>{
-      st.arrivedAt = new Date().toISOString();
-      st.gps = gpsStr;
-      const weekday = new Date().getDay();
-      const stops = getStopsFor(currentDriver, weekday);
-      renderStopInfoBox(stops[currentStopIdx], st);
-      $('arriveBtn').style.display='none'; $('departBtn').style.display='block';
+    if(!navigator.geolocation){
       $('arriveBtn').disabled=false; $('arriveBtn').textContent='到店打卡';
-      const ok = await saveCurrentState();
-      setArriveStatus(ok ? '✓ 已記錄到店' : '打卡失敗，請檢查網路', !ok);
-    };
-    if(navigator.geolocation){
-      navigator.geolocation.getCurrentPosition(
-        pos=> finish(pos.coords.latitude.toFixed(5)+','+pos.coords.longitude.toFixed(5)),
-        ()=> finish(null),
-        {timeout:8000}
-      );
-    }else{ finish(null); }
+      setArriveStatus('此裝置不支援定位，無法打卡（到店打卡需要開啟定位）', true);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async pos=>{
+        const gpsStr = pos.coords.latitude.toFixed(5)+','+pos.coords.longitude.toFixed(5);
+        st.arrivedAt = new Date().toISOString();
+        st.gps = gpsStr;
+        const weekday = new Date().getDay();
+        const stops = getStopsFor(currentDriver, weekday);
+        renderStopInfoBox(stops[currentStopIdx], st);
+        $('arriveBtn').style.display='none'; $('departBtn').style.display='block';
+        $('arriveBtn').disabled=false; $('arriveBtn').textContent='到店打卡';
+        const ok = await saveCurrentState();
+        setArriveStatus(ok ? '✓ 已記錄到店（含定位）' : '打卡失敗，請檢查網路', !ok);
+      },
+      (err)=>{
+        $('arriveBtn').disabled=false; $('arriveBtn').textContent='到店打卡';
+        setArriveStatus('無法取得定位，請開啟手機定位權限後再試一次（到店打卡需要定位才能送出）', true);
+      },
+      {timeout:10000, enableHighAccuracy:true}
+    );
   });
 
-  $('departBtn').addEventListener('click', async ()=>{
+  $('departBtn').addEventListener('click', ()=>{
     const st = currentState.stops[currentStopIdx];
-    st.departedAt = new Date().toISOString();
-    st.note = $('stopNote').value.trim();
-    if(stopPhotoData) st.photo = stopPhotoData;
-    $('departBtn').disabled = true; $('departBtn').textContent = '送出中...';
-    const ok = await saveCurrentState();
-    $('departBtn').disabled = false; $('departBtn').textContent = '離店打卡';
-    setStopStatus(ok ? '✓ 已離店，本站完成' : '送出失敗，請檢查網路', !ok);
-    if(ok){
-      $('departBtn').style.display='none';
-      renderDriverView();
-      setTimeout(()=> showView('view-driver'), 700);
+    $('departBtn').disabled = true; $('departBtn').textContent = '定位中...';
+    if(!navigator.geolocation){
+      $('departBtn').disabled=false; $('departBtn').textContent = '離店打卡';
+      setStopStatus('此裝置不支援定位，無法打卡（離店打卡需要開啟定位）', true);
+      return;
     }
+    navigator.geolocation.getCurrentPosition(
+      async pos=>{
+        const gpsStr = pos.coords.latitude.toFixed(5)+','+pos.coords.longitude.toFixed(5);
+        st.departedAt = new Date().toISOString();
+        st.departGps = gpsStr;
+        st.note = $('stopNote').value.trim();
+        if(stopPhotoData) st.photo = stopPhotoData;
+        $('departBtn').textContent = '送出中...';
+        const ok = await saveCurrentState();
+        $('departBtn').disabled = false; $('departBtn').textContent = '離店打卡';
+        setStopStatus(ok ? '✓ 已離店，本站完成（含定位）' : '送出失敗，請檢查網路', !ok);
+        if(ok){
+          $('departBtn').style.display='none';
+          renderDriverView();
+          setTimeout(()=> showView('view-driver'), 700);
+        }
+      },
+      (err)=>{
+        $('departBtn').disabled=false; $('departBtn').textContent = '離店打卡';
+        setStopStatus('無法取得定位，請開啟手機定位權限後再試一次（離店打卡需要定位才能送出）', true);
+      },
+      {timeout:10000, enableHighAccuracy:true}
+    );
   });
   function setStopStatus(msg, isErr){ $('stopStatus').textContent = msg; $('stopStatus').className = 'statusline '+(isErr?'err':'ok'); }
   function setArriveStatus(msg, isErr){ $('arriveStatus').textContent = msg; $('arriveStatus').className = 'statusline '+(isErr?'err':'ok'); }
