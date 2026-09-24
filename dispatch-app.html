@@ -473,6 +473,11 @@
     return driver.dailyStops || [];
   }
   function getStopTasks(driver, stop, weekday){
+    const today = todayDateStr();
+    const override = allOverrides.find(o=> o.site===stop.site && o.date===today);
+    if(override && override.tasks && override.tasks.length){
+      return override.tasks.map(n=>({name:n, active:true}));
+    }
     if(stop.free) return stop.free.map(n=>({name:n, active:true}));
     const table = driver.tables[stop.table] || [];
     return table.map(t=>({name:t.name, active:t.days.includes(weekday)}));
@@ -492,6 +497,7 @@
   let lastLoadedAt = null;
   let currentState = null; // {stops:[{arrivedAt,departedAt,gps,photo,note,tasks:{}}]}
   let allCheckins = []; // fetched from backend
+  let allOverrides = []; //門市提交的隔天工作需求，格式 {site, date, tasks:[...]}
   let checkinsLoadedOnce = false;
 
   function showView(id){
@@ -595,6 +601,11 @@
       checkinsLoadedOnce = true;
       lastLoadedAt = new Date();
     }catch(e){ allCheckins = allCheckins || []; console.error(e); }
+    try{
+      const res2 = await fetch(APPS_SCRIPT_URL + '?action=overrides');
+      const data2 = await res2.json();
+      allOverrides = Array.isArray(data2) ? data2 : [];
+    }catch(e){ console.error(e); }
   }
 
   function footerInfoHtml(){
@@ -829,6 +840,16 @@
 
     $('stopSite').textContent = `① ${stop.site}`;
     $('stopTime').textContent = stop.time;
+    const todayOverride = allOverrides.find(o=> o.site===stop.site && o.date===todayDateStr());
+    let overrideBanner = document.getElementById('overrideBanner');
+    if(!overrideBanner){
+      overrideBanner = document.createElement('div');
+      overrideBanner.id = 'overrideBanner';
+      overrideBanner.style.cssText = 'background:rgba(217,96,75,0.1); border:1px solid rgba(217,96,75,0.3); color:var(--red); border-radius:10px; padding:10px 12px; font-size:12.5px; margin-bottom:12px; line-height:1.5;';
+      $('stopTime').insertAdjacentElement('afterend', overrideBanner);
+    }
+    overrideBanner.style.display = todayOverride ? 'block' : 'none';
+    if(todayOverride) overrideBanner.textContent = '⚠ 門市已更新今日工作項目，以下清單是門市臨時提交的內容，非原本排定項目';
     $('stopNote').value = st.note || '';
     $('stopNote').disabled = locked;
     $('photoPreview').style.display='none'; $('photoPreview').src='';
