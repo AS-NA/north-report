@@ -92,6 +92,12 @@
 
   /* stop detail */
   .infobox{ margin:16px 20px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; font-size:13px; }
+  #view-stop.selecting-store > *:not(.topbar):not(#storeSelectBox){ display:none !important; }
+  #view-stop.selecting-store #storeSelectBox{ display:block !important; padding:20px; }
+  .storeselecttitle{ font-size:14px; color:var(--text-mute); margin-bottom:14px; line-height:1.6; }
+  .storeoptbtn{ width:100%; padding:16px; margin-bottom:10px; border-radius:12px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-size:15px; font-weight:700; cursor:pointer; text-align:left; }
+  .storeoptbtn:active{ background:var(--panel-2); }
+  .storeoptbtn .tag{ display:inline-block; font-size:11px; font-family:var(--font-mono); color:#fff; background:var(--accent); border-radius:10px; padding:2px 8px; margin-left:8px; vertical-align:middle; }
   .infobox .row1{ display:flex; justify-content:space-between; align-items:center; }
   .infobox .arrived{font-family:var(--font-mono); color:var(--teal);}
   .infobox .diff{font-family:var(--font-mono); font-size:12px;}
@@ -292,6 +298,7 @@
       <button class="backbtn" data-back="driver">←</button>
       <div class="who"><div class="n" id="stopSite"></div><div class="m" id="stopTime"></div></div>
     </div>
+    <div id="storeSelectBox" style="display:none;"></div>
     <div class="infobox" id="stopInfoBox"></div>
     <button class="bigbtn arrive" id="arriveBtn">到店打卡</button>
     <div class="statusline" id="arriveStatus"></div>
@@ -374,11 +381,10 @@
     },
     { region:'高雄', code:'南高2', name:'李尚鴻', hours:'07:00-16:00',
       tables:{
-        A:[T('勻貨歸倉',[2,4,5]),T('補貨歸倉',[3,4,5]),T('追加歸倉',[3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])],
         B:[T('收送貨',[1,2,3,4,5])],
-        C:[T('勻貨歸倉',[2,4,5]),T('補貨歸倉',[3,4,5]),T('追加歸倉',[3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5]),T('收送貨',[1,2,3,4,5])]
+        D:[T('店務',[1,2,3,4,5])]
       },
-      dailyStops:[ {site:'夢時代(收貨)',time:'07:00-08:00',table:'B'}, {site:'岡山秀泰',time:'09:00-09:30',table:'C'}, {site:'三多',time:'10:30-11:00',table:'A'}, {site:'夢時代',time:'12:30-15:00',table:'A'} ]
+      dailyStops:[ {site:'夢時代',time:'07:00-08:00',table:'B'}, {site:'岡山秀泰',time:'09:00-09:30',table:'B'}, {site:'三多遠百',time:'10:30-11:00',table:'B'}, {site:'夢時代商圈',time:'12:30-15:00',table:'D',storeOptions:['夢時代大碼','夢時代IP','夢時代CA']} ]
     },
     { region:'台南', code:'南台1', name:'陳琮斌', hours:'12:00-21:00',
       tables:{ A:[T('勻貨歸倉',[2,3,4,5]),T('補貨歸倉',[4,5]),T('追加歸倉',[4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])] },
@@ -698,7 +704,14 @@
       base = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})) };
     }
     // keep the site/time labels synced to the current schedule so the backend log stays readable
-    base.stops.forEach((s,i)=>{ if(stops[i]){ s.site = stops[i].site; s.time = stops[i].time; } });
+    base.stops.forEach((s,i)=>{
+      if(stops[i]){
+        // for a stop with selectable store options, once a store has been chosen for today,
+        // keep using that specific store's name instead of the generic group label
+        s.site = (stops[i].storeOptions && s.selectedStore) ? s.selectedStore : stops[i].site;
+        s.time = stops[i].time;
+      }
+    });
     currentState = base;
   }
 
@@ -809,7 +822,7 @@
       else{ statusHtml = locked ? '<span class="status wait">等待中</span>' : '<span class="status wait">未開始</span>'; prevDeparted=false; }
       return `<div class="stopcard ${cardClass} ${locked && !st.arrivedAt ? 'locked':''}" data-idx="${i}">
         <div class="srow">
-          <div><div class="idx">STOP ${i+1}</div><div class="site">${escapeHtml(stop.site)}</div><div class="time">${stop.time}</div></div>
+          <div><div class="idx">STOP ${i+1}</div><div class="site">${escapeHtml(st.site || stop.site)}${stop.storeOptions && !st.selectedStore ? ' <span style="font-size:11px; color:var(--accent); font-weight:600;">（待選店家）</span>' : ''}</div><div class="time">${stop.time}</div></div>
           ${statusHtml}
         </div>
         <div class="itemcount">${activeCount} 項工作項目</div>
@@ -825,6 +838,26 @@
 
   // ============ STOP DETAIL ============
   let stopPhotoData = null;
+  function renderStoreSelection(idx, stop){
+    showView('view-stop');
+    document.getElementById('view-stop').classList.add('selecting-store');
+    $('stopSite').textContent = `① ${stop.site}`;
+    $('stopTime').textContent = stop.time;
+    $('storeSelectBox').innerHTML = `
+      <div class="storeselecttitle">這一站是「${escapeHtml(stop.site)}」，請先選擇今天實際要去哪一家門市，選定後這一站就會依這家店來記錄工作項目跟打卡。</div>
+      ${stop.storeOptions.map((name,i)=>`<button class="storeoptbtn" data-choice="${escapeHtml(name)}">${escapeHtml(name)}${i===0?'<span class="tag">主要支援</span>':''}</button>`).join('')}
+    `;
+    document.querySelectorAll('#storeSelectBox .storeoptbtn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const st = currentState.stops[idx];
+        st.selectedStore = btn.dataset.choice;
+        st.site = btn.dataset.choice;
+        document.getElementById('view-stop').classList.remove('selecting-store');
+        await saveCurrentState();
+        openStop(idx);
+      });
+    });
+  }
   function openStop(idx){
     currentStopIdx = idx;
     const weekday = new Date().getDay();
@@ -837,6 +870,12 @@
     const st = currentState.stops[idx];
     const locked = !!st.departedAt;
     stopPhotoData = null;
+    document.getElementById('view-stop').classList.remove('selecting-store');
+
+    if(stop.storeOptions && !st.selectedStore){
+      renderStoreSelection(idx, stop);
+      return;
+    }
 
     $('stopSite').textContent = `① ${stop.site}`;
     $('stopTime').textContent = stop.time;
