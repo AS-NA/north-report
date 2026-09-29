@@ -800,6 +800,7 @@
       const tasks = getStopTasks(driver, stop, weekday).filter(t=>t.active);
       const st = state.stops[i] || {};
       tasks.forEach(t=>{
+        if(shipCarrierFor(t.name)) return; // 寄貨類工作（登記箱數）不算在完成度內
         const rec = st.tasks && st.tasks[t.name];
         if(rec && rec.status==='na') return; // not-applicable items don't count toward completion
         totalTasks++;
@@ -1402,6 +1403,7 @@
         }
         const tasks = getStopTasks(d, stop, weekday).filter(t=>t.active);
         tasks.forEach(t=>{
+          if(shipCarrierFor(t.name)) return; // 寄貨類工作（登記箱數）不算在完成度統計內
           const rec2 = st.tasks && st.tasks[t.name];
           if(rec2 && rec2.status==='na'){
             const reasonLabel = reasonMap[rec2.reason] || '尚未選擇原因';
