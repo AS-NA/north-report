@@ -1327,6 +1327,40 @@
 
   function weekdayOfDateStr(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d).getDay(); }
 
+  // 寄貨看板：把當天所有司機登記的箱數，依物流商彙總成「店家→箱數」，
+  // 給管理端一鍵複製成跟現有回報範本一樣的格式。
+  function buildShipBoard(dateStr){
+    const weekday = weekdayOfDateStr(dateStr);
+    const board = { '佶傳':{}, '新竹物流':{}, '黑貓宅急便':{} };
+    DRIVERS.forEach(d=>{
+      const stops = getStopsFor(d, weekday);
+      if(d.noSchedule || stops.length===0) return;
+      const key = driverKey(d)+'|'+dateStr;
+      const rec = allCheckins.find(r=>r.key===key);
+      if(!rec || !rec.state) return;
+      let state;
+      try{ state = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; }catch(e){ return; }
+      if(!state || !state.stops) return;
+      stops.forEach((stop,i)=>{
+        const st = state.stops[i];
+        if(!st || !st.tasks) return;
+        const tasks = getStopTasks(d, stop, weekday);
+        tasks.forEach(t=>{
+          const carrier = shipCarrierFor(t.name);
+          if(!carrier) return;
+          const rec2 = st.tasks[t.name];
+          const boxes = rec2 && rec2.boxes;
+          if(!boxes || !boxes.length) return;
+          boxes.forEach(b=>{
+            if(!b || !b.site) return;
+            board[carrier][b.site] = (board[carrier][b.site]||0) + (b.qty||0);
+          });
+        });
+      });
+    });
+    return board;
+  }
+
   function buildAdminAnalytics(weekday, dateStr){
     const online = [], notOnline = [], anomalies = [];
     let totalTasks=0, totalDone=0;
@@ -1513,6 +1547,51 @@
       }
       rbody += footerInfoHtml();
       $('adminBody').innerHTML = rbody;
+      wireFooterInfo();
+      return;
+    }
+
+    if(adminTab==='ship'){
+      const board = buildShipBoard(adminDate);
+      const carriers = ['佶傳','新竹物流','黑貓宅急便'];
+      const mmdd = adminDate.slice(5).replace('-','/');
+      let templateText = `範本${mmdd}\n`;
+      carriers.forEach(c=>{
+        templateText += `${c}：\n`;
+        Object.entries(board[c]).forEach(([site,qty])=>{ templateText += `${site}　${qty}箱\n`; });
+        templateText += `\n`;
+      });
+      templateText = templateText.trim() + '\n';
+
+      let sbody = `
+        <div class="datepicker">
+          <input type="date" id="adminDateInput" value="${adminDate}">
+          <button class="refreshsmall" id="adminRefreshBtn">重新載入</button>
+        </div>
+        <div style="margin:14px 20px;"><button class="btn accent" id="shipCopyBtn" style="width:100%;">📋 複製文字（貼給群組回報用）</button></div>
+      `;
+      sbody += carriers.map(c=>{
+        const entries = Object.entries(board[c]);
+        const total = entries.reduce((s,[,q])=>s+q, 0);
+        return `<div class="section-label" style="margin:18px 20px 8px;">${escapeHtml(c)}${total>0?`　共 ${total} 箱`:''}</div>` +
+          (entries.length
+            ? entries.map(([site,qty])=>`<div class="miniline"><div class="n">${escapeHtml(site)}</div><div class="c">${qty} 箱</div></div>`).join('')
+            : `<div class="placeholder">今天還沒有登記</div>`);
+      }).join('');
+      sbody += footerInfoHtml();
+      $('adminBody').innerHTML = sbody;
+      $('adminDateInput').addEventListener('change', (e)=>{ adminDate = e.target.value; renderAdmin(); });
+      $('adminRefreshBtn').addEventListener('click', async ()=>{ $('adminBody').innerHTML='<div class="loading">載入中...</div>'; await refreshCheckins(); renderAdmin(); });
+      const shipCopyBtn = $('shipCopyBtn');
+      if(shipCopyBtn) shipCopyBtn.addEventListener('click', async ()=>{
+        try{
+          await navigator.clipboard.writeText(templateText);
+          shipCopyBtn.textContent = '✓ 已複製';
+          setTimeout(()=>{ shipCopyBtn.textContent = '📋 複製文字（貼給群組回報用）'; }, 1500);
+        }catch(e){
+          alert('複製失敗，請手動選取文字複製：\n\n'+templateText);
+        }
+      });
       wireFooterInfo();
       return;
     }
