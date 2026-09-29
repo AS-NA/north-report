@@ -340,6 +340,7 @@
     <div class="modal scanmodal">
       <h3 id="scanModalTitle">掃描單號</h3>
       <div id="scanReaderDiv"></div>
+      <button class="btn ghost" id="torchBtn" type="button" style="display:none; margin-top:8px; width:100%;">🔦 開啟手電筒</button>
       <div class="scanhint" id="scanHintText">將條碼對準框框內</div>
 
       <div class="scanconfirm" id="scanConfirmBox" style="display:none;">
@@ -1114,6 +1115,7 @@
   let manualModeActive = false;
   let scannerPaused = false;
   let quaggaDetectedHandler = null;
+  let quaggaProcessedHandler = null;
   let lastRememberedDest = '';
   function renderScanList(taskName, st){
     const scans = (st.tasks[taskName] && st.tasks[taskName].scans) || [];
@@ -1173,10 +1175,12 @@
       },
       numOfWorkers: 0,
       locate: true,
-      locator: { patchSize: 'medium', halfSample: true },
+      locator: { patchSize: 'large', halfSample: false },
       frequency: 10,
       decoder: {
-        readers: ['code_128_reader'],
+        // 新竹物流／黑貓的托運單條碼實際上有 CODE128 也有 CODE39，兩種都開才不會掃不到；
+        // 靠下面的「連續讀到同一個值 3 次」機制來擋掉誤讀，不會因為多開一種格式就變不準。
+        readers: ['code_128_reader','code_39_reader'],
         multiple: false
       }
     }, function(err){
@@ -1197,7 +1201,23 @@
       scannerActive = true;
       const canvasEl = document.querySelector('#scanReaderDiv canvas');
       if(canvasEl){ canvasEl.style.width = '100%'; canvasEl.style.position = 'absolute'; canvasEl.style.top = '0'; }
+      setupTorchButton();
     });
+
+    // Live diagnostic: shows whether the camera is actually feeding frames to
+    // the decoder at all, and whether it's finding candidate barcode regions
+    // (locating) even before it manages to decode one. Without this, "完全沒反應"
+    // is impossible to tell apart from "camera frozen" vs "sees something but
+    // can't read it" vs "isn't finding anything barcode-shaped at all".
+    let frameCount = 0, locateCount = 0;
+    quaggaProcessedHandler = function(result){
+      frameCount++;
+      if(result && result.boxes && result.boxes.length) locateCount++;
+      if(!scannerPaused && $('scanHintText') && $('scanHintText').textContent.indexOf('辨識中') === -1){
+        $('scanHintText').textContent = `將條碼對準框框內（已處理 ${frameCount} 幀・偵測到候選區 ${locateCount} 次）`;
+      }
+    };
+    Quagga.onProcessed(quaggaProcessedHandler);
 
     // Require the SAME code to be read several times in a row before trusting it —
     // a single noisy camera frame can easily misread one digit, but it's very
@@ -1277,15 +1297,49 @@
     $('scanConfirmBox').style.display = 'none';
     scannerPaused = false;
     manualModeActive = false;
+    $('torchBtn').style.display = 'none';
+    $('torchBtn').textContent = '🔦 開啟手電筒';
+    torchOn = false; torchTrack = null;
     if(scannerActive){
       try{
         if(quaggaDetectedHandler) Quagga.offDetected(quaggaDetectedHandler);
+        if(quaggaProcessedHandler) Quagga.offProcessed(quaggaProcessedHandler);
         Quagga.stop();
       }catch(e){}
       scannerActive = false;
       quaggaDetectedHandler = null;
+      quaggaProcessedHandler = null;
     }
   }
+  // 反光包裝、光線不足時條碼常常掃不到——能開閃光燈的話讓司機自己開，
+  // 大部分反光問題直接補光就能解決，不用一直換角度找無反光的位置。
+  let torchOn = false, torchTrack = null;
+  function setupTorchButton(){
+    try{
+      const videoEl = document.querySelector('#scanReaderDiv video');
+      const stream = videoEl && videoEl.srcObject;
+      const track = stream && stream.getVideoTracks && stream.getVideoTracks()[0];
+      const caps = track && track.getCapabilities && track.getCapabilities();
+      if(track && caps && caps.torch){
+        torchTrack = track;
+        $('torchBtn').style.display = 'block';
+      }else{
+        $('torchBtn').style.display = 'none';
+      }
+    }catch(e){
+      $('torchBtn').style.display = 'none';
+    }
+  }
+  $('torchBtn').addEventListener('click', async ()=>{
+    if(!torchTrack) return;
+    try{
+      torchOn = !torchOn;
+      await torchTrack.applyConstraints({ advanced: [{ torch: torchOn }] });
+      $('torchBtn').textContent = torchOn ? '🔦 關閉手電筒' : '🔦 開啟手電筒';
+    }catch(e){
+      $('torchBtn').style.display = 'none';
+    }
+  });
   $('scanDoneBtn').addEventListener('click', ()=>{
     closeScanner();
     if(currentStopIdx !== null && currentDriver){
