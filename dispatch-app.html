@@ -1088,14 +1088,17 @@
         const val = btn.dataset.val;
         if(!st.tasks) st.tasks = {};
         const prev = st.tasks[taskName] || {};
+        // 標記完成/未完成/不適用時，之前登記的箱數（boxes）要一起帶過去，
+        // 不然點狀態按鈕會把剛剛登記的箱數整個蓋掉、看起來像資料消失了。
+        const carryBoxes = prev.boxes ? { boxes: prev.boxes } : {};
         if(prev.status === val){
-          st.tasks[taskName] = {}; // toggle off
+          st.tasks[taskName] = { ...carryBoxes }; // toggle off
         }else if(val==='done'){
-          st.tasks[taskName] = { status:'done' };
+          st.tasks[taskName] = { status:'done', ...carryBoxes };
         }else if(val==='partial'){
-          st.tasks[taskName] = { status:'partial', percent: (typeof prev.percent==='number')?prev.percent:50, reason: prev.reason||'', note: prev.note||'' };
+          st.tasks[taskName] = { status:'partial', percent: (typeof prev.percent==='number')?prev.percent:50, reason: prev.reason||'', note: prev.note||'', ...carryBoxes };
         }else if(val==='na'){
-          st.tasks[taskName] = { status:'na', reason: prev.reason||'' };
+          st.tasks[taskName] = { status:'na', reason: prev.reason||'', ...carryBoxes };
         }
         renderTaskRows(stop, st, weekday, locked);
         await saveCurrentState();
