@@ -1298,6 +1298,7 @@
   // ============ ADMIN ============
   let adminTab = 'live';
   let adminDate = todayDateStr();
+  let adminShipDriver = ''; // 寄貨看板篩選：空字串＝全部司機
   async function openAdmin(){
     liveDrill = null;
     document.querySelector('.app').classList.add('wide');
@@ -1330,12 +1331,21 @@
 
   function weekdayOfDateStr(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d).getDay(); }
 
+  // 哪些司機的班表裡有寄貨類工作（黑貓/新竹物流/佶傳），給寄貨看板的司機篩選用。
+  function driversWithShipTasks(){
+    return DRIVERS.filter(d=>{
+      const tables = d.tables || {};
+      return Object.values(tables).some(arr=> (arr||[]).some(t=> shipCarrierFor(t.name)));
+    });
+  }
+
   // 寄貨看板：把當天所有司機登記的箱數，依物流商彙總成「店家→箱數」，
-  // 給管理端一鍵複製成跟現有回報範本一樣的格式。
-  function buildShipBoard(dateStr){
+  // 給管理端一鍵複製成跟現有回報範本一樣的格式。driverFilter 有值時只算該司機（driverKey）。
+  function buildShipBoard(dateStr, driverFilter){
     const weekday = weekdayOfDateStr(dateStr);
     const board = { '佶傳':{}, '新竹物流':{}, '黑貓宅急便':{} };
     DRIVERS.forEach(d=>{
+      if(driverFilter && driverKey(d)!==driverFilter) return;
       const stops = getStopsFor(d, weekday);
       if(d.noSchedule || stops.length===0) return;
       const key = driverKey(d)+'|'+dateStr;
