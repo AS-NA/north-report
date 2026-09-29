@@ -462,6 +462,13 @@
         4:[{site:'西門AS',time:'09:30-18:30',table:'B'},{site:'西門三店(IP)',time:'09:30-18:30',table:'B'}],
         5:[{site:'延平倉',time:'09:30-18:30',table:'A'}]
       }
+    },
+    { region:'台北', code:'北4', name:'NANA', hours:'依當日排程',
+      tables:{ A:[
+        T('黑貓寄北區',[1,2,3,4,5]),T('黑貓寄中區',[1,2,3,4,5]),T('黑貓寄南區',[1,2,3,4,5]),
+        T('新竹寄北區',[1,2,3,4,5]),T('新竹寄中區',[1,2,3,4,5]),T('新竹寄南區',[1,2,3,4,5])
+      ] },
+      dailyStops:[ {site:'延平倉(寄貨)',time:'依當日排程',table:'A'} ]
     }
   ];
 
@@ -737,9 +744,21 @@
     const payload = { action:'checkin', key, region:currentDriver.region, name:currentDriver.name, date:todayDateStr(), state: JSON.stringify(currentState) };
 
     async function attemptOnce(){
-      const res = await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
-      const json = await res.json();
-      if(!json || !json.success) throw new Error('save failed');
+      // Hard cap how long we wait for a response — without this, a slow/hung
+      // Apps Script call leaves the UI stuck on "送出中..." indefinitely with
+      // no way for the person to know whether it's still working or dead.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(()=> controller.abort(), 15000);
+      try{
+        const res = await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload), signal: controller.signal });
+        const json = await res.json();
+        if(!json || !json.success) throw new Error('save failed');
+      }catch(e){
+        if(e.name==='AbortError') throw new Error('save timeout');
+        throw e;
+      }finally{
+        clearTimeout(timeoutId);
+      }
     }
 
     for(let attempt=1; attempt<=2; attempt++){
@@ -996,7 +1015,7 @@
           </select>
         </div>`;
       }
-      const isShipping = (t.name==='寄黑貓' || t.name==='寄新竹物流');
+      const isShipping = (t.name.startsWith('寄黑貓') || t.name.startsWith('寄新竹物流') || t.name.startsWith('黑貓寄') || t.name.startsWith('新竹寄'));
       let shipHtml = '';
       if(isShipping){
         const scans = rec.scans || [];
