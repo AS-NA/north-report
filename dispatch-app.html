@@ -1565,10 +1565,12 @@
     }
 
     if(adminTab==='ship'){
-      const board = buildShipBoard(adminDate);
+      const board = buildShipBoard(adminDate, adminShipDriver);
       const carriers = ['佶傳','新竹物流','黑貓宅急便'];
       const mmdd = adminDate.slice(5).replace('-','/');
-      let templateText = `範本${mmdd}\n`;
+      const shipDriverList = driversWithShipTasks();
+      const shipDriverName = adminShipDriver ? (shipDriverList.find(d=>driverKey(d)===adminShipDriver)||{}).name : '';
+      let templateText = `範本${mmdd}${shipDriverName?`　${shipDriverName}`:''}\n`;
       carriers.forEach(c=>{
         templateText += `${c}：\n`;
         Object.entries(board[c]).forEach(([site,qty])=>{ templateText += `${site}　${qty}箱\n`; });
@@ -1581,6 +1583,12 @@
           <input type="date" id="adminDateInput" value="${adminDate}">
           <button class="refreshsmall" id="adminRefreshBtn">重新載入</button>
         </div>
+        <div style="margin:0 20px 14px;">
+          <select id="adminShipDriverSelect" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);">
+            <option value="">全部司機</option>
+            ${shipDriverList.map(d=>`<option value="${escapeHtml(driverKey(d))}" ${adminShipDriver===driverKey(d)?'selected':''}>${escapeHtml(d.name)}（${escapeHtml(d.region)}・${escapeHtml(d.code)}）</option>`).join('')}
+          </select>
+        </div>
         <div style="margin:14px 20px;"><button class="btn accent" id="shipCopyBtn" style="width:100%;">📋 複製文字（貼給群組回報用）</button></div>
       `;
       sbody += carriers.map(c=>{
@@ -1589,11 +1597,12 @@
         return `<div class="section-label" style="margin:18px 20px 8px;">${escapeHtml(c)}${total>0?`　共 ${total} 箱`:''}</div>` +
           (entries.length
             ? entries.map(([site,qty])=>`<div class="miniline"><div class="n">${escapeHtml(site)}</div><div class="c">${qty} 箱</div></div>`).join('')
-            : `<div class="placeholder">今天還沒有登記</div>`);
+            : `<div class="placeholder">${adminShipDriver?'這位司機當天還沒有登記':'今天還沒有登記'}</div>`);
       }).join('');
       sbody += footerInfoHtml();
       $('adminBody').innerHTML = sbody;
       $('adminDateInput').addEventListener('change', (e)=>{ adminDate = e.target.value; renderAdmin(); });
+      $('adminShipDriverSelect').addEventListener('change', (e)=>{ adminShipDriver = e.target.value; renderAdmin(); });
       $('adminRefreshBtn').addEventListener('click', async ()=>{ $('adminBody').innerHTML='<div class="loading">載入中...</div>'; await refreshCheckins(); renderAdmin(); });
       const shipCopyBtn = $('shipCopyBtn');
       if(shipCopyBtn) shipCopyBtn.addEventListener('click', async ()=>{
