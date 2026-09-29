@@ -382,7 +382,7 @@
     { region:'高雄', code:'南高2', name:'李尚鴻', hours:'07:00-16:00',
       tables:{
         B:[T('收送貨',[1,2,3,4,5])],
-        D:[T('店務',[1,2,3,4,5]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])]
+        D:[T('勻貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('整倉並袋',[1,2,3,4,5]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])]
       },
       dailyStops:[ {site:'夢時代',time:'07:00-08:00',table:'B'}, {site:'岡山秀泰',time:'09:00-09:30',table:'B'}, {site:'三多遠百',time:'10:30-11:00',table:'B'}, {site:'夢時代商圈',time:'12:30-15:00',table:'D',storeOptions:['夢時代大碼','夢時代IP','夢時代CA']} ]
     },
@@ -1323,6 +1323,16 @@
 
   $('departBtn').addEventListener('click', ()=>{
     const st = currentState.stops[currentStopIdx];
+    const weekday = new Date().getDay();
+    const stops = getStopsFor(currentDriver, weekday);
+    const stop = stops[currentStopIdx];
+    const tasks = getStopTasks(currentDriver, stop, weekday).filter(t=>t.active);
+    const unmarked = tasks.filter(t=> !(st.tasks && st.tasks[t.name] && st.tasks[t.name].status));
+    if(unmarked.length>0){
+      setStopStatus(`⚠ 尚有工作項目未標記，請先完成以下項目再離店打卡：${unmarked.map(t=>t.name).join('、')}`, true);
+      renderTaskRows(stop, st, weekday, false);
+      return;
+    }
     $('departBtn').disabled = true; $('departBtn').textContent = '定位中...';
     if(!navigator.geolocation){
       $('departBtn').disabled=false; $('departBtn').textContent = '離店打卡';
