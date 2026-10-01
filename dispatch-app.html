@@ -73,6 +73,15 @@
   .metric .v{font-family:var(--font-mono); font-weight:700; font-size:15px;}
   .metric .l{font-size:10.5px; color:var(--text-mute); margin-top:2px;}
 
+  .breakcard{ margin:16px 20px 0; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .breaktop{ display:flex; justify-content:space-between; align-items:center; }
+  .breaktitle{ font-weight:700; font-size:14px; }
+  .breakbtn{ font-size:13px; font-weight:700; padding:8px 16px; border-radius:10px; border:1px solid var(--accent-2); background:var(--panel); color:var(--accent-2); cursor:pointer; font-family:var(--font-body); }
+  .breakbtn.active{ background:var(--accent-2); color:#fff; border-color:var(--accent-2); }
+  .breaklist{ margin-top:10px; }
+  .breaklist .brow{ display:flex; justify-content:space-between; font-size:12.5px; color:var(--text-mute); padding:4px 0; }
+  .breaklist .brow.ongoing{ color:var(--accent-2); font-weight:600; }
+  .breaklist .bempty{ font-size:12.5px; color:var(--text-mute); }
   .stoplist{padding:16px 20px;}
   .stopcard{ background:var(--panel); border:1px solid var(--line); border-radius:14px; margin-bottom:12px; padding:14px 16px; cursor:pointer; }
   .stopcard.locked{ opacity:0.45; cursor:not-allowed; }
@@ -287,6 +296,13 @@
         <div class="metric"><div class="v" id="mLate">0</div><div class="l">遲到</div></div>
         <div class="metric"><div class="v" id="mDone">0/0</div><div class="l">項目完成</div></div>
       </div>
+    </div>
+    <div class="breakcard" id="breakCard">
+      <div class="breaktop">
+        <div class="breaktitle">☕ 休息時間</div>
+        <button class="breakbtn" id="breakToggleBtn" type="button">開始休息</button>
+      </div>
+      <div class="breaklist" id="breakList"></div>
     </div>
     <div class="stoplist" id="stopList"></div>
   </div>
@@ -683,6 +699,13 @@
     return score;
   }
 
+  function breaksCompleteness(breaks){
+    if(!breaks || !breaks.length) return -1;
+    let score = breaks.length * 2;
+    if(!breaks[breaks.length-1].end) score += 1; // an ongoing break in progress is "more complete" info
+    return score;
+  }
+
   function loadCurrentState(){
     const key = driverKey(currentDriver)+'|'+todayDateStr();
     const weekday = new Date().getDay();
@@ -720,13 +743,15 @@
         const cs = cloudState.stops[i];
         mergedStops.push( stopCompleteness(cs) > stopCompleteness(ls) ? cs : (ls || cs) );
       }
-      base = { stops: mergedStops };
+      const mergedBreaks = breaksCompleteness(cloudState.breaks) > breaksCompleteness(localState.breaks) ? cloudState.breaks : (localState.breaks || cloudState.breaks);
+      base = { stops: mergedStops, breaks: mergedBreaks || [] };
     }else{
       base = localState || cloudState;
     }
     if(!base){
-      base = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})) };
+      base = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})), breaks: [] };
     }
+    if(!base.breaks) base.breaks = []; // 舊資料（還沒有休息打卡功能前存的）補上空陣列
     // keep the site/time labels synced to the current schedule so the backend log stays readable
     base.stops.forEach((s,i)=>{
       if(stops[i]){
@@ -828,6 +853,39 @@
     return d;
   }
 
+  function fmtHM(iso){ const d = new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+  function minutesBetween(a,b){ return Math.max(0, Math.round((new Date(b)-new Date(a))/60000)); }
+
+  function renderBreakCard(){
+    if(!currentState.breaks) currentState.breaks = [];
+    const breaks = currentState.breaks;
+    const ongoing = breaks.length && !breaks[breaks.length-1].end;
+    const btn = $('breakToggleBtn');
+    btn.textContent = ongoing ? '結束休息' : '開始休息';
+    btn.classList.toggle('active', !!ongoing);
+    if(!breaks.length){
+      $('breakList').innerHTML = `<div class="bempty">今天還沒有休息紀錄</div>`;
+    }else{
+      $('breakList').innerHTML = breaks.map(b=>{
+        if(b.end) return `<div class="brow"><span>${fmtHM(b.start)} - ${fmtHM(b.end)}</span><span>${minutesBetween(b.start,b.end)} 分鐘</span></div>`;
+        return `<div class="brow ongoing"><span>${fmtHM(b.start)} - 休息中...</span><span></span></div>`;
+      }).join('');
+    }
+  }
+  $('breakToggleBtn').addEventListener('click', async ()=>{
+    if(!currentState) return;
+    if(!currentState.breaks) currentState.breaks = [];
+    const breaks = currentState.breaks;
+    const ongoing = breaks.length && !breaks[breaks.length-1].end;
+    if(ongoing){
+      breaks[breaks.length-1].end = new Date().toISOString();
+    }else{
+      breaks.push({ start: new Date().toISOString(), end: null });
+    }
+    renderBreakCard();
+    await saveCurrentState();
+  });
+
   function renderDriverView(){
     const weekday = new Date().getDay();
     const stops = getStopsFor(currentDriver, weekday);
@@ -838,6 +896,7 @@
     $('mArrived').textContent = `${prog.arrivedCount}/${prog.totalStops}`;
     $('mLate').textContent = prog.lateCount;
     $('mDone').textContent = `${prog.doneTasks}/${prog.totalTasks}`;
+    renderBreakCard();
 
     if(currentDriver.noSchedule || stops.length===0){
       $('stopList').innerHTML = `<div class="placeholder">目前還沒有這位司機的詳細排程資料。<br>等主管更新排程檔案後就會自動出現在這裡。</div>`;
@@ -848,7 +907,7 @@
     $('stopList').innerHTML = stops.map((stop,i)=>{
       const st = currentState.stops[i] || {};
       const tasks = getStopTasks(currentDriver, stop, weekday);
-      const activeTasks = tasks.filter(t=>t.active);
+      const activeTasks = tasks.filter(t=>t.active && !shipCarrierFor(t.name));
       const activeCount = activeTasks.length;
       const fullyDone = activeCount>0 && activeTasks.every(t=> st.tasks && st.tasks[t.name] && (st.tasks[t.name].status==='done' || st.tasks[t.name].status==='na'));
       const locked = !prevDeparted;
@@ -1015,11 +1074,14 @@
         return `<div class="taskrow na"><div class="taskname">— ${escapeHtml(t.name)}</div><div class="naword">本日未排程</div></div>`;
       }
       const rec = (st.tasks && st.tasks[t.name]) || {};
+      const shipCarrier = shipCarrierFor(t.name);
       const status = rec.status || '';
       const percent = (typeof rec.percent === 'number') ? rec.percent : 50;
       const dis = locked ? 'disabled' : '';
       let extraHtml = '';
-      if(status==='partial'){
+      if(shipCarrier){
+        // 寄貨類工作只登記箱數，不顯示完成/未完成/不適用相關內容
+      }else if(status==='partial'){
         extraHtml = `<div class="taskextra">
           <div class="pctrow"><input type="range" min="0" max="99" step="5" value="${percent}" data-pct-task="${escapeHtml(t.name)}" ${dis}><span class="pctval">${percent}%</span></div>
           <div class="naReasonSelect" style="margin-top:10px;">
@@ -1039,7 +1101,6 @@
           </select>
         </div>`;
       }
-      const shipCarrier = shipCarrierFor(t.name);
       let shipHtml = '';
       if(shipCarrier){
         const boxes = rec.boxes || [];
@@ -1051,14 +1112,15 @@
           </div>`}
         </div>`;
       }
-      return `<div class="taskrow" data-task="${escapeHtml(t.name)}">
-        <div class="trtop">
-          <div class="taskname">${escapeHtml(t.name)}</div>
-          <div class="taskbtns">
+      const taskBtnsHtml = shipCarrier ? '' : `<div class="taskbtns">
             <button class="tbtn done ${status==='done'?'active':''}" data-val="done" ${dis}>完成</button>
             <button class="tbtn notdone ${status==='partial'?'active':''}" data-val="partial" ${dis}>未完成</button>
             <button class="nabtn ${status==='na'?'active':''}" data-val="na" ${dis}>不適用</button>
-          </div>
+          </div>`;
+      return `<div class="taskrow" data-task="${escapeHtml(t.name)}">
+        <div class="trtop">
+          <div class="taskname">${escapeHtml(t.name)}</div>
+          ${taskBtnsHtml}
         </div>
         ${extraHtml}
         ${shipHtml}
@@ -1258,7 +1320,7 @@
     const weekday = new Date().getDay();
     const stops = getStopsFor(currentDriver, weekday);
     const stop = stops[currentStopIdx];
-    const tasks = getStopTasks(currentDriver, stop, weekday).filter(t=>t.active);
+    const tasks = getStopTasks(currentDriver, stop, weekday).filter(t=>t.active && !shipCarrierFor(t.name));
     const unmarked = tasks.filter(t=> !(st.tasks && st.tasks[t.name] && st.tasks[t.name].status));
     if(unmarked.length>0){
       setStopStatus(`⚠ 尚有工作項目未標記，請先完成以下項目再離店打卡：${unmarked.map(t=>t.name).join('、')}`, true);
@@ -1377,6 +1439,13 @@
     return board;
   }
 
+  function computeBreakInfo(breaks){
+    if(!breaks || !breaks.length) return { count:0, totalMin:0, ongoing:false };
+    let totalMin = 0;
+    breaks.forEach(b=>{ if(b.end) totalMin += minutesBetween(b.start, b.end); else totalMin += minutesBetween(b.start, new Date().toISOString()); });
+    return { count: breaks.length, totalMin, ongoing: !breaks[breaks.length-1].end };
+  }
+
   function buildAdminAnalytics(weekday, dateStr){
     const online = [], notOnline = [], anomalies = [];
     let totalTasks=0, totalDone=0;
@@ -1392,7 +1461,8 @@
       const prog = computeProgress(d, weekday, state);
       totalTasks += prog.totalTasks; totalDone += prog.doneTasks;
       const started = state.stops.some(s=>s && s.arrivedAt);
-      if(started) online.push({d, prog}); else notOnline.push({d, prog});
+      const breakInfo = computeBreakInfo(state.breaks);
+      if(started) online.push({d, prog, breakInfo}); else notOnline.push({d, prog, breakInfo});
 
       stops.forEach((stop,i)=>{
         const st = state.stops[i] || {};
@@ -1650,9 +1720,10 @@
         `).join('') : `<div class="placeholder">今天還沒有任何工作項目資料</div>`;
       }else if(liveDrill==='online'){
         body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">上線司機（${a.online.length}）</div></div>`;
-        body += a.online.length ? a.online.map(({d,prog})=>`
-          <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code}</div></div><div class="c">${prog.pct}% · 到站 ${prog.arrivedCount}/${prog.totalStops}</div></div>
-        `).join('') : `<div class="placeholder">目前沒有司機上線</div>`;
+        body += a.online.length ? a.online.map(({d,prog,breakInfo})=>{
+          const breakText = breakInfo.count ? `☕ ${breakInfo.count}次・${breakInfo.totalMin}分${breakInfo.ongoing?'（休息中）':''}` : '☕ 無休息紀錄';
+          return `<div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code}</div></div><div style="text-align:right;"><div class="c">${prog.pct}% · 到站 ${prog.arrivedCount}/${prog.totalStops}</div><div class="c" style="margin-top:2px;${breakInfo.ongoing?'color:var(--accent-2);font-weight:600;':''}">${breakText}</div></div></div>`;
+        }).join('') : `<div class="placeholder">目前沒有司機上線</div>`;
       }else if(liveDrill==='offline'){
         body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">未上線司機（${a.notOnline.length}）</div></div>`;
         body += a.notOnline.length ? a.notOnline.map(({d})=>`
