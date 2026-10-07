@@ -70,6 +70,8 @@
   .qbtn small{ display:block; font-weight:400; font-size:11.5px; opacity:.85; margin-top:3px; }
   .q1{ background:linear-gradient(135deg,#2563EB,#4DA3FF); } .q2{ background:linear-gradient(135deg,#059669,#34D399); }
   .q3{ background:linear-gradient(135deg,#EA580C,#FB923C); } .q4{ background:linear-gradient(135deg,#7C3AED,#A78BFA); }
+  .ovr{ display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:var(--text-mute); }
+  .ovr input{ width:18px; height:18px; }
   .banner{ background:rgba(248,113,113,.12); border:1px solid var(--red); color:var(--red); padding:10px 12px; border-radius:10px; font-size:13px; margin-bottom:14px; }
 </style>
 </head>
@@ -106,6 +108,7 @@
     <div class="card" id="dateCard">
       <h3>登錄日期</h3>
       <input type="date" class="datein" id="dateIn">
+      <label class="ovr"><input type="checkbox" id="ovrChk"> 修正模式（輸入的數字會「取代」大表上的數字）</label>
       <div class="hint" id="dateHint"></div>
     </div>
     <div id="formArea"></div>
@@ -217,16 +220,23 @@
 
   function fillForm(dateStr){
     const rec = records.find(r=>r.date===dateStr);
+    const ovr = $('ovrChk').checked;
     const keys = [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['trip'], ['recoveredPackages']].map(a=>a[0]);
     keys.forEach(k=>{
       const el = $('f_'+k); if(!el) return;
-      const v = rec ? rec[k] : '';
+      const v = (ovr && rec) ? rec[k] : '';
       el.value = (v===undefined||v===null) ? '' : v;
     });
-    $('dateHint').textContent = rec ? '⚠ 這一天已經有登錄資料，送出會覆蓋有填寫的欄位（沒填的欄位不會動）' : '這一天還沒有登錄資料';
-    $('dateHint').className = 'hint' + (rec ? ' warn' : '');
+    if(ovr){
+      $('dateHint').textContent = rec ? '修正模式：下面是大表目前的數字，改完送出會直接取代' : '這一天還沒有登錄資料';
+      $('dateHint').className = 'hint warn';
+    }else{
+      $('dateHint').textContent = rec ? '這一天已有登錄：這次填的數字會「累加」到大表（上面進度卡是目前累計）' : '這一天還沒有登錄資料，送出後會新增一列';
+      $('dateHint').className = 'hint';
+    }
     recalc(); renderSummary(dateStr);
   }
+  $('ovrChk').addEventListener('change', ()=> fillForm($('dateIn').value));
   $('dateIn').addEventListener('change', e=> fillForm(e.target.value));
 
   // ---------- 網路 ----------
@@ -251,7 +261,7 @@
     if(!apiReady()){ setStatus('還沒設定 Apps Script 網址', 'err'); return; }
     const date = $('dateIn').value;
     if(!date){ setStatus('請先選擇日期', 'err'); return; }
-    const payload = { date };
+    const payload = { date, mode: $('ovrChk').checked ? 'overwrite' : 'add' };
     [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['recoveredPackages']].forEach(([k])=>{
       const v = val(k); if(v!=='') payload[k] = num(v);
     });
@@ -262,12 +272,12 @@
     if(Object.keys(payload).length<=1){ setStatus('還沒有填任何數字', 'err'); return; }
 
     const btn = $('submitBtn'); btn.disabled = true; btn.textContent = '送出中...'; setStatus('');
-    let ok = false;
+    let ok = false, serverMode = null;
     for(let attempt=1; attempt<=2 && !ok; attempt++){
       try{
         const res = await fetchWithTimeout(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) }, 15000);
         const json = await res.json();
-        if(json && json.success) ok = true; else throw new Error((json&&json.error)||'save failed');
+        if(json && json.success){ ok = true; serverMode = json.mode || null; } else throw new Error((json&&json.error)||'save failed');
       }catch(e){
         console.error(e);
         if(attempt===1) await new Promise(r=>setTimeout(r,1200));
@@ -275,7 +285,8 @@
     }
     btn.disabled = false; btn.textContent = '送出登錄';
     if(ok){
-      setStatus('✓ 已寫入大表（'+date+'）', 'ok');
+      if(!serverMode) setStatus('⚠ 已寫入，但大表程式還是舊版（不會累加）：請到 Apps Script 重新部署新版本，並確認網址是同一個部署', 'err');
+      else setStatus($('ovrChk').checked ? '✓ 已修正大表（'+date+'）' : '✓ 已累加到大表（'+date+'）', 'ok');
       await loadRecords(); fillForm(date);
     }else{
       setStatus('送出失敗，請檢查網路後再按一次（畫面上的數字還在）', 'err');
