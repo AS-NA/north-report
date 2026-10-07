@@ -298,15 +298,24 @@
   });
 
   // ---------- 紀錄 ----------
+  function ymd(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+  function recRowHtml(r){
+    const total = r.total!==''&&r.total!==undefined ? num(r.total) : CHANNELS.reduce((s,[k])=>s+num(r[k]),0);
+    return `<div class="rec"><div><div class="d">${esc(r.date)}</div>
+      <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}・上架 ${num(r.returnShelved)}・${r.trip?esc(r.trip):'未選車次'}・回收包裹 ${num(r.recoveredPackages)}</div></div>
+      <button class="smallbtn" data-edit="${esc(r.date)}">編輯</button></div>`;
+  }
   function renderRecords(){
-    const list = [...records].sort((a,b)=> a.date<b.date?1:-1).slice(0,60);
-    $('recMeta').textContent = list.length ? ('共 '+records.length+' 天資料，顯示最近 '+list.length+' 天') : '';
-    $('recList').innerHTML = list.length ? list.map(r=>{
-      const total = r.total!==''&&r.total!==undefined ? num(r.total) : CHANNELS.reduce((s,[k])=>s+num(r[k]),0);
-      return `<div class="rec"><div><div class="d">${esc(r.date)}</div>
-        <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}・上架 ${num(r.returnShelved)}・${r.trip?esc(r.trip):'未選車次'}・回收包裹 ${num(r.recoveredPackages)}</div></div>
-        <button class="smallbtn" data-edit="${esc(r.date)}">編輯</button></div>`;
-    }).join('') : `<div class="placeholder">還沒有任何紀錄</div>`;
+    const end = new Date(); const start = new Date(); start.setDate(start.getDate()-59);
+    const startS = ymd(start), endS = ymd(end);
+    const inRange = records.filter(r=> r.date>=startS && r.date<=endS).sort((a,b)=> a.date<b.date?1:-1);
+    const outside = records.filter(r=> !(r.date>=startS && r.date<=endS)).sort((a,b)=> a.date<b.date?1:-1);
+    $('recMeta').textContent = '近 60 天（'+startS+' ～ '+endS+'）共 '+inRange.length+' 天有資料';
+    let html = inRange.length ? inRange.map(recRowHtml).join('') : `<div class="placeholder">這 60 天內還沒有任何紀錄</div>`;
+    if(outside.length){
+      html += `<div class="hint warn" style="margin:14px 0 4px;">⚠ 另有 ${outside.length} 筆日期不在這 60 天內（未來日期或太久以前），可能是日期填錯，請確認：</div>` + outside.map(recRowHtml).join('');
+    }
+    $('recList').innerHTML = html;
     document.querySelectorAll('#recList [data-edit]').forEach(b=>{
       b.addEventListener('click', ()=>{ $('dateIn').value = b.dataset.edit; fillForm(b.dataset.edit); showTab('entry'); });
     });
