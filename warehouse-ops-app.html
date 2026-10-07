@@ -85,6 +85,26 @@
   .ovr{ display:flex; align-items:center; gap:10px; margin-top:12px; font-size:15px; font-weight:600; color:var(--text); }
   .ovr input{ width:22px; height:22px; }
   .banner{ background:#FDE7E4; border:2px solid var(--red); color:var(--red); padding:12px 14px; border-radius:12px; font-size:15px; font-weight:700; margin-bottom:16px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip{ border:2px solid var(--line); background:#F8FBFF; color:var(--text); border-radius:999px; padding:10px 16px; font-size:17px; font-weight:700; cursor:pointer; font-family:var(--font-body); }
+  .chip.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .rfmsg{ min-height:22px; font-size:15px; font-weight:700; margin:4px 2px 10px; } .rfmsg.err{ color:var(--red); } .rfmsg.ok{ color:var(--green); }
+  .rfcard{ background:var(--panel); border:1px solid var(--line); border-left:6px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; box-shadow:0 2px 8px rgba(11,23,48,.07); }
+  .rfcard.doing{ border-left-color:var(--orange); } .rfcard.done{ border-left-color:var(--green); }
+  .rftop{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+  .rftop .nm{ font-size:19px; font-weight:800; } .rftop .cd{ font-size:14px; color:var(--text-mute); font-family:var(--font-mono); font-weight:700; }
+  .rfbadge{ font-size:14px; font-weight:800; padding:4px 10px; border-radius:999px; background:var(--panel-2); color:var(--text-mute); white-space:nowrap; }
+  .rfcard.doing .rfbadge{ background:#FFE9D9; color:var(--orange); } .rfcard.done .rfbadge{ background:#DDF5E8; color:var(--green); }
+  .rfrow{ display:flex; align-items:center; gap:10px; margin:6px 0; } .rfrow label{ flex:1; font-size:16px; font-weight:700; }
+  .rfrow input{ width:110px; padding:10px 12px; border:2px solid var(--line); border-radius:12px; font-size:22px; font-weight:800; text-align:right; background:#F8FBFF; color:var(--text); font-family:var(--font-body); }
+  .rfdiff{ font-size:14px; font-weight:800; min-width:64px; text-align:right; } .rfdiff.ok{ color:var(--green); } .rfdiff.bad{ color:var(--red); }
+  .rftimes{ font-size:16px; font-weight:700; margin:10px 0; display:flex; flex-wrap:wrap; gap:6px 16px; font-family:var(--font-mono); }
+  .rftimes a{ color:var(--accent); text-decoration:none; margin-left:4px; cursor:pointer; }
+  .rfbtns{ display:flex; gap:8px; }
+  .rfbtns button{ flex:1; padding:13px 6px; border:none; border-radius:12px; font-size:17px; font-weight:800; color:#fff; cursor:pointer; font-family:var(--font-body); }
+  .rfbtns button[data-act="save"]{ background:#64748b; } .rfbtns button[data-act="start"]{ background:var(--orange); } .rfbtns button[data-act="end"]{ background:var(--green); }
+  .rfbtns button:disabled{ opacity:.35; cursor:not-allowed; }
+  .rfwho{ font-size:13.5px; color:var(--text-mute); margin-top:8px; font-weight:600; }
 </style>
 </head>
 <body>
@@ -96,6 +116,7 @@
     <div class="tab active" data-tab="entry">登錄</div>
     <div class="tab" data-tab="records">紀錄</div>
     <div class="tab" data-tab="dash">儀表板</div>
+    <div class="tab" data-tab="refurb">門市整新</div>
   </div>
 
   <div class="view active" id="view-entry">
@@ -143,6 +164,15 @@
     <div id="dashBody"></div>
   </div>
 
+  <div class="view" id="view-refurb">
+    <div class="card"><h3>整新日期</h3><input type="date" class="datein" id="rfDate" style="width:100%;text-align:left;"></div>
+    <div class="card"><h3>今天整理的同仁 <small style="color:var(--text-mute);font-weight:600;">（輪值，最多選 2 位）</small></h3><div class="chips" id="rfStaff"></div></div>
+    <div class="rangebar" id="rfGroups"></div>
+    <div class="card" id="rfSum"></div>
+    <div class="rfmsg" id="rfMsg"></div>
+    <div id="rfList"></div>
+  </div>
+
   <div class="submitbar" id="submitBar">
     <div class="status" id="statusLine"></div>
     <button class="bigbtn" id="submitBtn">送出登錄</button>
@@ -181,6 +211,7 @@
     $('submitBar').style.display = name==='entry' ? 'block' : 'none';
     if(name==='records') renderRecords();
     if(name==='dash') renderDash();
+    if(name==='refurb') loadRefurb();
     window.scrollTo(0,0);
   }
 
@@ -423,6 +454,128 @@
       </div>
       <div class="hint">統計範圍：${days[0]} ～ ${days[days.length-1]}（共 ${days.length} 天，其中 ${rows.length} 天有登錄；日均是用有登錄的天數算）</div>`;
   }
+
+  // ---------- 門市新品整新 ----------
+  const RF_GROUPS = ['週五','週一','週二','週三'];     // 排程組別
+  const RF_STAFF = ['管育芝','謝蕾','楊裕萱','林子庭'];  // 輪值同仁
+  let rfStores = [], rfRecs = [], rfGroup = RF_GROUPS[0], rfStaffSel = [], rfDraft = {}, rfBusy = false;
+  try{ rfStaffSel = JSON.parse(localStorage.getItem('rfStaff')||'[]').filter(n=>RF_STAFF.indexOf(n)>=0).slice(0,2); }catch(e){}
+  const nowHM = ()=>{ const d=new Date(); return pad(d.getHours())+':'+pad(d.getMinutes()); };
+  const hmMin = t=>{ const m=/^(\d{1,2}):(\d{2})/.exec(String(t||'')); return m ? Number(m[1])*60+Number(m[2]) : null; };
+  function rfSay(t, cls){ const el=$('rfMsg'); el.textContent=t||''; el.className='rfmsg '+(cls||''); }
+  function rfRec(date, code){ return rfRecs.find(r=>r.date===date && String(r.code)===String(code)); }
+
+  async function loadRefurb(){
+    if(!$('rfDate').value) $('rfDate').value = todayStr();
+    if(!apiReady()){ rfSay('還沒設定 Apps Script 網址','err'); return false; }
+    try{
+      const res = await fetchWithTimeout(API_URL + (API_URL.indexOf('?')>=0?'&':'?') + 'type=refurb&t=' + Date.now(), {}, 15000);
+      const json = await res.json();
+      if(!json || !Array.isArray(json.stores)){ rfSay('⚠ 大表程式還沒更新到「門市整新」功能：請貼上新版 Apps Script，並用「新版本」重新部署','err'); renderRefurb(); return false; }
+      rfStores = json.stores; rfRecs = json.records || []; rfSay('');
+    }catch(e){ console.error(e); rfSay('讀取失敗，請按「重新整理」或稍後再試','err'); }
+    renderRefurb(); return true;
+  }
+
+  function renderRefurb(){
+    $('rfStaff').innerHTML = RF_STAFF.map(n=>`<button type="button" class="chip${rfStaffSel.indexOf(n)>=0?' on':''}" data-name="${esc(n)}">${esc(n)}</button>`).join('');
+    const date = $('rfDate').value || todayStr();
+    $('rfGroups').innerHTML = RF_GROUPS.map(g=>{
+      const n = rfStores.filter(s=>s.group===g).length;
+      return `<button type="button" class="smallbtn${g===rfGroup?' active':''}" data-g="${g}">${g}排程 (${n})</button>`;
+    }).join('');
+    const list = rfStores.filter(s=>s.group===rfGroup);
+    let done=0, exp=0, con=0;
+    list.forEach(s=>{ const r=rfRec(date,s.code); if(r&&r.end) done++; exp += num(r&&r.expected!==''?r.expected:s.expected); con += num(r&&r.confirmed); });
+    $('rfSum').innerHTML = list.length
+      ? `<div style="display:flex;justify-content:space-between;align-items:baseline;"><b style="font-size:17px;">${rfGroup}排程 進度</b><span style="font-family:var(--font-mono);font-weight:800;font-size:26px;color:var(--accent);">${done} / ${list.length} 間</span></div><div class="pbar"><i style="width:${Math.round(done/list.length*100)}%;background:var(--green)"></i></div><div class="hint" style="margin:0;">已確認箱數 ${con} / 應有箱數 ${exp}</div>`
+      : '<div class="placeholder">這一組還沒有門市。<br>請到大表的「store_list」分頁，填入門市代碼、門市名稱、排程組別。</div>';
+    $('rfList').innerHTML = list.map(s=>{
+      const r = rfRec(date, s.code) || {};
+      const dk = date+'|'+s.code, dr = rfDraft[dk] || {};
+      const expV = dr.exp!==undefined ? dr.exp : (r.expected!==undefined&&r.expected!=='' ? r.expected : (s.expected!==''&&s.expected!==undefined ? s.expected : ''));
+      const conV = dr.con!==undefined ? dr.con : (r.confirmed!==undefined ? r.confirmed : '');
+      const started = !!r.start, ended = !!r.end, cls = ended?'done':(started?'doing':'');
+      const mins = (hmMin(r.start)!==null && hmMin(r.end)!==null) ? hmMin(r.end)-hmMin(r.start) : null;
+      const diff = (expV!==''&&conV!=='') ? num(conV)-num(expV) : null;
+      const diffTxt = diff===null ? '' : (diff===0 ? '✓ 相符' : (diff>0?'多 ':'少 ')+Math.abs(diff));
+      return `<div class="rfcard ${cls}" data-code="${esc(s.code)}">
+        <div class="rftop"><div><div class="nm">${esc(s.name||s.code)}</div><div class="cd">${esc(s.code)}</div></div><span class="rfbadge">${ended?'完成':(started?'整理中':'待處理')}</span></div>
+        <div class="rfrow"><label>應有箱數</label><input type="number" inputmode="numeric" min="0" class="rfexp" value="${esc(expV)}" placeholder="0"></div>
+        <div class="rfrow"><label>確認箱數</label><input type="number" inputmode="numeric" min="0" class="rfcon" value="${esc(conV)}" placeholder="0"><span class="rfdiff ${diff===0?'ok':'bad'}">${diffTxt}</span></div>
+        <div class="rftimes"><span>開始 ${started?esc(r.start):'--:--'} ${started?'<a data-act="editstart">✎</a>':''}</span><span>完成 ${ended?esc(r.end):'--:--'} ${ended?'<a data-act="editend">✎</a>':''}</span>${mins!==null&&mins>=0?'<span>用時 '+mins+' 分</span>':''}</div>
+        <div class="rfbtns"><button type="button" data-act="save">儲存箱數</button><button type="button" data-act="start"${(started||conV==='')?' disabled':''}>▶ 開始</button><button type="button" data-act="end"${(!started||ended)?' disabled':''}>✔ 完成</button></div>
+        ${r.staff?'<div class="rfwho">整理：'+esc(r.staff)+'</div>':''}
+      </div>`;
+    }).join('');
+  }
+
+  async function rfPost(payload){
+    let lastErr='';
+    for(let a=1;a<=2;a++){
+      try{
+        const res = await fetchWithTimeout(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) }, 15000);
+        const json = await res.json();
+        if(json && json.success){ if(!json.refurb) throw new Error('大表程式還沒更新到「門市整新」功能（請貼上新版並用「新版本」部署）'); return {ok:true}; }
+        throw new Error((json&&json.error)||'save failed');
+      }catch(e){ console.error(e); lastErr = (e&&e.name==='AbortError')?'連線逾時':String((e&&e.message)||e); if(a===1) await new Promise(r=>setTimeout(r,1200)); }
+    }
+    return {ok:false, err:lastErr};
+  }
+
+  async function rfAct(code, act){
+    if(rfBusy) return;
+    const date = $('rfDate').value || todayStr();
+    const store = rfStores.find(s=>String(s.code)===String(code)); if(!store) return;
+    if(rfStaffSel.length<1){ rfSay('請先在上面選「今天整理的同仁」（1～2 位）','err'); window.scrollTo(0,0); return; }
+    const card = document.querySelector('#rfList .rfcard[data-code="'+(window.CSS&&CSS.escape?CSS.escape(code):code)+'"]');
+    const expV = card.querySelector('.rfexp').value, conV = card.querySelector('.rfcon').value;
+    const cur = rfRec(date, code) || {};
+    const payload = { type:'refurb', date, group:store.group, code:store.code, name:store.name, staff:rfStaffSel.join('、') };
+    if(expV!=='') payload.expected = num(expV);
+    if(conV!=='') payload.confirmed = num(conV);
+    if(act==='save'){ if(expV===''&&conV===''){ rfSay('請先填箱數','err'); return; } }
+    else if(act==='start'){ if(conV===''){ rfSay('請先填「確認箱數」才能開始','err'); return; } payload.start = nowHM(); }
+    else if(act==='end'){ payload.end = nowHM(); }
+    else if(act==='editstart' || act==='editend'){
+      const t = window.prompt(act==='editstart'?'修改開始時間（例如 09:30）':'修改完成時間（例如 10:40）', act==='editstart'?cur.start:cur.end);
+      if(t===null) return;
+      const m = /^(\d{1,2})[:：](\d{2})$/.exec(String(t).trim()); if(!m || Number(m[1])>23 || Number(m[2])>59){ rfSay('時間格式要像 09:30','err'); return; }
+      payload[act==='editstart'?'start':'end'] = pad(Number(m[1]))+':'+m[2];
+    }
+    rfBusy = true; rfSay('送出中...');
+    const r = await rfPost(payload);
+    rfBusy = false;
+    if(r.ok){
+      delete rfDraft[date+'|'+code];
+      rfSay('✓ 已記錄（'+store.name+'）','ok');
+      await loadRefurb();
+    }else{ rfSay('送出失敗：'+r.err+'（輸入的箱數還在，可再按一次）','err'); }
+  }
+
+  $('rfStaff').addEventListener('click', e=>{
+    const b = e.target.closest('.chip'); if(!b) return; const n = b.dataset.name, i = rfStaffSel.indexOf(n);
+    if(i>=0) rfStaffSel.splice(i,1); else if(rfStaffSel.length>=2){ rfSay('最多選 2 位同仁','err'); return; } else rfStaffSel.push(n);
+    try{ localStorage.setItem('rfStaff', JSON.stringify(rfStaffSel)); }catch(err){}
+    rfSay(''); renderRefurb();
+  });
+  $('rfGroups').addEventListener('click', e=>{ const b=e.target.closest('[data-g]'); if(!b) return; rfGroup=b.dataset.g; renderRefurb(); });
+  $('rfDate').addEventListener('change', ()=>{ rfDraft = {}; renderRefurb(); });
+  $('rfList').addEventListener('click', e=>{
+    const el = e.target.closest('[data-act]'); if(!el || el.disabled) return;
+    const card = el.closest('.rfcard'); if(card) rfAct(card.dataset.code, el.dataset.act);
+  });
+  $('rfList').addEventListener('input', e=>{
+    const card = e.target.closest('.rfcard'); if(!card) return;
+    const date = $('rfDate').value || todayStr(), dk = date+'|'+card.dataset.code;
+    const exp = card.querySelector('.rfexp').value, con = card.querySelector('.rfcon').value;
+    rfDraft[dk] = { exp, con };
+    const d = card.querySelector('.rfdiff'), diff = (exp!==''&&con!=='') ? num(con)-num(exp) : null;
+    d.textContent = diff===null ? '' : (diff===0?'✓ 相符':(diff>0?'多 ':'少 ')+Math.abs(diff)); d.className = 'rfdiff '+(diff===0?'ok':'bad');
+    const st = card.querySelector('[data-act="start"]'), r = rfRec(date, card.dataset.code) || {};
+    st.disabled = !!r.start || con==='';
+  });
+  $('rfDate').value = todayStr();
 
   // ---------- 啟動 ----------
   buildForm();
