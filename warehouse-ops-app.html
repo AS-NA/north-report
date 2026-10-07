@@ -278,12 +278,12 @@
     if(Object.keys(payload).length<=1){ setStatus('還沒有填任何數字', 'err'); return; }
 
     const btn = $('submitBtn'); btn.disabled = true; btn.textContent = '送出中...'; setStatus('');
-    let ok = false, serverMode = null, lastErr = '';
+    let ok = false, serverMode = null, serverCols = 0, lastErr = '';
     for(let attempt=1; attempt<=2 && !ok; attempt++){
       try{
         const res = await fetchWithTimeout(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) }, 15000);
         const json = await res.json();
-        if(json && json.success){ ok = true; serverMode = json.mode || null; } else throw new Error((json&&json.error)||'save failed');
+        if(json && json.success){ ok = true; serverMode = json.mode || null; serverCols = json.cols || 0; } else throw new Error((json&&json.error)||'save failed');
       }catch(e){
         console.error(e);
         lastErr = (e && e.name==='AbortError') ? '連線逾時' : String((e && e.message) || e);
@@ -292,7 +292,8 @@
     }
     btn.disabled = false; btn.textContent = '送出登錄';
     if(ok){
-      if(!serverMode) setStatus('⚠ 已寫入，但大表程式還是舊版（不會累加）：請到 Apps Script 重新部署新版本，並確認網址是同一個部署', 'err');
+      if(serverMode && payload.newArrival !== undefined && serverCols < 20) setStatus('⚠ 大表程式還不認識「新品上架」：請把新版 Apps Script 貼上、儲存，再「管理部署作業 → 編輯 → 新版本」部署', 'err');
+      else if(!serverMode) setStatus('⚠ 已寫入，但大表程式還是舊版（不會累加）：請到 Apps Script 重新部署新版本，並確認網址是同一個部署', 'err');
       else setStatus($('ovrChk').checked ? '✓ 已修正大表（'+date+'）' : '✓ 已累加到大表（'+date+'）', 'ok');
       await loadRecords(); fillForm(date);
     }else{
