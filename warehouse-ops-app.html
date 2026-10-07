@@ -31,6 +31,15 @@
   .row input, .row select, .datein{ width:128px; padding:12px 12px; border:2px solid var(--line); border-radius:12px; font-size:22px; font-weight:800; text-align:right; background:#F8FBFF; color:var(--text); font-family:var(--font-body); }
   .row input:focus, .row select:focus, .datein:focus{ outline:none; border-color:var(--accent); background:#fff; }
   .row select{ text-align:left; font-size:18px; }
+  .staffbox{ padding:10px 0; border-top:1px dashed var(--line); }
+  .stitle{ font-size:17px; font-weight:700; margin-bottom:8px; }
+  .srow{ display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .srow select{ flex:1; min-width:0; padding:12px; border:2px solid var(--line); border-radius:12px; font-size:18px; font-weight:700; background:#F8FBFF; color:var(--text); font-family:var(--font-body); }
+  .srow input{ width:110px; padding:12px; border:2px solid var(--line); border-radius:12px; font-size:22px; font-weight:800; text-align:right; background:#F8FBFF; color:var(--text); font-family:var(--font-body); }
+  .srow .sdel{ border:none; background:#EEF4FB; color:#64748b; border-radius:10px; width:38px; height:44px; font-size:16px; cursor:pointer; }
+  .addbtn{ width:100%; padding:11px; border:2px dashed var(--accent); background:#F3F8FF; color:var(--accent); border-radius:12px; font-size:16px; font-weight:700; cursor:pointer; }
+  .staffsum{ display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:16px; font-weight:700; }
+  .staffsum b{ font-size:24px; color:var(--accent-2); font-family:var(--font-mono); }
   .datein{ width:100%; text-align:left; font-size:20px; }
   .row .auto{ width:128px; text-align:right; font-weight:800; font-size:24px; color:var(--accent-2); font-family:var(--font-mono); }
   .totalbar{ display:flex; justify-content:space-between; align-items:center; background:#DCEBFF; border-radius:12px; padding:12px 14px; margin-top:10px; font-size:18px; font-weight:800; }
@@ -99,7 +108,7 @@
       <div class="sumcard"><div class="ttl">今日出貨 <small>(訂單)</small></div>
         <div class="pbar"><i id="outBar" style="width:0%;background:var(--orange)"></i></div>
         <div class="big" id="outTxt">-</div>
-        <div class="two"><div>回收包裹<b id="outPkg">-</b></div><div>車次<b id="outTrip">-</b></div></div></div>
+        <div class="two"><div>撤貨出倉<b id="outPkg">-</b></div><div>撤貨處理<b id="outTrip">-</b></div></div></div>
     </div>
     <div class="qtitle">快捷功能區</div>
     <div class="qgrid">
@@ -143,14 +152,14 @@
 (function(){
   // ====== 設定區 ======
   const API_URL = 'https://script.google.com/macros/s/AKfycbwCgoBIRBGN4wWyMndLNueScqk6HpM5RamVj-gCtOpTWMh1L69fpv_G7TL_wZlJfR00/exec';   // ← 換成 Apps Script 部署後的網址
-  const TRIP_OPTIONS = ['', '第1車', '第2車', '第3車', '第4車']; // 門市車次選項，可自行增減
+  const STAFF_OPTIONS = ['鄭文菁', '管育芝', '謝蕾', '楊裕萱', '林子庭', '陳泓達']; // 門市撤貨處理的同仁名單，可自行增減 // 門市撤貨處理的同仁名單，請改成實際名字，可自行增減
   const CHANNELS = [
     ['officialDelivery','官網宅配'], ['officialPickup','官網超取'], ['intlDelivery','國際宅配'],
     ['shopee','蝦皮'], ['rakuten','樂天'], ['amazon','亞馬遜'], ['b2bBorrow','商借B2B'],
     ['storePickup','門市店取'], ['storeB2B','門市B2B'], ['groupBuy','團購']
   ];
   const RETURN_FIELDS = [['returnIn','撤退貨進倉'], ['returnShelved','上架數量']];
-  const OTHER_FIELDS = [['storeReturn','門市撤貨'], ['weeklyCollect','周徵貨量']];
+  const OTHER_FIELDS = [['weeklyCollect','周徵貨量'], ['storeReturn','門市撤貨進倉']];
   // ====================
 
   const $ = id => document.getElementById(id);
@@ -191,17 +200,49 @@
       </div>
       <div class="card"><h3>門市・其他</h3>
         ${OTHER_FIELDS.map(([k,l])=>numRow(k,l)).join('')}
-        <div class="row"><label for="f_trip">門市車次</label>
-          <select id="f_trip" data-key="trip">${TRIP_OPTIONS.map(o=>`<option value="${esc(o)}">${o||'未選擇'}</option>`).join('')}</select></div>
-        ${numRow('recoveredPackages','回收包裹數')}
+        <div class="staffbox"><div class="stitle">門市撤貨處理量（可分同仁）</div>
+          <div id="staffRows"></div>
+          <button type="button" id="addStaff" class="addbtn">＋ 新增同仁</button>
+          <div class="staffsum"><span>處理量合計</span><b id="staffTotal">0</b></div></div>
+        ${numRow('recoveredPackages','撤貨出倉數量')}
         ${numRow('newArrival','新品上架')}
       </div>`;
     document.querySelectorAll('#formArea input').forEach(i=> i.addEventListener('input', recalc));
+    $('addStaff').addEventListener('click', ()=>{ addStaffRow('',''); });
+    $('staffRows').addEventListener('click', e=>{ const b=e.target.closest('.sdel'); if(b){ b.parentNode.remove(); if(!document.querySelector('#staffRows .srow')) addStaffRow('',''); recalc(); }});
+    setStaffRows([]);
+  }
+  function staffOptsHtml(sel){
+    const list = STAFF_OPTIONS.slice(); if(sel && list.indexOf(sel)<0) list.push(sel);
+    return '<option value="">選同仁</option>' + list.map(n=>'<option value="'+esc(n)+'"'+(n===sel?' selected':'')+'>'+esc(n)+'</option>').join('');
+  }
+  function addStaffRow(name, qty){
+    const d = document.createElement('div'); d.className = 'srow';
+    d.innerHTML = '<select class="sname">'+staffOptsHtml(name)+'</select><input type="number" inputmode="numeric" min="0" class="sqty" placeholder="0" value="'+(qty===''||qty==null?'':esc(String(qty)))+'"><button type="button" class="sdel" aria-label="刪除">✕</button>';
+    d.querySelector('.sqty').addEventListener('input', recalc);
+    $('staffRows').appendChild(d);
+  }
+  function setStaffRows(list){
+    $('staffRows').innerHTML = '';
+    (list && list.length ? list : [{name:'',qty:''}]).forEach(x=>addStaffRow(x.name, x.qty));
+  }
+  function readStaff(){
+    const detail = {}; let total = 0;
+    document.querySelectorAll('#staffRows .srow').forEach(r=>{
+      const q = num(r.querySelector('.sqty').value); if(!q) return;
+      const n = (r.querySelector('.sname').value || '未指定').replace(/[:、,]/g,'');
+      detail[n] = (detail[n]||0) + q; total += q;
+    });
+    return { detail, total };
+  }
+  function parseDetail(txt){
+    return String(txt||'').split('、').map(t=>{ const i=t.lastIndexOf(':'); return i>0 ? {name:t.slice(0,i), qty:num(t.slice(i+1))} : null; }).filter(Boolean);
   }
   function val(key){ const el = $('f_'+key); return el ? el.value : ''; }
   function recalc(){
     const total = CHANNELS.reduce((s,[k])=> s + num(val(k)), 0);
     $('totalOut').textContent = total;
+    if($('staffTotal')) $('staffTotal').textContent = readStaff().total;
     $('remainOut').textContent = Math.max(0, num(val('returnIn')) - num(val('returnShelved')));
   }
   function renderSummary(dateStr){
@@ -215,7 +256,7 @@
     $('inWait').textContent = r ? Math.max(0,rin-rsh) : '-'; $('inDone').textContent = r ? rsh : '-';
     $('outBar').style.width = (avg? Math.min(100,Math.round(tot/avg*100)):(tot?100:0))+'%';
     $('outTxt').innerHTML = r ? ('<span class="n">'+tot+'</span><span class="of"> 單</span><div class="sub">'+(avg?'近7日均 '+Math.round(avg):'今日合計')+'</div>') : '尚未登錄';
-    $('outPkg').textContent = r ? num(r.recoveredPackages) : '-'; $('outTrip').textContent = r && r.trip ? r.trip : '-';
+    $('outPkg').textContent = r ? num(r.recoveredPackages) : '-'; $('outTrip').textContent = r ? num(r.storeHandle) : '-';
   }
   $('qEntry').addEventListener('click', ()=> $('dateCard').scrollIntoView({behavior:'smooth'}));
   $('qRecords').addEventListener('click', ()=> showTab('records'));
@@ -225,12 +266,15 @@
   function fillForm(dateStr){
     const rec = records.find(r=>r.date===dateStr);
     const ovr = $('ovrChk').checked;
-    const keys = [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['trip'], ['recoveredPackages'], ['newArrival']].map(a=>a[0]);
+    const keys = [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['recoveredPackages'], ['newArrival']].map(a=>a[0]);
     keys.forEach(k=>{
       const el = $('f_'+k); if(!el) return;
       const v = (ovr && rec) ? rec[k] : '';
       el.value = (v===undefined||v===null) ? '' : v;
     });
+    let rows = [];
+    if(ovr && rec){ rows = parseDetail(rec.storeHandleDetail); if(!rows.length && num(rec.storeHandle)) rows = [{name:'', qty:num(rec.storeHandle)}]; }
+    setStaffRows(rows);
     if(ovr){
       $('dateHint').textContent = rec ? '修正模式：下面是大表目前的數字，改完送出會直接取代' : '這一天還沒有登錄資料';
       $('dateHint').className = 'hint warn';
@@ -256,7 +300,7 @@
       const res = await fetchWithTimeout(API_URL + (API_URL.indexOf('?')>=0?'&':'?') + 't=' + Date.now(), {}, 15000);
       const json = await res.json();
       // 大表是預先排好整年日期的，沒填資料的日子不算「有登錄」
-      const hasData = r => CHANNELS.some(([k])=>num(r[k])) || ['returnIn','returnShelved','storeReturn','weeklyCollect','recoveredPackages','newArrival'].some(k=>num(r[k])) || !!r.trip;
+      const hasData = r => CHANNELS.some(([k])=>num(r[k])) || ['returnIn','returnShelved','storeReturn','weeklyCollect','recoveredPackages','newArrival','storeHandle'].some(k=>num(r[k]));
       records = (json.records||[]).filter(r=>r.date && hasData(r));
       return true;
     }catch(e){ console.error(e); return false; }
@@ -271,7 +315,7 @@
     [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['recoveredPackages'], ['newArrival','新品上架']].forEach(([k])=>{
       const v = val(k); if(v!=='') payload[k] = num(v);
     });
-    if(val('trip')) payload.trip = val('trip');
+    const st = readStaff(); if(st.total){ payload.storeHandle = st.total; payload.storeHandleDetail = st.detail; }
     const anyChannel = CHANNELS.some(([k])=> val(k)!=='');
     if(anyChannel) payload.total = CHANNELS.reduce((s,[k])=> s+num(val(k)), 0);
     if(val('returnIn')!=='' || val('returnShelved')!=='') payload.returnRemaining = Math.max(0, num(val('returnIn')) - num(val('returnShelved')));
@@ -292,7 +336,7 @@
     }
     btn.disabled = false; btn.textContent = '送出登錄';
     if(ok){
-      if(serverMode && payload.newArrival !== undefined && serverCols < 20) setStatus('⚠ 大表程式還不認識「新品上架」：請把新版 Apps Script 貼上、儲存，再「管理部署作業 → 編輯 → 新版本」部署', 'err');
+      if(serverMode && serverCols < 21) setStatus('⚠ 大表程式不是最新版（還不認識「新品上架」或「門市撤貨處理量」）：請把新版 Apps Script 貼上、儲存，再「管理部署作業 → 編輯 → 新版本」部署', 'err');
       else if(!serverMode) setStatus('⚠ 已寫入，但大表程式還是舊版（不會累加）：請到 Apps Script 重新部署新版本，並確認網址是同一個部署', 'err');
       else setStatus($('ovrChk').checked ? '✓ 已修正大表（'+date+'）' : '✓ 已累加到大表（'+date+'）', 'ok');
       await loadRecords(); fillForm(date);
@@ -306,7 +350,7 @@
   function recRowHtml(r){
     const total = r.total!==''&&r.total!==undefined ? num(r.total) : CHANNELS.reduce((s,[k])=>s+num(r[k]),0);
     return `<div class="rec"><div><div class="d">${esc(r.date)}</div>
-      <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}・上架 ${num(r.returnShelved)}・${r.trip?esc(r.trip):'未選車次'}・回收包裹 ${num(r.recoveredPackages)}・新品上架 ${num(r.newArrival)}</div></div>
+      <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}・上架 ${num(r.returnShelved)}・門市撤貨處理 ${num(r.storeHandle)}・撤貨出倉 ${num(r.recoveredPackages)}・新品上架 ${num(r.newArrival)}</div></div>
       <button class="smallbtn" data-edit="${esc(r.date)}">編輯</button></div>`;
   }
   function renderRecords(){
