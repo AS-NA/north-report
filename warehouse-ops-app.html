@@ -2,19 +2,20 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<meta name="color-scheme" content="dark">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>倉儲運營進出貨登錄</title>
 <style>
   :root{
-    --bg:#F3F6FC; --panel:#FFFFFF; --panel-2:#EEF2FA; --line:#DCE3F0;
-    --text:#1B2438; --text-mute:#6B7690;
-    --accent:#2FA5D6; --accent-2:#8B7FEF; --green:#3AAE72; --red:#D9604B;
+    --bg:#0B1220; --panel:#131C2E; --panel-2:#1B2740; --line:#26334D;
+    --text:#E8EEF9; --text-mute:#8C9AB5;
+    --accent:#4DA3FF; --accent-2:#A78BFA; --green:#34D399; --orange:#FB923C; --red:#F87171;
     --font-body:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
     --font-mono:ui-monospace,Menlo,Consolas,monospace;
   }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-body); font-size:15px; padding-bottom:90px; }
-  .topbar{ background:linear-gradient(135deg,#D7ECFB,#E8E3FB); padding:20px 20px 16px; border-bottom:1px solid var(--line); }
+  .topbar{ background:linear-gradient(135deg,#12203A,#1C1B3A); padding:20px 20px 16px; border-bottom:1px solid var(--line); }
   .topbar .brand{ font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; color:var(--text-mute); }
   .topbar h1{ margin:4px 0 0; font-size:20px; }
   .tabs{ display:flex; background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
@@ -36,7 +37,7 @@
   .hint{ font-size:12.5px; color:var(--text-mute); margin-top:8px; }
   .hint.warn{ color:var(--red); }
   .submitbar{ position:fixed; left:0; right:0; bottom:0; background:var(--panel); border-top:1px solid var(--line); padding:12px 20px calc(12px + env(safe-area-inset-bottom)); z-index:6; }
-  .bigbtn{ width:100%; padding:15px; border:none; border-radius:12px; background:var(--accent); color:#fff; font-size:16px; font-weight:700; cursor:pointer; font-family:var(--font-body); }
+  .bigbtn{ width:100%; padding:15px; border:none; border-radius:12px; background:linear-gradient(135deg,#3B82F6,#4DA3FF); color:#fff; font-size:16px; font-weight:700; cursor:pointer; font-family:var(--font-body); }
   .bigbtn:disabled{ opacity:.55; }
   .smallbtn{ padding:7px 12px; border-radius:9px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:13px; cursor:pointer; font-family:var(--font-body); }
   .status{ text-align:center; font-size:13px; margin-bottom:8px; min-height:18px; }
@@ -54,7 +55,22 @@
   .rangebar{ display:flex; gap:8px; margin-bottom:12px; }
   .rangebar .smallbtn.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
   .placeholder{ text-align:center; color:var(--text-mute); padding:26px 0; font-size:14px; }
-  .banner{ background:rgba(217,96,75,.12); border:1px solid var(--red); color:var(--red); padding:10px 12px; border-radius:10px; font-size:13px; margin-bottom:14px; }
+  .sumgrid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+  .sumcard{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; }
+  .sumcard .ttl{ font-weight:700; font-size:14px; }
+  .sumcard .ttl small{ color:var(--text-mute); font-weight:400; }
+  .pbar{ height:7px; background:var(--panel-2); border-radius:6px; overflow:hidden; margin:10px 0 6px; }
+  .pbar i{ display:block; height:100%; border-radius:6px; }
+  .sumcard .big{ font-size:14px; font-family:var(--font-mono); }
+  .sumcard .two{ display:flex; margin-top:10px; padding-top:10px; border-top:1px solid var(--line); text-align:center; }
+  .sumcard .two div{ flex:1; font-size:12px; color:var(--text-mute); } .sumcard .two b{ display:block; font-size:17px; color:var(--text); font-family:var(--font-mono); margin-top:2px; }
+  .qtitle{ font-weight:700; margin:4px 0 10px; }
+  .qgrid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; }
+  .qbtn{ border:none; border-radius:14px; padding:16px 14px; color:#fff; font-size:16px; font-weight:700; text-align:left; cursor:pointer; font-family:var(--font-body); }
+  .qbtn small{ display:block; font-weight:400; font-size:11.5px; opacity:.85; margin-top:3px; }
+  .q1{ background:linear-gradient(135deg,#2563EB,#4DA3FF); } .q2{ background:linear-gradient(135deg,#059669,#34D399); }
+  .q3{ background:linear-gradient(135deg,#EA580C,#FB923C); } .q4{ background:linear-gradient(135deg,#7C3AED,#A78BFA); }
+  .banner{ background:rgba(248,113,113,.12); border:1px solid var(--red); color:var(--red); padding:10px 12px; border-radius:10px; font-size:13px; margin-bottom:14px; }
 </style>
 </head>
 <body>
@@ -70,7 +86,24 @@
 
   <div class="view active" id="view-entry">
     <div id="cfgBanner" class="banner" style="display:none;">還沒設定 Apps Script 網址：請把程式最上面的 API_URL 換成你部署後的網址。</div>
-    <div class="card">
+    <div class="sumgrid">
+      <div class="sumcard"><div class="ttl">今日進貨 <small>(撤退貨)</small></div>
+        <div class="pbar"><i id="inBar" style="width:0%;background:var(--green)"></i></div>
+        <div class="big" id="inTxt">-</div>
+        <div class="two"><div>待上架<b id="inWait">-</b></div><div>已上架<b id="inDone">-</b></div></div></div>
+      <div class="sumcard"><div class="ttl">今日出貨 <small>(訂單)</small></div>
+        <div class="pbar"><i id="outBar" style="width:0%;background:var(--orange)"></i></div>
+        <div class="big" id="outTxt">-</div>
+        <div class="two"><div>回收包裹<b id="outPkg">-</b></div><div>車次<b id="outTrip">-</b></div></div></div>
+    </div>
+    <div class="qtitle">快捷功能區</div>
+    <div class="qgrid">
+      <button class="qbtn q1" id="qEntry" type="button">登錄資料<small>填寫今日數量</small></button>
+      <button class="qbtn q2" id="qRecords" type="button">歷史紀錄<small>查詢與編輯</small></button>
+      <button class="qbtn q3" id="qDash" type="button">數據儀表板<small>趨勢與通路</small></button>
+      <button class="qbtn q4" id="qReload" type="button">重新整理<small>同步大表資料</small></button>
+    </div>
+    <div class="card" id="dateCard">
       <h3>登錄日期</h3>
       <input type="date" class="datein" id="dateIn">
       <div class="hint" id="dateHint"></div>
@@ -164,6 +197,24 @@
     $('totalOut').textContent = total;
     $('remainOut').textContent = Math.max(0, num(val('returnIn')) - num(val('returnShelved')));
   }
+  function renderSummary(dateStr){
+    const r = records.find(x=>x.date===dateStr);
+    const sorted = [...records].sort((a,b)=> a.date<b.date?-1:1).filter(x=>x.date<dateStr).slice(-7);
+    const dt = x => (x.total!==''&&x.total!==undefined) ? num(x.total) : CHANNELS.reduce((s,[k])=>s+num(x[k]),0);
+    const rin = r?num(r.returnIn):0, rsh = r?num(r.returnShelved):0, tot = r?dt(r):0;
+    const avg = sorted.length ? sorted.reduce((s,x)=>s+dt(x),0)/sorted.length : 0;
+    $('inBar').style.width = (rin? Math.min(100,Math.round(rsh/rin*100)):0)+'%';
+    $('inTxt').textContent = r ? (rsh+' / '+rin+' 件 ('+(rin?Math.round(rsh/rin*100):0)+'%)') : '尚未登錄';
+    $('inWait').textContent = r ? Math.max(0,rin-rsh) : '-'; $('inDone').textContent = r ? rsh : '-';
+    $('outBar').style.width = (avg? Math.min(100,Math.round(tot/avg*100)):(tot?100:0))+'%';
+    $('outTxt').textContent = r ? (tot+' 單'+(avg?' (近7日均 '+Math.round(avg)+')':'')) : '尚未登錄';
+    $('outPkg').textContent = r ? num(r.recoveredPackages) : '-'; $('outTrip').textContent = r && r.trip ? r.trip : '-';
+  }
+  $('qEntry').addEventListener('click', ()=> $('dateCard').scrollIntoView({behavior:'smooth'}));
+  $('qRecords').addEventListener('click', ()=> showTab('records'));
+  $('qDash').addEventListener('click', ()=> showTab('dash'));
+  $('qReload').addEventListener('click', async ()=>{ setStatus('同步中...'); const ok = await loadRecords(); fillForm($('dateIn').value); setStatus(ok?'✓ 已同步':'同步失敗', ok?'ok':'err'); });
+
   function fillForm(dateStr){
     const rec = records.find(r=>r.date===dateStr);
     const keys = [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['trip'], ['recoveredPackages']].map(a=>a[0]);
@@ -174,7 +225,7 @@
     });
     $('dateHint').textContent = rec ? '⚠ 這一天已經有登錄資料，送出會覆蓋有填寫的欄位（沒填的欄位不會動）' : '這一天還沒有登錄資料';
     $('dateHint').className = 'hint' + (rec ? ' warn' : '');
-    recalc();
+    recalc(); renderSummary(dateStr);
   }
   $('dateIn').addEventListener('change', e=> fillForm(e.target.value));
 
