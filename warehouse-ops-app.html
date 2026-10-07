@@ -142,14 +142,14 @@
 <script>
 (function(){
   // ====== 設定區 ======
-  const API_URL = 'https://script.google.com/macros/s/AKfycbwjZ0b0fnoOzep2eZZFI54JkjctXEGLTFZE8kvtl4Zj7jS_6ChKXxGXkS4PeIeryryF/exec';   // ← 換成 Apps Script 部署後的網址
+  const API_URL = 'https://script.google.com/macros/s/AKfycbylkIZVm7uWzfE5gj_Tr3uw2MMn9BfJkdUPr6R60kQJGP17qfhljJE4-8vcJaxBYjOX/exec';   // ← 換成 Apps Script 部署後的網址
   const TRIP_OPTIONS = ['', '第1車', '第2車', '第3車', '第4車']; // 門市車次選項，可自行增減
   const CHANNELS = [
-    ['officialDelivery','官網宅配'], ['officialPickup','官網超取'], ['intlDelivery','國際'],
-    ['shopee','蝦皮'], ['rakuten','樂天'], ['amazon','亞馬遜'], ['b2bBorrow','B2B借貨'],
-    ['storePickup','門市取貨'], ['storeB2B','門市B2B'], ['groupBuy','團購']
+    ['officialDelivery','官網宅配'], ['officialPickup','官網超取'], ['intlDelivery','國際宅配'],
+    ['shopee','蝦皮'], ['rakuten','樂天'], ['amazon','亞馬遜'], ['b2bBorrow','商借B2B'],
+    ['storePickup','門市店取'], ['storeB2B','門市B2B'], ['groupBuy','團購']
   ];
-  const RETURN_FIELDS = [['returnIn','撤退貨進倉'], ['returnShelved','已上架數量']];
+  const RETURN_FIELDS = [['returnIn','撤退貨進倉'], ['returnShelved','上架數量']];
   const OTHER_FIELDS = [['storeReturn','門市撤貨'], ['weeklyCollect','周徵貨量']];
   // ====================
 
@@ -187,7 +187,7 @@
       </div>
       <div class="card"><h3>撤退貨</h3>
         ${RETURN_FIELDS.map(([k,l])=>numRow(k,l)).join('')}
-        <div class="row"><label>未上架（自動計算）</label><div class="auto" id="remainOut">0</div></div>
+        <div class="row"><label>剩餘未上架數量（自動計算）</label><div class="auto" id="remainOut">0</div></div>
       </div>
       <div class="card"><h3>門市・其他</h3>
         ${OTHER_FIELDS.map(([k,l])=>numRow(k,l)).join('')}
@@ -254,7 +254,9 @@
     try{
       const res = await fetchWithTimeout(API_URL + (API_URL.indexOf('?')>=0?'&':'?') + 't=' + Date.now(), {}, 15000);
       const json = await res.json();
-      records = (json.records||[]).filter(r=>r.date);
+      // 大表是預先排好整年日期的，沒填資料的日子不算「有登錄」
+      const hasData = r => CHANNELS.some(([k])=>num(r[k])) || ['returnIn','returnShelved','storeReturn','weeklyCollect','recoveredPackages'].some(k=>num(r[k])) || !!r.trip;
+      records = (json.records||[]).filter(r=>r.date && hasData(r));
       return true;
     }catch(e){ console.error(e); return false; }
   }
