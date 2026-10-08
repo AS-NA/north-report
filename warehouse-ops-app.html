@@ -9,7 +9,7 @@
   :root{
     --bg:#EEF4FB; --panel:#FFFFFF; --panel-2:#E6EFFA; --line:#BCCDE4;
     --text:#0B1730; --text-mute:#4A5B7A;
-    --accent:#0B6FDB; --accent-2:#6A3FE0; --green:#0E9F55; --orange:#E8620A; --red:#D42B1E;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --accent:#0B6FDB; --accent-2:#6A3FE0; --green:#0E9F55; --orange:#E8620A; --red:#D42B1E;
     --font-body:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
     --font-mono:ui-monospace,Menlo,Consolas,monospace;
   }
@@ -62,6 +62,13 @@
   .barrow{ display:flex; align-items:center; gap:8px; margin:10px 0; font-size:16px; font-weight:600; }
   .barrow .n{ width:86px; flex:none; } .barrow .t{ flex:1; height:14px; background:var(--panel-2); border-radius:8px; overflow:hidden; }
   .barrow .f{ height:100%; background:var(--accent); border-radius:8px; } .barrow .c{ width:60px; text-align:right; font-family:var(--font-mono); font-weight:800; font-size:17px; }
+  .kpi .v.sm{ font-size:26px; } .kpi .dl{ font-size:12.5px; color:var(--text-mute); margin-top:4px; font-weight:600; } .kpi .dl.up{ color:#0A7A41; } .kpi .dl.dn{ color:#B3261E; }
+  .barrow .c small{ display:block; font-size:11.5px; color:var(--text-mute); font-weight:600; } .barrow[data-tip]{ cursor:pointer; }
+  .lgd{ display:flex; flex-wrap:wrap; gap:6px 14px; font-size:13.5px; color:var(--text-mute); margin:-2px 0 8px; font-weight:600; } .lgd i{ display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  #vizTip{ position:fixed; z-index:50; display:none; background:#0B1730; color:#fff; padding:8px 11px; border-radius:10px; font-size:13.5px; line-height:1.5; white-space:pre-line; pointer-events:none; box-shadow:0 4px 14px rgba(0,0,0,.25); max-width:220px; }
+  .dtbl{ border-collapse:collapse; width:100%; font-size:14px; } .dtbl th,.dtbl td{ padding:6px 8px; text-align:right; border-top:1px solid var(--line); white-space:nowrap; } .dtbl th:first-child,.dtbl td:first-child{ text-align:left; } .dtbl th{ color:var(--text-mute); font-weight:700; }
+  details.card summary{ font-weight:800; font-size:16px; cursor:pointer; }
+  .dashsvg text{ font-family:var(--font-mono); }
   .rangebar{ display:flex; gap:8px; margin-bottom:14px; }
   .rangebar .smallbtn.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
   .placeholder{ text-align:center; color:var(--text-mute); padding:28px 0; font-size:16px; }
@@ -104,7 +111,7 @@
   .rfbtns button{ flex:1; padding:13px 6px; border:none; border-radius:12px; font-size:17px; font-weight:800; color:#fff; cursor:pointer; font-family:var(--font-body); }
   .rfbtns button[data-act="save"]{ background:#64748b; } .rfbtns button[data-act="start"]{ background:var(--orange); } .rfbtns button[data-act="end"]{ background:var(--green); }
   .rfbtns button:disabled{ opacity:.35; cursor:not-allowed; }
-  .wknav{ display:flex; align-items:center; gap:8px; } .wklbl{ flex:1; text-align:center; font-size:19px; font-weight:800; font-family:var(--font-mono); }
+  .wknav{ display:flex; align-items:center; gap:8px; } .wksel{ flex:1; min-width:0; text-align:center; text-align-last:center; font-size:17px; font-weight:800; font-family:var(--font-mono); padding:10px 8px; border:1.5px solid var(--line,#c5d2e6); border-radius:12px; background:#fff; color:inherit; } .wklbl{ flex:1; text-align:center; font-size:19px; font-weight:800; font-family:var(--font-mono); }
   .rfwho{ font-size:13.5px; color:var(--text-mute); margin-top:8px; font-weight:600; }
 </style>
 </head>
@@ -161,13 +168,14 @@
       <button class="smallbtn active" data-days="7">近 7 天</button>
       <button class="smallbtn" data-days="14">近 14 天</button>
       <button class="smallbtn" data-days="30">近 30 天</button>
+      <button class="smallbtn" data-days="90">近 90 天</button>
     </div>
     <div id="dashBody"></div>
   </div>
 
   <div class="view" id="view-refurb">
     <div class="card"><h3>整理週別</h3>
-      <div class="wknav"><button type="button" id="rfPrev" class="smallbtn">‹ 上週</button><div id="rfWeekLbl" class="wklbl"></div><button type="button" id="rfNext" class="smallbtn">下週 ›</button></div></div>
+      <div class="wknav"><button type="button" id="rfPrev" class="smallbtn">‹ 上週</button><select id="rfWeekSel" class="wksel" aria-label="選擇週別"></select><button type="button" id="rfNext" class="smallbtn">下週 ›</button></div></div>
     <div class="card"><h3>今天整理的同仁 <small style="color:var(--text-mute);font-weight:600;">（輪值，最多選 2 位）</small></h3><div class="chips" id="rfStaff"></div></div>
     <div class="rangebar" id="rfGroups"></div>
     <div class="card" id="rfSum"></div>
@@ -212,7 +220,7 @@
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+name));
     $('submitBar').style.display = name==='entry' ? 'block' : 'none';
     if(name==='records') renderRecords();
-    if(name==='dash') renderDash();
+    if(name==='dash'){ renderDash(); if(!rfStores.length && apiReady()) loadRefurb().then(renderDashRf); }
     if(name==='refurb') loadRefurb();
     window.scrollTo(0,0);
   }
@@ -416,45 +424,167 @@
       renderDash();
     });
   });
-  function renderDash(){
-    // 依「日曆」算最近 N 天（含今天），沒登錄的日子留空，不是只拿最後 N 筆紀錄
-    const days = [];
-    for(let i=dashDays-1;i>=0;i--){
-      const d = new Date(); d.setDate(d.getDate()-i);
-      days.push(d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()));
+  // 圖表配色（驗證過：色盲可分辨；淺色在白底上對比偏低，所以都有圖例、數字與點一下的提示）
+  const VG = [
+    {n:'官網',     keys:['officialDelivery','officialPickup','intlDelivery'], c:'var(--s1)'},
+    {n:'電商平台', keys:['shopee','rakuten','amazon'],                         c:'var(--s2)'},
+    {n:'門市／B2B', keys:['b2bBorrow','storePickup','storeB2B','groupBuy'],      c:'var(--s3)'}
+  ];
+  const WD = ['日','一','二','三','四','五','六'];
+  const dowOf = ds => { const [y,m,d]=ds.split('-').map(Number); return new Date(y,m-1,d).getDay(); };
+  const chTotal = r => CHANNELS.reduce((s,[k])=>s+num(r[k]),0);
+  const fmt = n => Math.round(n).toLocaleString('en-US');
+
+  // 點一下（或滑過）圖表就跳出數字
+  (function(){
+    const tip = document.createElement('div'); tip.id='vizTip'; document.body.appendChild(tip);
+    function show(t){
+      tip.textContent = t.dataset.tip; tip.style.display='block';
+      const b = t.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+      let x = b.left + b.width/2 - w/2; x = Math.max(8, Math.min(window.innerWidth - w - 8, x));
+      let y = b.top - h - 8; if(y < 8) y = b.bottom + 8;
+      tip.style.left = x+'px'; tip.style.top = y+'px';
     }
+    document.addEventListener('click', e=>{ const t = e.target.closest('[data-tip]'); if(t) show(t); else tip.style.display='none'; });
+    document.addEventListener('mouseover', e=>{ const t = e.target.closest && e.target.closest('[data-tip]'); if(t) show(t); });
+    window.addEventListener('scroll', ()=>{ tip.style.display='none'; }, {passive:true});
+  })();
+
+  function hbars(items, color, unit){   // 橫條：[{l, v, sub?}]
+    const mx = Math.max(1, ...items.map(x=>x.v));
+    return items.map(x=>`<div class="barrow" data-tip="${esc(x.l)}：${fmt(x.v)}${unit||''}${x.sub?'\n'+esc(x.sub):''}"><div class="n">${esc(x.l)}</div><div class="t"><div class="f" style="width:${Math.round(x.v/mx*100)}%;${color?'background:'+color:''}"></div></div><div class="c">${fmt(x.v)}${x.pct!==undefined?`<small>${x.pct}%</small>`:''}</div></div>`).join('');
+  }
+  function legend(items){ return `<div class="lgd">${items.map(i=>`<span><i style="background:${i.c}"></i>${esc(i.n)}</span>`).join('')}</div>`; }
+
+  function renderDash(){
+    // 依「日曆」算最近 N 天（含今天），沒登錄的日子留空
+    const fmtD = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+    const days = [], prevDays = [];
+    for(let i=dashDays-1;i>=0;i--){ const d = new Date(); d.setDate(d.getDate()-i); days.push(fmtD(d)); }
+    for(let i=dashDays*2-1;i>=dashDays;i--){ const d = new Date(); d.setDate(d.getDate()-i); prevDays.push(fmtD(d)); }
     const byDate = {}; records.forEach(r=>{ byDate[r.date] = r; });
     const slots = days.map(d=> ({ date:d, rec: byDate[d] || null }));
     const rows = slots.filter(s=>s.rec).map(s=>s.rec);
     if(!rows.length){ $('dashBody').innerHTML = `<div class="placeholder">${days[0]} ～ ${days[days.length-1]} 這段時間還沒有登錄資料</div>`; return; }
-    const dayTotal = r => (r.total!==''&&r.total!==undefined) ? num(r.total) : CHANNELS.reduce((s,[k])=>s+num(r[k]),0);
-    const totals = slots.map(s=> s.rec ? dayTotal(s.rec) : 0);
+
+    const totals = slots.map(s=> s.rec ? chTotal(s.rec) : 0);
     const sum = totals.reduce((a,b)=>a+b,0);
-    const returnIn = rows.reduce((s,r)=>s+num(r.returnIn),0);
-    const shelved = rows.reduce((s,r)=>s+num(r.returnShelved),0);
-    const chSum = CHANNELS.map(([k,l])=>({l, v: rows.reduce((s,r)=>s+num(r[k]),0)})).sort((a,b)=>b.v-a.v);
-    const chMax = Math.max(1, ...chSum.map(x=>x.v));
+    const prevSum = prevDays.reduce((s,d)=> s + (byDate[d] ? chTotal(byDate[d]) : 0), 0);
+    const prevCnt = prevDays.filter(d=>byDate[d]).length;
+    const delta = prevSum>0 ? Math.round((sum-prevSum)/prevSum*100) : null;
+    const S = k => rows.reduce((s,r)=>s+num(r[k]),0);
+    const returnIn = S('returnIn'), shelved = S('returnShelved');
+    const pending = Math.max(0, returnIn - shelved);
+    const peakI = totals.indexOf(Math.max(...totals));
+
+    // 1) 每日訂單量（依通路群組堆疊）
+    const W = 320, H = 170, top = 18, bot = 22, ph = H-top-bot, bw = W/slots.length, few = slots.length<=14;
     const tMax = Math.max(1, ...totals);
-    const W = 320, H = 150, bw = W/slots.length, few = slots.length<=14;
-    const bars = slots.map((s,i)=>{
-      const cx = (i*bw+bw/2).toFixed(1);
-      const lab = few ? `<text x="${cx}" y="${H-5}" font-size="11" text-anchor="middle" fill="var(--text-mute)">${s.date.slice(5)}</text>` : '';
-      if(!s.rec) return lab + (few ? `<text x="${cx}" y="${H-24}" font-size="11" text-anchor="middle" fill="var(--text-mute)">-</text>` : '');
-      const bh = Math.round(totals[i]/tMax*(H-48));
-      return `<rect x="${(i*bw+bw*0.15).toFixed(1)}" y="${H-bh-20}" width="${(bw*0.7).toFixed(1)}" height="${bh}" rx="3" fill="var(--accent)"/>`
-        + (few ? `<text x="${cx}" y="${H-bh-24}" font-size="12" font-weight="700" text-anchor="middle" fill="var(--text)">${totals[i]}</text>` : '') + lab;
+    const dayBars = slots.map((s,i)=>{
+      const x = i*bw, cx = x+bw/2;
+      const lab = (few || i%Math.ceil(slots.length/7)===0) ? `<text x="${cx.toFixed(1)}" y="${H-6}" font-size="10.5" text-anchor="middle" fill="var(--text-mute)">${s.date.slice(5).replace('-','/')}</text>` : '';
+      if(!s.rec) return lab;
+      let y = top+ph, out = '';
+      VG.forEach(g=>{
+        const v = g.keys.reduce((a,k)=>a+num(s.rec[k]),0), h = v/tMax*ph;
+        if(h<=0) return;
+        y -= h;
+        out += `<rect x="${(x+bw*0.14).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*0.72).toFixed(1)}" height="${h.toFixed(1)}" fill="${g.c}" stroke="#fff" stroke-width="1.2"/>`;
+      });
+      const tip = s.date.slice(5).replace('-','/')+'（週'+WD[dowOf(s.date)]+'）\n'+VG.map(g=>g.n+' '+fmt(g.keys.reduce((a,k)=>a+num(s.rec[k]),0))).join('\n')+'\n合計 '+fmt(totals[i]);
+      const num_ = (few||i===peakI) ? `<text x="${cx.toFixed(1)}" y="${(y-4).toFixed(1)}" font-size="${few?11:11}" font-weight="700" text-anchor="middle" fill="var(--text)">${fmt(totals[i])}</text>` : '';
+      return out + num_ + lab + `<rect x="${x.toFixed(1)}" y="0" width="${bw.toFixed(1)}" height="${H-bot}" fill="transparent" data-tip="${esc(tip)}"/>`;
     }).join('');
+
+    // 2) 通路占比
+    const chSum = CHANNELS.map(([k,l])=>({l, v:S(k)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v).map(x=>({...x, pct: sum?Math.round(x.v/sum*100):0}));
+
+    // 3) 星期別平均
+    const wdAgg = Array.from({length:7},()=>({s:0,n:0}));
+    slots.forEach((s,i)=>{ if(s.rec){ const w=dowOf(s.date); wdAgg[w].s+=totals[i]; wdAgg[w].n++; } });
+    const wdAvg = [1,2,3,4,5,6,0].map(w=>({l:'週'+WD[w], v: wdAgg[w].n ? wdAgg[w].s/wdAgg[w].n : 0, n: wdAgg[w].n}));
+    const wdMax = Math.max(1,...wdAvg.map(x=>x.v));
+    const wdCols = wdAvg.map((x,i)=>{
+      const h = Math.round(x.v/wdMax*80), cx = 22+i*44;
+      return `<g data-tip="${x.l} 平均 ${fmt(x.v)} 單\n（${x.n} 天有登錄）"><rect x="${cx-14}" y="${100-h}" width="28" height="${h}" rx="4" fill="var(--s1)" opacity="${x.v===wdMax?1:.55}"/><text x="${cx}" y="${96-h}" font-size="11" font-weight="700" text-anchor="middle" fill="var(--text)">${x.n?fmt(x.v):'-'}</text><text x="${cx}" y="116" font-size="11.5" text-anchor="middle" fill="var(--text-mute)">${x.l}</text><rect x="${cx-22}" y="0" width="44" height="120" fill="transparent"/></g>`;
+    }).join('');
+
+    // 4) 撤退貨：每日進倉 vs 上架
+    const rMax = Math.max(1, ...slots.map(s=>s.rec?Math.max(num(s.rec.returnIn),num(s.rec.returnShelved)):0));
+    const rH = 120, rbw = W/slots.length;
+    const retBars = slots.map((s,i)=>{
+      const x = i*rbw; if(!s.rec) return '';
+      const a = num(s.rec.returnIn), b = num(s.rec.returnShelved);
+      const ha = a/rMax*(rH-34), hb = b/rMax*(rH-34), w = rbw*0.34;
+      const lab = (few || i%Math.ceil(slots.length/7)===0) ? `<text x="${(x+rbw/2).toFixed(1)}" y="${rH-4}" font-size="10.5" text-anchor="middle" fill="var(--text-mute)">${s.date.slice(5).replace('-','/')}</text>` : '';
+      const tip = s.date.slice(5).replace('-','/')+'\n撤退貨進倉 '+fmt(a)+'\n上架數量 '+fmt(b)+'\n未上架 '+fmt(Math.max(0,a-b));
+      return `<rect x="${(x+rbw*0.12).toFixed(1)}" y="${(rH-20-ha).toFixed(1)}" width="${w.toFixed(1)}" height="${ha.toFixed(1)}" rx="2" fill="var(--s1)"/><rect x="${(x+rbw*0.12+w+1).toFixed(1)}" y="${(rH-20-hb).toFixed(1)}" width="${w.toFixed(1)}" height="${hb.toFixed(1)}" rx="2" fill="var(--s2)"/>${lab}<rect x="${x.toFixed(1)}" y="0" width="${rbw.toFixed(1)}" height="${rH-14}" fill="transparent" data-tip="${esc(tip)}"/>`;
+    }).join('');
+
+    // 5) 門市作業合計、同仁排行
+    const storeItems = [['weeklyCollect','周徵貨量'],['storeReturn','門市撤貨進倉'],['storeHandle','門市撤貨處理量'],['recoveredPackages','撤貨出倉數量'],['newArrival','新品上架']].map(([k,l])=>({l, v:S(k)}));
+    const staffMap = {};
+    rows.forEach(r=>parseDetail(r.storeHandleDetail).forEach(p=>{ staffMap[p.name]=(staffMap[p.name]||0)+p.qty; }));
+    const staffItems = Object.keys(staffMap).map(n=>({l:n, v:staffMap[n]})).sort((a,b)=>b.v-a.v);
+    const staffSum = staffItems.reduce((s,x)=>s+x.v,0);
+
+    // 6) 數字表
+    const tbl = `<table class="dtbl"><tr><th>日期</th>${VG.map(g=>`<th>${g.n}</th>`).join('')}<th>合計</th><th>進倉</th><th>上架</th></tr>${slots.filter(s=>s.rec).reverse().map(s=>`<tr><td>${s.date.slice(5).replace('-','/')}</td>${VG.map(g=>`<td>${fmt(g.keys.reduce((a,k)=>a+num(s.rec[k]),0))}</td>`).join('')}<td><b>${fmt(chTotal(s.rec))}</b></td><td>${fmt(num(s.rec.returnIn))}</td><td>${fmt(num(s.rec.returnShelved))}</td></tr>`).join('')}</table>`;
+
     $('dashBody').innerHTML = `
       <div class="kpis">
-        <div class="kpi"><div class="v">${sum}</div><div class="l">訂單總量</div></div>
-        <div class="kpi"><div class="v">${Math.round(sum/rows.length)}</div><div class="l">日均訂單</div></div>
-        <div class="kpi"><div class="v">${returnIn?Math.round(shelved/returnIn*100):0}%</div><div class="l">撤退貨上架率</div></div>
+        <div class="kpi"><div class="v">${fmt(sum)}</div><div class="l">訂單總量</div>${delta===null?'':`<div class="dl ${delta>=0?'up':'dn'}">${delta>=0?'▲':'▼'} ${Math.abs(delta)}% 較前 ${dashDays} 天</div>`}</div>
+        <div class="kpi"><div class="v">${fmt(sum/rows.length)}</div><div class="l">日均訂單</div></div>
+        <div class="kpi"><div class="v">${returnIn?Math.round(shelved/returnIn*100):0}%</div><div class="l">撤退貨上架率</div><div class="dl">未上架 ${fmt(pending)}</div></div>
       </div>
-      <div class="card"><h3>每日訂單量</h3><svg viewBox="0 0 ${W} ${H}" width="100%">${bars}</svg></div>
-      <div class="card"><h3>各通路合計</h3>
-        ${chSum.map(x=>`<div class="barrow"><div class="n">${esc(x.l)}</div><div class="t"><div class="f" style="width:${Math.round(x.v/chMax*100)}%"></div></div><div class="c">${x.v}</div></div>`).join('')}
+      <div class="kpis">
+        <div class="kpi"><div class="v sm">${fmt(S('storeHandle'))}</div><div class="l">門市撤貨處理</div></div>
+        <div class="kpi"><div class="v sm">${fmt(S('recoveredPackages'))}</div><div class="l">撤貨出倉</div></div>
+        <div class="kpi"><div class="v sm">${fmt(S('newArrival'))}</div><div class="l">新品上架</div></div>
       </div>
-      <div class="hint">統計範圍：${days[0]} ～ ${days[days.length-1]}（共 ${days.length} 天，其中 ${rows.length} 天有登錄；日均是用有登錄的天數算）</div>`;
+
+      <div class="card"><h3>每日訂單量</h3>${legend(VG)}
+        <svg viewBox="0 0 ${W} ${H}" width="100%">${dayBars}</svg>
+        <div class="hint">尖峰：${slots[peakI].date.slice(5).replace('-','/')}（週${WD[dowOf(slots[peakI].date)]}）${fmt(totals[peakI])} 單。點一下長條看各通路。</div></div>
+
+      <div class="card"><h3>各通路占比</h3>${hbars(chSum,'','')}</div>
+
+      <div class="card"><h3>星期別平均訂單量</h3>
+        <svg viewBox="0 0 308 122" width="100%">${wdCols}</svg>
+        <div class="hint">看哪幾天最忙，用來排人力。顏色最深的是平均最高的那天。</div></div>
+
+      <div class="card"><h3>撤退貨：進倉 vs 上架</h3>${legend([{n:'撤退貨進倉',c:'var(--s1)'},{n:'上架數量',c:'var(--s2)'}])}
+        <svg viewBox="0 0 ${W} ${rH}" width="100%">${retBars}</svg>
+        <div class="hint">期間累計：進倉 ${fmt(returnIn)}、上架 ${fmt(shelved)}、尚未上架 ${fmt(pending)}。</div></div>
+
+      <div class="card"><h3>門市作業合計</h3>${hbars(storeItems,'var(--s3)','')}</div>
+
+      ${staffItems.length?`<div class="card"><h3>同仁撤貨處理量</h3>${hbars(staffItems.map(x=>({...x, pct: staffSum?Math.round(x.v/staffSum*100):0})),'var(--s1)','')}</div>`:''}
+
+      <div class="card" id="dashRf"></div>
+
+      <details class="card"><summary>看數字表</summary><div style="overflow-x:auto;margin-top:10px">${tbl}</div></details>
+      <div class="hint">統計範圍：${days[0]} ～ ${days[days.length-1]}（共 ${days.length} 天，其中 ${rows.length} 天有登錄；日均用有登錄的天數算）</div>`;
+    renderDashRf();
+  }
+
+  // 儀表板：本週門市整新進度
+  function renderDashRf(){
+    const el = $('dashRf'); if(!el) return;
+    const wk = rfWeekInfo(mondayOf(new Date()));
+    if(!rfStores.length){ el.innerHTML = `<h3>本週門市整新　${wk.label}</h3><div class="hint">${apiReady()?'讀取中，或還沒有門市清單。':'還沒設定網址。'}</div>`; return; }
+    const recs = rfRecs.filter(r=>r.week===wk.key);
+    const rows = RF_GROUPS.map(g=>{
+      const st = rfStores.filter(s=>s.group===g);
+      const done = st.filter(s=>{ const r=recs.find(x=>String(x.code)===String(s.code)); return r && r.status==='完成'; });
+      const going = st.filter(s=>{ const r=recs.find(x=>String(x.code)===String(s.code)); return r && r.status==='整理中'; });
+      const mins = done.map(s=>num(recs.find(x=>String(x.code)===String(s.code)).minutes)).filter(m=>m>0);
+      return {g, total:st.length, done:done.length, going:going.length, avg: mins.length?Math.round(mins.reduce((a,b)=>a+b,0)/mins.length):0};
+    }).filter(x=>x.total);
+    const allT = rows.reduce((s,x)=>s+x.total,0), allD = rows.reduce((s,x)=>s+x.done,0);
+    el.innerHTML = `<h3>本週門市整新　${wk.label}</h3>
+      <div class="hint" style="margin:0 0 8px">全部 ${allT} 間，已完成 ${allD} 間（${allT?Math.round(allD/allT*100):0}%）</div>
+      ${rows.map(x=>`<div class="barrow" data-tip="${x.g}排程\n完成 ${x.done} / ${x.total}\n整理中 ${x.going}${x.avg?'\n平均用時 '+x.avg+' 分鐘':''}"><div class="n">${x.g}</div><div class="t"><div class="f" style="width:${Math.round(x.done/x.total*100)}%;background:var(--s3)"></div></div><div class="c">${x.done}/${x.total}</div></div>${x.avg?`<div class="hint" style="margin:-4px 0 6px 94px">平均用時 ${x.avg} 分鐘</div>`:''}`).join('')}`;
   }
 
   // ---------- 門市新品整新 ----------
@@ -496,7 +626,13 @@
 
   function renderRefurb(){
     const wk = rfWeekInfo(rfMon);
-    $('rfWeekLbl').textContent = wk.label;
+    (function(){
+      const base = mondayOf(new Date()), cur = Math.round((rfMon-base)/604800000);
+      const lo = Math.min(-30, cur-2), hi = Math.max(30, cur+2);
+      let h = '';
+      for(let o=hi; o>=lo; o--){ const m=new Date(base); m.setDate(m.getDate()+o*7); h += `<option value="${o}"${o===cur?' selected':''}>${rfWeekInfo(m).label}${o===0?'　★本週':''}</option>`; }
+      $('rfWeekSel').innerHTML = h;
+    })();
     $('rfStaff').innerHTML = RF_STAFF.map(n=>`<button type="button" class="chip${rfStaffSel.indexOf(n)>=0?' on':''}" data-name="${esc(n)}">${esc(n)}</button>`).join('');
     $('rfGroups').innerHTML = RF_GROUPS.map(g=>{
       const n = rfStores.filter(s=>s.group===g).length;
@@ -582,6 +718,7 @@
     rfSay(''); renderRefurb();
   });
   $('rfGroups').addEventListener('click', e=>{ const b=e.target.closest('[data-g]'); if(!b) return; rfGroup=b.dataset.g; renderRefurb(); });
+  $('rfWeekSel').addEventListener('change', e=>{ const m=mondayOf(new Date()); m.setDate(m.getDate()+Number(e.target.value)*7); rfMon=m; rfDraft = {}; renderRefurb(); });
   $('rfPrev').addEventListener('click', ()=>{ rfMon.setDate(rfMon.getDate()-7); rfDraft = {}; renderRefurb(); });
   $('rfNext').addEventListener('click', ()=>{ rfMon.setDate(rfMon.getDate()+7); rfDraft = {}; renderRefurb(); });
   $('rfList').addEventListener('click', e=>{
