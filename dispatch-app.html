@@ -439,7 +439,7 @@
     { region:'桃園', code:'北桃1', name:'陳兆晏', hours:'11:00-20:00',
       tables:{ A:[T('勻貨歸倉',[3,4,5]),T('補貨歸倉',[1,4,5]),T('追加歸倉',[1,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3,5]),T('新品整理',[3,5]),T('寄黑貓',[1,3,4,5]),T('寄新竹物流',[1,3,4,5])] },
       weeklyStops:{
-        1:[{site:'統領',time:'11:00-11:30',table:'A'},{site:'大江',time:'12:20-17:00',table:'A'},{site:'台茂',time:'17:30-18:30',table:'A'},{site:'統領',time:'18:30-20:00',table:'A'}],
+        1:[{site:'統領',time:'11:00-11:30',table:'A',exclude:['撤貨抓貨(只抓倉庫)','區內勻貨']},{site:'大江',time:'12:20-17:00',table:'A'},{site:'台茂',time:'17:30-18:30',table:'A'},{site:'統領',time:'18:30-20:00',table:'A'}],
         2:[{site:'統領',time:'11:00-11:30',table:'A'},{site:'大江',time:'12:20-14:00',table:'A'},{site:'巨城',time:'14:00-15:30',table:'A'},{site:'台茂',time:'15:30-19:00',table:'A'},{site:'統領',time:'19:30-20:00',table:'A'}],
         3:[{site:'統領',time:'11:00-11:40',table:'A'},{site:'大江',time:'12:30-15:00',table:'A'},{site:'巨城',time:'15:00-16:30',table:'A'},{site:'台茂',time:'16:30-18:30',table:'A'},{site:'統領',time:'18:30-20:00',table:'A'}],
         4:[{site:'統領',time:'11:00-11:30',table:'A'},{site:'大江',time:'12:20-18:30',table:'A'},{site:'統領',time:'19:30-20:00',table:'A'}],
@@ -525,7 +525,7 @@
       return override.tasks.map(n=>({name:n, active:true}));
     }
     if(stop.free) return stop.free.map(n=>({name:n, active:true}));
-    const table = driver.tables[stop.table] || [];
+    const table = (driver.tables[stop.table] || []).filter(t=> !(stop.exclude && stop.exclude.includes(t.name)));
     return table.map(t=>({name:t.name, active:t.days.includes(weekday)}));
   }
   function todayDateStr(){
