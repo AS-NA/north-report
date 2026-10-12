@@ -198,7 +198,7 @@
     ['shopee','蝦皮'], ['rakuten','樂天'], ['amazon','亞馬遜'], ['b2bBorrow','商借B2B'],
     ['storePickup','門市店取'], ['storeB2B','門市B2B'], ['groupBuy','團購']
   ];
-  const RETURN_FIELDS = [['returnIn','撤退貨進倉'], ['returnShelved','上架數量']];
+  const RETURN_FIELDS = [['ecReturn','EC退貨'], ['storeRecall','門市撤貨'], ['returnShelved','上架數量']];   // 撤退貨進倉 = EC退貨 + 門市撤貨（自動加總存到 returnIn）
   const OTHER_FIELDS = [['weeklyCollect','周徵貨量'], ['storeReturn','門市撤貨進倉']];
   // ====================
 
@@ -236,7 +236,9 @@
         <div class="totalbar"><span>訂單總計</span><b id="totalOut">0</b></div>
       </div>
       <div class="card"><h3>撤退貨</h3>
-        ${RETURN_FIELDS.map(([k,l])=>numRow(k,l)).join('')}
+        ${numRow('ecReturn','EC退貨')}${numRow('storeRecall','門市撤貨')}
+        <div class="row"><label>撤退貨進倉合計（自動計算）</label><div class="auto" id="retInOut">0</div></div>
+        ${numRow('returnShelved','上架數量')}
         <div class="row"><label>剩餘未上架數量（自動計算）</label><div class="auto" id="remainOut">0</div></div>
       </div>
       <div class="card"><h3>新富倉</h3>
@@ -280,11 +282,13 @@
     return String(txt||'').split('、').map(t=>{ const i=t.lastIndexOf(':'); return i>0 ? {name:t.slice(0,i), qty:num(t.slice(i+1))} : null; }).filter(Boolean);
   }
   function val(key){ const el = $('f_'+key); return el ? el.value : ''; }
+  const retIn = () => num(val('ecReturn')) + num(val('storeRecall'));
   function recalc(){
     const total = CHANNELS.reduce((s,[k])=> s + num(val(k)), 0);
     $('totalOut').textContent = total;
     if($('staffTotal')) $('staffTotal').textContent = readStaff().total;
-    $('remainOut').textContent = Math.max(0, num(val('returnIn')) - num(val('returnShelved')));
+    if($('retInOut')) $('retInOut').textContent = retIn();
+    $('remainOut').textContent = Math.max(0, retIn() - num(val('returnShelved')));
   }
   function renderSummary(dateStr){
     const r = records.find(x=>x.date===dateStr);
@@ -313,6 +317,7 @@
       const v = (ovr && rec) ? rec[k] : '';
       el.value = (v===undefined||v===null) ? '' : v;
     });
+    if(ovr && rec && num(rec.returnIn) && !num(rec.ecReturn) && !num(rec.storeRecall)){ $('f_ecReturn').value = rec.returnIn; }   // 舊資料沒分類：先放在 EC退貨，請自行調整
     let rows = [];
     if(ovr && rec){ rows = parseDetail(rec.storeHandleDetail); if(!rows.length && num(rec.storeHandle)) rows = [{name:'', qty:num(rec.storeHandle)}]; }
     setStaffRows(rows);
@@ -359,7 +364,8 @@
     const st = readStaff(); if(st.total){ payload.storeHandle = st.total; payload.storeHandleDetail = st.detail; }
     const anyChannel = CHANNELS.some(([k])=> val(k)!=='');
     if(anyChannel) payload.total = CHANNELS.reduce((s,[k])=> s+num(val(k)), 0);
-    if(val('returnIn')!=='' || val('returnShelved')!=='') payload.returnRemaining = Math.max(0, num(val('returnIn')) - num(val('returnShelved')));
+    if(val('ecReturn')!=='' || val('storeRecall')!=='') payload.returnIn = retIn();
+    if(val('ecReturn')!=='' || val('storeRecall')!=='' || val('returnShelved')!=='') payload.returnRemaining = Math.max(0, retIn() - num(val('returnShelved')));
     if(Object.keys(payload).length<=1){ setStatus('還沒有填任何數字', 'err'); return; }
 
     const btn = $('submitBtn'); btn.disabled = true; btn.textContent = '送出中...'; setStatus('');
@@ -377,7 +383,7 @@
     }
     btn.disabled = false; btn.textContent = '送出登錄';
     if(ok){
-      if(serverMode && serverCols < 21) setStatus('⚠ 大表程式不是最新版（還不認識「新品上架」或「門市撤貨處理量」）：請把新版 Apps Script 貼上、儲存，再「管理部署作業 → 編輯 → 新版本」部署', 'err');
+      if(serverMode && serverCols < 23) setStatus('⚠ 大表程式不是最新版（還不認識「EC退貨/門市撤貨」欄位）：請把新版 Apps Script 貼上、儲存，再「管理部署作業 → 編輯 → 新版本」部署', 'err');
       else if(!serverMode) setStatus('⚠ 已寫入，但大表程式還是舊版（不會累加）：請到 Apps Script 重新部署新版本，並確認網址是同一個部署', 'err');
       else setStatus($('ovrChk').checked ? '✓ 已修正大表（'+date+'）' : '✓ 已累加到大表（'+date+'）', 'ok');
       await loadRecords(); fillForm(date);
@@ -391,7 +397,7 @@
   function recRowHtml(r){
     const total = r.total!==''&&r.total!==undefined ? num(r.total) : CHANNELS.reduce((s,[k])=>s+num(r[k]),0);
     return `<div class="rec"><div><div class="d">${esc(r.date)}</div>
-      <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}・上架 ${num(r.returnShelved)}・門市撤貨處理 ${num(r.storeHandle)}・撤貨出倉 ${num(r.recoveredPackages)}・新品上架 ${num(r.newArrival)}</div></div>
+      <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}${(num(r.ecReturn)||num(r.storeRecall))?'（EC '+num(r.ecReturn)+'／門市 '+num(r.storeRecall)+'）':''}・上架 ${num(r.returnShelved)}・門市撤貨處理 ${num(r.storeHandle)}・撤貨出倉 ${num(r.recoveredPackages)}・新品上架 ${num(r.newArrival)}</div></div>
       <button class="smallbtn" data-edit="${esc(r.date)}">編輯</button></div>`;
   }
   function renderRecords(){
@@ -555,7 +561,7 @@
 
       <div class="card"><h3>撤退貨：進倉 vs 上架</h3>${legend([{n:'撤退貨進倉',c:'var(--s1)'},{n:'上架數量',c:'var(--s2)'}])}
         <svg viewBox="0 0 ${W} ${rH}" width="100%">${retBars}</svg>
-        <div class="hint">期間累計：進倉 ${fmt(returnIn)}、上架 ${fmt(shelved)}、尚未上架 ${fmt(pending)}。</div></div>
+        <div class="hint">期間累計：進倉 ${fmt(returnIn)}（EC退貨 ${fmt(S('ecReturn'))}、門市撤貨 ${fmt(S('storeRecall'))}）、上架 ${fmt(shelved)}、尚未上架 ${fmt(pending)}。</div></div>
 
       <div class="card"><h3>門市作業合計</h3>${hbars(storeItems,'var(--s3)','')}</div>
 
