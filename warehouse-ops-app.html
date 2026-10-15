@@ -123,6 +123,8 @@
   .rfbtns button:disabled{ opacity:.35; cursor:not-allowed; }
   .wknav{ display:flex; align-items:center; gap:8px; } .wksel{ flex:1; min-width:0; text-align:center; text-align-last:center; font-size:17px; font-weight:800; font-family:var(--font-mono); padding:10px 8px; border:1.5px solid var(--line,#c5d2e6); border-radius:12px; background:#fff; color:inherit; } .wklbl{ flex:1; text-align:center; font-size:19px; font-weight:800; font-family:var(--font-mono); }
   .rfwho{ font-size:13.5px; color:var(--text-mute); margin-top:8px; font-weight:600; }
+.lbl-red{color:#d93025;font-weight:700}
+.lbl-blue{color:#1a5fd0;font-weight:700}
 </style>
 </head>
 <body>
@@ -208,7 +210,7 @@
     ['shopee','蝦皮'], ['rakuten','樂天'], ['amazon','亞馬遜'], ['b2bBorrow','商借B2B'],
     ['storePickup','門市店取'], ['storeB2B','門市B2B'], ['groupBuy','團購']
   ];
-  const RETURN_FIELDS = [['ecReturn','EC退貨'], ['storeRecall','門市撤貨'], ['returnShelved','上架數量']];   // 撤退貨進倉 = EC退貨 + 門市撤貨（自動加總存到 returnIn）
+  const RETURN_FIELDS = [['ecReturn','EC退貨'], ['storeRecall','門市撤貨'], ['returnShelved','撤退貨上架']];   // 撤退貨進倉 = EC退貨 + 門市撤貨（自動加總存到 returnIn）
   const OTHER_FIELDS = [['weeklyCollect','周徵貨量'], ['storeReturn','門市撤貨進倉']];
   // ====================
 
@@ -236,8 +238,8 @@
   }
 
   // ---------- 表單 ----------
-  function numRow(key,label){
-    return `<div class="row"><label for="f_${key}">${label}</label><input type="number" inputmode="numeric" min="0" id="f_${key}" data-key="${key}" placeholder="0"></div>`;
+  function numRow(key,label,cls){
+    return `<div class="row"><label for="f_${key}"${cls?' class="'+cls+'"':''}>${label}</label><input type="number" inputmode="numeric" min="0" id="f_${key}" data-key="${key}" placeholder="0"></div>`;
   }
   function buildForm(){
     $('formArea').innerHTML = `
@@ -248,8 +250,9 @@
       <div class="card"><h3>觀音新富倉</h3>
         ${numRow('ecReturn','EC退貨')}${numRow('storeRecall','門市撤貨')}
         <div class="row"><label>撤退貨進倉合計（自動計算）</label><div class="auto" id="retInOut">0</div></div>
-        ${numRow('returnShelved','上架數量')}
+        ${numRow('returnShelved','撤退貨上架','lbl-red')}
         <div class="row"><label>剩餘未上架數量（自動計算）</label><div class="auto" id="remainOut">0</div></div>
+        ${numRow('newArrival','新品追加上架','lbl-blue')}
       </div>
       <div class="card"><h3>新地延平倉</h3>
         ${OTHER_FIELDS.map(([k,l])=>numRow(k,l)).join('')}
@@ -258,7 +261,6 @@
           <button type="button" id="addStaff" class="addbtn">＋ 新增同仁</button>
           <div class="staffsum"><span>處理量合計</span><b id="staffTotal">0</b></div></div>
         ${numRow('recoveredPackages','撤貨出倉數量')}
-        ${numRow('newArrival','新品上架')}
       </div>`;
     document.querySelectorAll('#formArea input').forEach(i=> i.addEventListener('input', recalc));
     $('addStaff').addEventListener('click', ()=>{ addStaffRow('',''); });
@@ -368,7 +370,7 @@
     const date = $('dateIn').value;
     if(!date){ setStatus('請先選擇日期', 'err'); return; }
     const payload = { date, mode: $('ovrChk').checked ? 'overwrite' : 'add' };
-    [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['recoveredPackages'], ['newArrival','新品上架']].forEach(([k])=>{
+    [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['recoveredPackages'], ['newArrival','新品追加上架']].forEach(([k])=>{
       const v = val(k); if(v!=='') payload[k] = num(v);
     });
     const st = readStaff(); if(st.total){ payload.storeHandle = st.total; payload.storeHandleDetail = st.detail; }
@@ -407,7 +409,7 @@
   function recRowHtml(r){
     const total = r.total!==''&&r.total!==undefined ? num(r.total) : CHANNELS.reduce((s,[k])=>s+num(r[k]),0);
     return `<div class="rec"><div><div class="d">${esc(r.date)}</div>
-      <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}${(num(r.ecReturn)||num(r.storeRecall))?'（EC '+num(r.ecReturn)+'／門市 '+num(r.storeRecall)+'）':''}・上架 ${num(r.returnShelved)}・門市撤貨處理 ${num(r.storeHandle)}・撤貨出倉 ${num(r.recoveredPackages)}・新品上架 ${num(r.newArrival)}</div></div>
+      <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}${(num(r.ecReturn)||num(r.storeRecall))?'（EC '+num(r.ecReturn)+'／門市 '+num(r.storeRecall)+'）':''}・上架 ${num(r.returnShelved)}・門市撤貨處理 ${num(r.storeHandle)}・撤貨出倉 ${num(r.recoveredPackages)}・新品追加上架 ${num(r.newArrival)}</div></div>
       <button class="smallbtn" data-edit="${esc(r.date)}">編輯</button></div>`;
   }
   function renderRecords(){
@@ -538,7 +540,7 @@
     }).join('');
 
     // 5) 門市作業合計、同仁排行
-    const storeItems = [['weeklyCollect','周徵貨量'],['storeReturn','門市撤貨進倉'],['storeHandle','門市撤貨處理量'],['recoveredPackages','撤貨出倉數量'],['newArrival','新品上架']].map(([k,l])=>({l, v:S(k)}));
+    const storeItems = [['weeklyCollect','周徵貨量'],['storeReturn','門市撤貨進倉'],['storeHandle','門市撤貨處理量'],['recoveredPackages','撤貨出倉數量'],['newArrival','新品追加上架']].map(([k,l])=>({l, v:S(k)}));
     const staffMap = {};
     rows.forEach(r=>parseDetail(r.storeHandleDetail).forEach(p=>{ staffMap[p.name]=(staffMap[p.name]||0)+p.qty; }));
     const staffItems = Object.keys(staffMap).map(n=>({l:n, v:staffMap[n]})).sort((a,b)=>b.v-a.v);
@@ -556,7 +558,7 @@
       <div class="kpis">
         <div class="kpi"><div class="v sm">${fmt(S('storeHandle'))}</div><div class="l">門市撤貨處理</div></div>
         <div class="kpi"><div class="v sm">${fmt(S('recoveredPackages'))}</div><div class="l">撤貨出倉</div></div>
-        <div class="kpi"><div class="v sm">${fmt(S('newArrival'))}</div><div class="l">新品上架</div></div>
+        <div class="kpi"><div class="v sm">${fmt(S('newArrival'))}</div><div class="l">新品追加上架</div></div>
       </div>
 
       <div class="card"><h3>每日訂單量</h3>${legend(VG)}
