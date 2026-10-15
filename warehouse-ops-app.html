@@ -69,6 +69,16 @@
   .dtbl{ border-collapse:collapse; width:100%; font-size:14px; } .dtbl th,.dtbl td{ padding:6px 8px; text-align:right; border-top:1px solid var(--line); white-space:nowrap; } .dtbl th:first-child,.dtbl td:first-child{ text-align:left; } .dtbl th{ color:var(--text-mute); font-weight:700; }
   details.card summary{ font-weight:800; font-size:16px; cursor:pointer; }
   .dashsvg text{ font-family:var(--font-mono); }
+  .tab{ font-size:15px; }
+  .bxline{ display:flex; gap:8px; align-items:center; } .bxsel,.bxinput{ flex:1; min-width:0; padding:12px; font-size:17px; border:2px solid var(--line); border-radius:12px; background:#fff; color:var(--text); font-family:var(--font-body); } .bxinput{ font-family:var(--font-mono); }
+  .bxfile{ display:inline-block; text-align:center; cursor:pointer; } .bxok{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .bxcam video{ width:100%; border-radius:12px; margin-top:10px; background:#000; } .bxextra{ display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+  .bxbig{ font-family:var(--font-mono); } .bxbig .n{ font-size:40px; font-weight:800; color:var(--accent); } .bxbig .of{ font-size:17px; color:var(--text-mute); font-weight:700; }
+  .bar{ height:12px; background:var(--panel-2); border-radius:8px; overflow:hidden; } .bar .fill{ height:100%; background:var(--green); border-radius:8px; }
+  .bxstore{ padding:12px 14px; } .bxhead{ display:flex; justify-content:space-between; font-size:17px; margin-bottom:6px; } .bxhead .ok{ color:var(--green); font-weight:800; }
+  .bxrow{ display:flex; align-items:center; gap:8px; padding:9px 0; border-top:1px dashed var(--line); } .bxinfo{ flex:1; min-width:0; } .bxno{ font-weight:800; font-size:17px; } .bxno small{ font-family:var(--font-mono); color:var(--text-mute); font-size:12px; font-weight:600; word-break:break-all; } .bxsub{ font-size:13.5px; color:var(--text-mute); margin-top:2px; }
+  .bxrow.got .bxno{ color:var(--green); } .bxrow.extra .bxno{ color:var(--orange); } .bxrow.dmg{ background:#FFF3F2; }
+  .bxgo{ min-width:78px; } .bxgo.on{ background:#DDF5E8; border-color:var(--green); color:#0A7A41; } .bxdmg.on{ background:#FFE3E0; border-color:var(--red); color:var(--red); }
   .rangebar{ display:flex; gap:8px; margin-bottom:14px; }
   .rangebar .smallbtn.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
   .placeholder{ text-align:center; color:var(--text-mute); padding:28px 0; font-size:16px; }
@@ -235,13 +245,13 @@
         ${CHANNELS.map(([k,l])=>numRow(k,l)).join('')}
         <div class="totalbar"><span>訂單總計</span><b id="totalOut">0</b></div>
       </div>
-      <div class="card"><h3>撤退貨</h3>
+      <div class="card"><h3>觀音新富倉</h3>
         ${numRow('ecReturn','EC退貨')}${numRow('storeRecall','門市撤貨')}
         <div class="row"><label>撤退貨進倉合計（自動計算）</label><div class="auto" id="retInOut">0</div></div>
         ${numRow('returnShelved','上架數量')}
         <div class="row"><label>剩餘未上架數量（自動計算）</label><div class="auto" id="remainOut">0</div></div>
       </div>
-      <div class="card"><h3>新富倉</h3>
+      <div class="card"><h3>新地延平倉</h3>
         ${OTHER_FIELDS.map(([k,l])=>numRow(k,l)).join('')}
         <div class="staffbox"><div class="stitle">門市撤貨處理量（可分同仁）</div>
           <div id="staffRows"></div>
