@@ -166,20 +166,6 @@
           <button class="manualbtn" id="manualArriveBtn">✏️ 手動輸入（進倉）</button>
         </div>
 
-        <button class="bigscanbtn organize" id="scanOrganizeBtn" style="margin-top:16px;">
-          <div class="btnrow2">
-            <div class="iconbadge">🗂️</div>
-            <div class="btntext">
-              <div class="btitle">新品整新登記</div>
-              <span class="sub">掃描或輸入箱號，記錄新品整新完成</span>
-            </div>
-            <div class="todaycount" id="cntOrganize">0</div>
-          </div>
-        </button>
-        <div class="manualrow">
-          <button class="manualbtn" id="manualOrganizeBtn">✏️ 手動輸入（整新）</button>
-        </div>
-
         <button class="bigscanbtn depart" id="scanDepartBtn" style="margin-top:16px;">
           <div class="btnrow2">
             <div class="iconbadge">📤</div>
@@ -357,19 +343,15 @@
     if(!$('todayStrip')) return;
     const today = todayDateStr();
     const arrivedToday = allRecords.filter(r=> localDateStr(r.arrivedAt)===today);
-    const organizedToday = allRecords.filter(r=> localDateStr(r.organizedAt)===today);
     const departedToday = allRecords.filter(r=> localDateStr(r.departedAt)===today);
     const pendingRecs = allRecords.filter(r=> r.arrivedAt && !r.departedAt);
-    const pendingOrganize = allRecords.filter(r=> r.arrivedAt && !r.organizedAt).length;
     const pendingDepartQty = pendingRecs.reduce((s,r)=> s+(parseInt(r.qty,10)||0), 0);
 
     $('todayStrip').innerHTML = `
       <div class="tstripitem"><div class="n">${arrivedToday.length}</div><div class="l">今日到貨</div></div>
-      <div class="tstripitem"><div class="n">${pendingOrganize}</div><div class="l">待整新</div></div>
       <div class="tstripitem"><div class="n">${pendingRecs.length}</div><div class="l">待出艙（${pendingDepartQty}件）</div></div>
     `;
     if($('cntArrive')) $('cntArrive').textContent = arrivedToday.length;
-    if($('cntOrganize')) $('cntOrganize').textContent = organizedToday.length;
     if($('cntDepart')) $('cntDepart').textContent = departedToday.length;
   }
   function renderFooter(){
@@ -498,11 +480,11 @@
         html += `<div class="placeholder" style="padding:16px;">這天沒有排定要整新的店櫃</div>`;
         return;
       }
-      html += `<div class="weektablewrap"><table class="weektable"><thead><tr><th>店櫃</th><th>箱數進度</th></tr></thead><tbody>`;
+      html += `<div class="weektablewrap"><table class="weektable"><thead><tr><th>店櫃</th><th>已出艙／到貨</th></tr></thead><tbody>`;
       storesToday.forEach(store=>{
         const boxes = allRecords.filter(r=> r.storeCode===store.code && localDateStr(r.arrivedAt)>=cycleStart && localDateStr(r.arrivedAt)<=cycleEnd);
         const total = boxes.length;
-        const done = boxes.filter(r=>r.organizedAt).length;
+        const done = boxes.filter(r=>r.departedAt).length;
         html += `<tr><td><span class="wc">${escapeHtml(store.code)}</span><span class="wsmall">${escapeHtml(store.name)}・${escapeHtml(store.type||'')}</span></td><td>${total? `${done}/${total}` : '尚無到貨'}</td></tr>`;
       });
       html += `</tbody></table></div>`;
@@ -741,8 +723,6 @@
   });
   $('scanArriveBtn').addEventListener('click', ()=> openScanModal(false, 'arrive'));
   $('manualArriveBtn').addEventListener('click', ()=> openScanModal(true, 'arrive'));
-  $('scanOrganizeBtn').addEventListener('click', ()=> openScanModal(false, 'organize'));
-  $('manualOrganizeBtn').addEventListener('click', ()=> openScanModal(true, 'organize'));
   $('scanDepartBtn').addEventListener('click', ()=> openScanModal(false, 'depart'));
   $('manualDepartBtn').addEventListener('click', ()=> openScanModal(true, 'depart'));
 
