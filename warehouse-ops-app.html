@@ -187,7 +187,9 @@
 
   <div class="view" id="view-refurb">
     <div class="card"><h3>整理週別</h3>
-      <div class="wknav"><button type="button" id="rfPrev" class="smallbtn">‹ 上週</button><select id="rfWeekSel" class="wksel" aria-label="選擇週別"></select><button type="button" id="rfNext" class="smallbtn">下週 ›</button></div></div>
+      <div class="wknav"><button type="button" id="rfPrev" class="smallbtn">‹ 上週</button><select id="rfWeekSel" class="wksel" aria-label="選擇週別"></select><button type="button" id="rfNext" class="smallbtn">下週 ›</button></div>
+      <div class="wknav" style="margin-top:10px"><label for="rfDate" style="font-weight:700;white-space:nowrap">選日期</label><input type="date" id="rfDate" class="wksel" style="font-size:16px" aria-label="選日期自動帶出週別"><button type="button" id="rfThis" class="smallbtn">本週</button></div>
+      <div class="hint" id="rfDateHint" style="margin-top:6px"></div></div>
     <div class="card"><h3>今天整理的同仁 <small style="color:var(--text-mute);font-weight:600;">（輪值，最多選 2 位）</small></h3><div class="chips" id="rfStaff"></div></div>
     <div class="rangebar" id="rfGroups"></div>
     <div class="card" id="rfSum"></div>
@@ -666,6 +668,12 @@
       for(let o=hi; o>=lo; o--){ const m=new Date(base); m.setDate(m.getDate()+o*7); h += `<option value="${o}"${o===cur?' selected':''}>${rfWeekInfo(m).label}${o===0?'　★本週':''}</option>`; }
       $('rfWeekSel').innerHTML = h;
     })();
+    (function(){
+      const d = $('rfDate'), picked = d.dataset.picked, sun = new Date(rfMon); sun.setDate(sun.getDate()+6);
+      const f = x => x.getFullYear()+'-'+pad(x.getMonth()+1)+'-'+pad(x.getDate());
+      if(!(picked && picked >= f(rfMon) && picked <= f(sun))){ d.value = f(rfMon); d.dataset.picked = ''; }
+      $('rfDateHint').textContent = '目前週別：'+wk.label+'。可直接選日期，或用上方選單選週數（可選未來週別）。';
+    })();
     $('rfStaff').innerHTML = RF_STAFF.map(n=>`<button type="button" class="chip${rfStaffSel.indexOf(n)>=0?' on':''}" data-name="${esc(n)}">${esc(n)}</button>`).join('');
     $('rfGroups').innerHTML = RF_GROUPS.map(g=>{
       const n = rfStores.filter(s=>s.group===g).length;
@@ -752,6 +760,8 @@
   });
   $('rfGroups').addEventListener('click', e=>{ const b=e.target.closest('[data-g]'); if(!b) return; rfGroup=b.dataset.g; renderRefurb(); });
   $('rfWeekSel').addEventListener('change', e=>{ const m=mondayOf(new Date()); m.setDate(m.getDate()+Number(e.target.value)*7); rfMon=m; rfDraft = {}; renderRefurb(); });
+  $('rfDate').addEventListener('change', e=>{ const v=e.target.value; if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return; const [y,m,dd]=v.split('-').map(Number); rfMon = mondayOf(new Date(y,m-1,dd)); e.target.dataset.picked = v; rfDraft = {}; renderRefurb(); });
+  $('rfThis').addEventListener('click', ()=>{ rfMon = mondayOf(new Date()); $('rfDate').dataset.picked=''; rfDraft = {}; renderRefurb(); });
   $('rfPrev').addEventListener('click', ()=>{ rfMon.setDate(rfMon.getDate()-7); rfDraft = {}; renderRefurb(); });
   $('rfNext').addEventListener('click', ()=>{ rfMon.setDate(rfMon.getDate()+7); rfDraft = {}; renderRefurb(); });
   $('rfList').addEventListener('click', e=>{
