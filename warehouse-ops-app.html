@@ -186,10 +186,11 @@
   </div>
 
   <div class="view" id="view-refurb">
-    <div class="card"><h3>整理週別</h3>
-      <div class="wknav"><button type="button" id="rfPrev" class="smallbtn">‹ 上週</button><select id="rfWeekSel" class="wksel" aria-label="選擇週別"></select><button type="button" id="rfNext" class="smallbtn">下週 ›</button></div>
-      <div class="wknav" style="margin-top:10px"><label for="rfDate" style="font-weight:700;white-space:nowrap">選日期</label><input type="date" id="rfDate" class="wksel" style="font-size:16px" aria-label="選日期自動帶出週別"><button type="button" id="rfThis" class="smallbtn">本週</button></div>
-      <div class="hint" id="rfDateHint" style="margin-top:6px"></div></div>
+    <div class="card"><h3>整理日期（記錄做的是哪一天）</h3>
+      <input type="date" id="rfDate" class="wksel" style="width:100%;font-size:17px" aria-label="整理日期"></div>
+    <div class="card"><h3>整新週期（選日期會自動帶出，也可以自己選）</h3>
+      <select id="rfWeekSel" class="wksel" style="width:100%" aria-label="選擇週別"></select>
+      <div class="hint" id="rfCycleHint" style="margin-top:8px"></div></div>
     <div class="card"><h3>今天整理的同仁 <small style="color:var(--text-mute);font-weight:600;">（輪值，最多選 2 位）</small></h3><div class="chips" id="rfStaff"></div></div>
     <div class="rangebar" id="rfGroups"></div>
     <div class="card" id="rfSum"></div>
@@ -606,8 +607,8 @@
   // 儀表板：本週門市整新進度
   function renderDashRf(){
     const el = $('dashRf'); if(!el) return;
-    const wk = rfWeekInfo(mondayOf(new Date()));
-    if(!rfStores.length){ el.innerHTML = `<h3>本週門市整新　${wk.label}</h3><div class="hint">${apiReady()?'讀取中，或還沒有門市清單。':'還沒設定網址。'}</div>`; return; }
+    const wk = rfWeekInfo(cycleMon(new Date()));
+    if(!rfStores.length){ el.innerHTML = `<h3>本週門市整新　${cycleLabel(cycleMon(new Date()))}</h3><div class="hint">${apiReady()?'讀取中，或還沒有門市清單。':'還沒設定網址。'}</div>`; return; }
     const recs = rfRecs.filter(r=>r.week===wk.key);
     const rows = RF_GROUPS.map(g=>{
       const st = rfStores.filter(s=>s.group===g);
@@ -617,7 +618,7 @@
       return {g, total:st.length, done:done.length, going:going.length, avg: mins.length?Math.round(mins.reduce((a,b)=>a+b,0)/mins.length):0};
     }).filter(x=>x.total);
     const allT = rows.reduce((s,x)=>s+x.total,0), allD = rows.reduce((s,x)=>s+x.done,0);
-    el.innerHTML = `<h3>本週門市整新　${wk.label}</h3>
+    el.innerHTML = `<h3>本週門市整新　${cycleLabel(cycleMon(new Date()))}</h3>
       <div class="hint" style="margin:0 0 8px">全部 ${allT} 間，已完成 ${allD} 間（${allT?Math.round(allD/allT*100):0}%）</div>
       ${rows.map(x=>`<div class="barrow" data-tip="${x.g}排程\n完成 ${x.done} / ${x.total}\n整理中 ${x.going}${x.avg?'\n平均用時 '+x.avg+' 分鐘':''}"><div class="n">${x.g}</div><div class="t"><div class="f" style="width:${Math.round(x.done/x.total*100)}%;background:var(--s3)"></div></div><div class="c">${x.done}/${x.total}</div></div>${x.avg?`<div class="hint" style="margin:-4px 0 6px 94px">平均用時 ${x.avg} 分鐘</div>`:''}`).join('')}`;
   }
@@ -634,7 +635,14 @@
   let rfStores = [], rfRecs = [], rfGroup = RF_GROUPS[0], rfStaffSel = [], rfDraft = {}, rfBusy = false;
   try{ rfStaffSel = JSON.parse(localStorage.getItem('rfStaff')||'[]').filter(n=>RF_STAFF.indexOf(n)>=0).slice(0,2); }catch(e){}
   function mondayOf(d){ const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; }
-  let rfMon = mondayOf(new Date());
+  // 整新週期：每週五是第一天（週五 → 下週一 → 週二 → 週三），週期用「下週一」所在的週數命名
+  function cycleMon(d){ const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()), w=x.getDay(), m=mondayOf(x); if(w===5||w===6||w===0) m.setDate(m.getDate()+7); return m; }
+  const addD = (d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+  const WDN = ['日','一','二','三','四','五','六'];
+  const fmtMD = d => (d.getMonth()+1)+'/'+d.getDate()+'（'+WDN[d.getDay()]+'）';
+  const cycleLabel = m => { const a=addD(m,-3), b=addD(m,2); return (a.getMonth()+1)+'/'+a.getDate()+'（五）～ '+(b.getMonth()+1)+'/'+b.getDate()+'（三）'; };
+  const GROUP_OFFSET = {'週五':-3,'週一':0,'週二':1,'週三':2};
+  let rfMon = cycleMon(new Date());
   function rfWeekInfo(mon){
     const th = new Date(mon); th.setDate(th.getDate()+3);
     const y = th.getFullYear(), mon1 = mondayOf(new Date(y,0,4));
@@ -642,6 +650,7 @@
     const sun = new Date(mon); sun.setDate(sun.getDate()+6);
     return { key: y+'-W'+pad(wk), label: 'W'+pad(wk)+'（'+(mon.getMonth()+1)+'/'+mon.getDate()+' – '+(sun.getMonth()+1)+'/'+sun.getDate()+'）' };
   }
+  const rfDay = ()=> ($('rfDate') && $('rfDate').value) || todayStr();
   const nowHM = ()=>{ const d=new Date(); return pad(d.getHours())+':'+pad(d.getMinutes()); };
   const md = d => d ? String(d).slice(5).replace('-','/') : '';
   function dtMin(d,t){ const a=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d||'')), b=/^(\d{1,2}):(\d{2})/.exec(String(t||'')); return (a&&b) ? Date.UTC(+a[1],+a[2]-1,+a[3],+b[1],+b[2])/60000 : null; }
@@ -662,22 +671,17 @@
   function renderRefurb(){
     const wk = rfWeekInfo(rfMon);
     (function(){
-      const base = mondayOf(new Date()), cur = Math.round((rfMon-base)/604800000);
+      const base = cycleMon(new Date()), cur = Math.round((rfMon-base)/604800000);
       const lo = Math.min(-30, cur-2), hi = Math.max(30, cur+2);
       let h = '';
-      for(let o=hi; o>=lo; o--){ const m=new Date(base); m.setDate(m.getDate()+o*7); h += `<option value="${o}"${o===cur?' selected':''}>${rfWeekInfo(m).label}${o===0?'　★本週':''}</option>`; }
+      for(let o=hi; o>=lo; o--){ const m=new Date(base); m.setDate(m.getDate()+o*7); h += `<option value="${o}"${o===cur?' selected':''}>${cycleLabel(m)}${o===0?'　★目前':''}</option>`; }
       $('rfWeekSel').innerHTML = h;
     })();
-    (function(){
-      const d = $('rfDate'), picked = d.dataset.picked, sun = new Date(rfMon); sun.setDate(sun.getDate()+6);
-      const f = x => x.getFullYear()+'-'+pad(x.getMonth()+1)+'-'+pad(x.getDate());
-      if(!(picked && picked >= f(rfMon) && picked <= f(sun))){ d.value = f(rfMon); d.dataset.picked = ''; }
-      $('rfDateHint').textContent = '目前週別：'+wk.label+'。可直接選日期，或用上方選單選週數（可選未來週別）。';
-    })();
+    $('rfCycleHint').innerHTML = '整新週期：<b>'+fmtMD(addD(rfMon,-3))+'</b>（第一天）→ '+fmtMD(rfMon)+' → '+fmtMD(addD(rfMon,1))+' → <b>'+fmtMD(addD(rfMon,2))+'</b>（最後一天）。每週五開始新的一週。';
     $('rfStaff').innerHTML = RF_STAFF.map(n=>`<button type="button" class="chip${rfStaffSel.indexOf(n)>=0?' on':''}" data-name="${esc(n)}">${esc(n)}</button>`).join('');
     $('rfGroups').innerHTML = RF_GROUPS.map(g=>{
       const n = rfStores.filter(s=>s.group===g).length;
-      return `<button type="button" class="smallbtn${g===rfGroup?' active':''}" data-g="${g}">${g}排程 (${n})</button>`;
+      return `<button type="button" class="smallbtn${g===rfGroup?' active':''}" data-g="${g}">${g}排程 (${n})<br><small>${GROUP_OFFSET[g]!==undefined?fmtMD(addD(rfMon,GROUP_OFFSET[g])):''}</small></button>`;
     }).join('');
     const list = rfStores.filter(s=>s.group===rfGroup);
     let done=0, orig=0, fin=0;
@@ -730,15 +734,15 @@
     if(origV!=='') payload.original = num(origV);
     if(finV!=='') payload.finished = num(finV);
     if(act==='save'){ if(origV===''&&finV===''){ rfSay('請先填箱數','err'); return; } }
-    else if(act==='start'){ if(origV===''){ rfSay('請先確認「原本箱數」才能開始','err'); return; } payload.startDate = todayStr(); payload.start = nowHM(); }
-    else if(act==='end'){ if(finV===''){ rfSay('請先填「整完箱數」才能完成','err'); return; } payload.endDate = todayStr(); payload.end = nowHM(); }
+    else if(act==='start'){ if(origV===''){ rfSay('請先確認「原本箱數」才能開始','err'); return; } payload.startDate = rfDay(); payload.start = nowHM(); }
+    else if(act==='end'){ if(finV===''){ rfSay('請先填「整完箱數」才能完成','err'); return; } payload.endDate = rfDay(); payload.end = nowHM(); }
     else if(act==='editstart' || act==='editend'){
       const isS = act==='editstart', d0 = isS?cur.startDate:cur.endDate, t0 = isS?cur.start:cur.end;
       const t = window.prompt((isS?'修改開始時間':'修改完成時間')+'（格式：10/09 09:30，或只填 09:30）', md(d0)+' '+t0);
       if(t===null) return;
       const m = /^(?:(\d{1,2})[\/-](\d{1,2})\s+)?(\d{1,2})[:：](\d{2})$/.exec(String(t).trim());
       if(!m || Number(m[3])>23 || Number(m[4])>59){ rfSay('格式要像 10/09 09:30','err'); return; }
-      const yr = String(d0||todayStr()).slice(0,4);
+      const yr = String(d0||rfDay()).slice(0,4);
       const dd = m[1] ? yr+'-'+pad(Number(m[1]))+'-'+pad(Number(m[2])) : d0;
       payload[isS?'startDate':'endDate'] = dd; payload[isS?'start':'end'] = pad(Number(m[3]))+':'+m[4];
     }
@@ -759,11 +763,8 @@
     rfSay(''); renderRefurb();
   });
   $('rfGroups').addEventListener('click', e=>{ const b=e.target.closest('[data-g]'); if(!b) return; rfGroup=b.dataset.g; renderRefurb(); });
-  $('rfWeekSel').addEventListener('change', e=>{ const m=mondayOf(new Date()); m.setDate(m.getDate()+Number(e.target.value)*7); rfMon=m; rfDraft = {}; renderRefurb(); });
-  $('rfDate').addEventListener('change', e=>{ const v=e.target.value; if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return; const [y,m,dd]=v.split('-').map(Number); rfMon = mondayOf(new Date(y,m-1,dd)); e.target.dataset.picked = v; rfDraft = {}; renderRefurb(); });
-  $('rfThis').addEventListener('click', ()=>{ rfMon = mondayOf(new Date()); $('rfDate').dataset.picked=''; rfDraft = {}; renderRefurb(); });
-  $('rfPrev').addEventListener('click', ()=>{ rfMon.setDate(rfMon.getDate()-7); rfDraft = {}; renderRefurb(); });
-  $('rfNext').addEventListener('click', ()=>{ rfMon.setDate(rfMon.getDate()+7); rfDraft = {}; renderRefurb(); });
+  $('rfDate').addEventListener('change', e=>{ const v=e.target.value; if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return; const [y,m,dd]=v.split('-').map(Number); rfMon = cycleMon(new Date(y,m-1,dd)); rfDraft = {}; renderRefurb(); });
+  $('rfWeekSel').addEventListener('change', e=>{ const m=cycleMon(new Date()); m.setDate(m.getDate()+Number(e.target.value)*7); rfMon=m; rfDraft = {}; renderRefurb(); });
   $('rfList').addEventListener('click', e=>{
     const el = e.target.closest('[data-act]'); if(!el || el.disabled) return;
     const card = el.closest('.rfcard'); if(card) rfAct(card.dataset.code, el.dataset.act);
@@ -782,6 +783,7 @@
 
   // ---------- 啟動 ----------
   buildForm();
+  $('rfDate').value = todayStr();
   $('dateIn').value = todayStr();
   fillForm(todayStr());
   loadRecords().then(ok=>{ if(ok){ fillForm($('dateIn').value); } else if(apiReady()){ setStatus('讀取大表失敗，仍可填寫後送出', 'err'); } });
