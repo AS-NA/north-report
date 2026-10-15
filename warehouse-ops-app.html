@@ -251,7 +251,7 @@
         ${numRow('ecReturn','EC退貨')}${numRow('storeRecall','門市撤貨')}
         <div class="row"><label>撤退貨進倉合計（自動計算）</label><div class="auto" id="retInOut">0</div></div>
         ${numRow('returnShelved','撤退貨上架','lbl-red')}
-        <div class="row"><label>剩餘未上架數量（自動計算）</label><div class="auto" id="remainOut">0</div></div>
+        <div class="row"><label>累計剩餘未上架（前一天剩餘＋進倉－上架）</label><div class="auto" id="remainOut">0</div></div>
         ${numRow('newArrival','新品追加上架','lbl-blue')}
       </div>
       <div class="card"><h3>新地延平倉</h3>
@@ -300,7 +300,21 @@
     $('totalOut').textContent = total;
     if($('staffTotal')) $('staffTotal').textContent = readStaff().total;
     if($('retInOut')) $('retInOut').textContent = retIn();
-    $('remainOut').textContent = Math.max(0, retIn() - num(val('returnShelved')));
+    $('remainOut').textContent = remainPreview();
+  }
+  // 累計未上架：前一天剩餘 + 進倉 − 上架（最低 0）；新增模式則在當天已存的剩餘上再加減
+  function prevRemain(date){
+    let best = null;
+    records.forEach(r=>{ if(r.date < date && r.returnRemaining!=='' && r.returnRemaining!=null && (!best || r.date > best.date)) best = r; });
+    return best ? num(best.returnRemaining) : 0;
+  }
+  function remainPreview(){
+    const date = $('dateIn') ? $('dateIn').value : '';
+    const delta = retIn() - num(val('returnShelved'));
+    const cur = records.find(r=>r.date===date);
+    const overwrite = $('ovrChk') && $('ovrChk').checked;
+    const base = (cur && !overwrite && cur.returnRemaining!=='' && cur.returnRemaining!=null) ? num(cur.returnRemaining) : prevRemain(date);
+    return Math.max(0, base + delta);
   }
   function renderSummary(dateStr){
     const r = records.find(x=>x.date===dateStr);
@@ -377,7 +391,7 @@
     const anyChannel = CHANNELS.some(([k])=> val(k)!=='');
     if(anyChannel) payload.total = CHANNELS.reduce((s,[k])=> s+num(val(k)), 0);
     if(val('ecReturn')!=='' || val('storeRecall')!=='') payload.returnIn = retIn();
-    if(val('ecReturn')!=='' || val('storeRecall')!=='' || val('returnShelved')!=='') payload.returnRemaining = Math.max(0, retIn() - num(val('returnShelved')));
+    if(val('ecReturn')!=='' || val('storeRecall')!=='' || val('returnShelved')!=='') {}   // 剩餘未上架由後端累計計算
     if(Object.keys(payload).length<=1){ setStatus('還沒有填任何數字', 'err'); return; }
 
     const btn = $('submitBtn'); btn.disabled = true; btn.textContent = '送出中...'; setStatus('');
@@ -492,7 +506,8 @@
     const delta = prevSum>0 ? Math.round((sum-prevSum)/prevSum*100) : null;
     const S = k => rows.reduce((s,r)=>s+num(r[k]),0);
     const returnIn = S('returnIn'), shelved = S('returnShelved');
-    const pending = Math.max(0, returnIn - shelved);
+    const lastRem = rows.filter(r=>r.returnRemaining!==''&&r.returnRemaining!=null).slice(-1)[0];
+    const pending = lastRem ? num(lastRem.returnRemaining) : Math.max(0, returnIn - shelved);
     const peakI = totals.indexOf(Math.max(...totals));
 
     // 1) 每日訂單量（依通路群組堆疊）
@@ -573,7 +588,7 @@
 
       <div class="card"><h3>撤退貨：進倉 vs 上架</h3>${legend([{n:'撤退貨進倉',c:'var(--s1)'},{n:'上架數量',c:'var(--s2)'}])}
         <svg viewBox="0 0 ${W} ${rH}" width="100%">${retBars}</svg>
-        <div class="hint">期間累計：進倉 ${fmt(returnIn)}（EC退貨 ${fmt(S('ecReturn'))}、門市撤貨 ${fmt(S('storeRecall'))}）、上架 ${fmt(shelved)}、尚未上架 ${fmt(pending)}。</div></div>
+        <div class="hint">期間累計：進倉 ${fmt(returnIn)}（EC退貨 ${fmt(S('ecReturn'))}、門市撤貨 ${fmt(S('storeRecall'))}）、上架 ${fmt(shelved)}、目前累計尚未上架 ${fmt(pending)}。</div></div>
 
       <div class="card"><h3>門市作業合計</h3>${hbars(storeItems,'var(--s3)','')}</div>
 
