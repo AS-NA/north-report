@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <meta charset="UTF-8">
 <meta name="color-scheme" content="light">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -163,6 +165,7 @@
       <input type="date" class="datein" id="dateIn">
       <label class="ovr"><input type="checkbox" id="ovrChk"> 修正模式（輸入的數字會「取代」大表上的數字）</label>
       <div class="hint" id="dateHint"></div>
+      <div class="hint" id="backendNote" style="font-weight:700"></div>
     </div>
     <div id="formArea"></div>
   </div>
@@ -374,6 +377,11 @@
       // 大表是預先排好整年日期的，沒填資料的日子不算「有登錄」
       const hasData = r => CHANNELS.some(([k])=>num(r[k])) || ['returnIn','returnShelved','storeReturn','weeklyCollect','recoveredPackages','newArrival','storeHandle'].some(k=>num(r[k]));
       records = (json.records||[]).filter(r=>r.date && hasData(r));
+      const bn = $('backendNote');
+      if(bn){
+        if(num(json.cols) >= 23){ bn.style.color = '#1a7f37'; bn.textContent = '✓ 大表程式版本正常（'+(json.ver||'')+'，'+json.cols+' 欄）'; }
+        else { bn.style.color = '#d93025'; bn.textContent = '⚠ 大表程式是舊版（它回報：'+(json.cols!==undefined?json.cols+' 欄':'沒有欄數')+'、'+(json.ver?json.ver:'沒有版本標記')+'）。需要新版：23 欄、版本 v3-累計剩餘。請貼上新版 Apps Script，並在「管理部署作業」用「新版本」重新部署；網址需和這個 APP 設定的相同。'; }
+      }
       return true;
     }catch(e){ console.error(e); return false; }
   }
@@ -395,12 +403,12 @@
     if(Object.keys(payload).length<=1){ setStatus('還沒有填任何數字', 'err'); return; }
 
     const btn = $('submitBtn'); btn.disabled = true; btn.textContent = '送出中...'; setStatus('');
-    let ok = false, serverMode = null, serverCols = 0, lastErr = '';
+    let ok = false, serverMode = null, serverCols = 0, serverVer = '', lastErr = '';
     for(let attempt=1; attempt<=2 && !ok; attempt++){
       try{
         const res = await fetchWithTimeout(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) }, 15000);
         const json = await res.json();
-        if(json && json.success){ ok = true; serverMode = json.mode || null; serverCols = json.cols || 0; } else throw new Error((json&&json.error)||'save failed');
+        if(json && json.success){ ok = true; serverMode = json.mode || null; serverCols = json.cols || 0; serverVer = json.ver || ''; } else throw new Error((json&&json.error)||'save failed');
       }catch(e){
         console.error(e);
         lastErr = (e && e.name==='AbortError') ? '連線逾時' : String((e && e.message) || e);
@@ -409,7 +417,7 @@
     }
     btn.disabled = false; btn.textContent = '送出登錄';
     if(ok){
-      if(serverMode && serverCols < 23) setStatus('⚠ 大表程式不是最新版（還不認識「EC退貨/門市撤貨」欄位）：請把新版 Apps Script 貼上、儲存，再「管理部署作業 → 編輯 → 新版本」部署', 'err');
+      if(serverMode && serverCols < 23) setStatus('⚠ 大表程式不是最新版（送出時它回報 '+serverCols+' 欄、版本「'+(serverVer||'無')+'」，需要 23 欄）：請把新版 Apps Script 貼上、儲存，再「管理部署作業 → 編輯 → 新版本」部署。若頁面頂端顯示綠字，請按 Ctrl+F5 重新整理頁面（可能是舊的網頁快取）', 'err');
       else if(!serverMode) setStatus('⚠ 已寫入，但大表程式還是舊版（不會累加）：請到 Apps Script 重新部署新版本，並確認網址是同一個部署', 'err');
       else setStatus($('ovrChk').checked ? '✓ 已修正大表（'+date+'）' : '✓ 已累加到大表（'+date+'）', 'ok');
       await loadRecords(); fillForm(date);
