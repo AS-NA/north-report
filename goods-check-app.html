@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#F3F6FC; --panel:#FFFFFF; --panel-2:#EEF2FA; --line:#DCE3F0;
@@ -104,6 +105,12 @@
   .field label{ display:block; font-size:12.5px; font-weight:600; color:var(--text-mute); margin-bottom:6px; font-family:var(--font-mono); text-transform:uppercase; }
   .field{ margin-bottom:14px; }
   .field input[type=text]{ width:100%; padding:11px 13px; border-radius:14px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:16px; }
+  .mcard{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:14px; }
+  .mcard h3{ margin:0 0 10px; font-size:17px; font-weight:800; font-family:var(--font-display); }
+  .mrow{ display:flex; justify-content:space-between; gap:8px; align-items:center; padding:8px 0; border-top:1px solid var(--line); font-size:14px; }
+  .mrow:first-of-type{ border-top:none; } .mrow .a{ font-family:var(--font-mono); font-weight:700; } .mrow .b{ color:var(--text-mute); text-align:right; font-size:13px; }
+  .mtag{ display:inline-block; font-size:12px; font-weight:700; padding:3px 9px; border-radius:20px; } .mtag.ok{ background:rgba(58,174,114,.16); color:#2b8a57; } .mtag.miss{ background:rgba(217,96,75,.16); color:#c0432f; } .mtag.warn{ background:rgba(242,169,58,.2); color:#a86a0a; }
+  .msel{ width:100%; padding:11px 13px; border-radius:14px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-size:15.5px; margin-bottom:10px; }
   .btn{ display:block; width:100%; padding:12px; border-radius:14px; border:none; font-size:15.5px; font-weight:700; cursor:pointer; font-family:var(--font-display); text-align:center; }
   .btn.accent{ background:var(--accent); color:#fff; }
   .btn.ghost{ background:var(--panel-2); color:var(--text); border:1px solid var(--line); }
@@ -146,6 +153,7 @@
         <div class="tab" data-tab="log">今日紀錄</div>
         <div class="tab" data-tab="admin">管理端</div>
         <div class="tab" data-tab="week">週進度</div>
+        <div class="tab" data-tab="manifest">出貨單</div>
       </div>
 
       <!-- SCAN TAB -->
@@ -218,6 +226,28 @@
         <div id="weekTableWrap"></div>
       </div>
 
+      <!-- MANIFEST TAB -->
+      <div id="tab-manifest" style="display:none;">
+        <div class="mcard">
+          <h3>① 匯入出貨單</h3>
+          <input type="file" id="mFiles" accept=".xlsx,.xls" multiple style="width:100%; margin-bottom:10px;">
+          <div id="mPreview"></div>
+          <button class="btn accent" id="mImportBtn" style="display:none;">匯入全部</button>
+          <div class="note">一次可以選好幾份檔案。同一份重複上傳不會重複匯入。</div>
+        </div>
+        <div class="mcard">
+          <h3>② 標籤破損？用日期＋箱號查詢</h3>
+          <select class="msel" id="mDateSel"></select>
+          <input type="text" class="searchbox" id="mBoxNo" inputmode="numeric" placeholder="輸入箱號（例如 11）或裝箱單號後幾碼" style="margin-bottom:10px;">
+          <button class="btn accent" id="mSearchBtn">查詢這一箱</button>
+          <div id="mResult" style="margin-top:12px;"></div>
+        </div>
+        <div class="mcard">
+          <h3>③ 缺箱比對</h3>
+          <div id="mMissing"></div>
+        </div>
+      </div>
+
       <div class="appfooter" id="footerInfo"></div>
     </main>
   </div>
@@ -269,6 +299,9 @@
   const $ = id => document.getElementById(id);
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyFmPFL7HpUcj33tUViRSaJj9AZPP4VEJSGhZsYpwNHbJJoXYsFgkL9kk6-h85qKCUT/exec';
 
+  // 出貨單清單用的獨立後端（見 manifest-apps-script），貼上部署網址；留空就不啟用出貨單功能
+  const MANIFEST_URL = '';
+
   let allRecords = [];
   let allZones = {}; // boxCode -> zone, from backend reference sheet
   let allStores = {}; // storeCode -> {code,name,type,weekday}
@@ -317,12 +350,13 @@
     t.addEventListener('click', ()=>{
       document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
       t.classList.add('active');
-      ['scan','log','admin','week'].forEach(name=>{
+      ['scan','log','admin','week','manifest'].forEach(name=>{
         $('tab-'+name).style.display = (name===t.dataset.tab) ? 'block' : 'none';
       });
       if(t.dataset.tab==='log') renderLog();
       if(t.dataset.tab==='admin') renderAdmin();
       if(t.dataset.tab==='week') renderWeek();
+      if(t.dataset.tab==='manifest') loadManifest();
     });
   });
 
@@ -337,6 +371,7 @@
       lastLoadedAt = new Date();
       renderFooter();
       renderHomeStats();
+      if(manifestLoaded && $('mMissing')) renderManifest();
     }catch(e){ console.error(e); }
   }
   function renderHomeStats(){
@@ -432,9 +467,178 @@
       actionHtml = `<span class="action done">此箱已完成到貨與出艙</span>`;
       metaHtml = `到貨　${fmtTime(r.arrivedAt)}<br>出艙　${fmtTime(r.departedAt)}<br>停留　${fmtDuration(r.arrivedAt, r.departedAt)}<br>件數　${r.qty||1} 件`;
     }
+    const mi = manifestInfoHtml(r.boxCode||boxCode); if(mi) metaHtml += '<br>'+mi;
     board.className = 'resultboard show';
     board.innerHTML = `<div class="boxno">${escapeHtml(r.boxCode||boxCode)}</div><div class="zone">${escapeHtml(zone)}</div>${actionHtml}<div class="meta">${metaHtml}</div>${siblingHtml}`;
   }
+
+  // ================= 出貨單（應到箱清單） =================
+  let manifestBoxes = [], manifestLoaded = false, mPending = [];
+  const manifestOn = () => !!MANIFEST_URL;
+  const isoMD = d => String(d||'').slice(5).replace('-','/');
+  function arrivedRec(code){ return allRecords.find(r=> r.boxCode===code && r.arrivedAt); }
+  function storeLabel(code){ const s = allStores[code]; return s ? (code+' '+(s.name||'')) : code; }
+  function manifestInfoHtml(code){
+    if(!manifestLoaded || !manifestBoxes.length) return '';
+    const b = manifestBoxes.find(x=>x.code===code);
+    if(!b) return '<span style="color:#FFB4A6;">⚠ 這個箱號不在已匯入的出貨單內</span>';
+    return `出貨單　${escapeHtml(storeLabel(b.store))}・${b.styles} 款 ${b.qty} 件（出貨 ${escapeHtml(isoMD(b.shipDate))}）`;
+  }
+
+  // 解析一份出貨單 Excel：自動找表頭（箱號、裝箱單號、店鋪…），日期和批次從上方標題列抓
+  function cellStr(v){ return v==null ? '' : String(v).trim(); }
+  function parseManifestRows(rows, fileName){
+    const colRe = { no:/^箱[號号]$/, code:/(裝|装).*(單|单).*(號|号)/, store:/店[鋪铺]/, barcode:/條碼|条码/, style:/款[號号]/, name:/品名/, spec:/規格|规格/, qty:/數量|数量/ };
+    let hi = -1, col = {};
+    for(let i=0;i<Math.min(rows.length,20);i++){
+      const c = {};
+      (rows[i]||[]).forEach((v,j)=>{ const t = cellStr(v); for(const k in colRe){ if(c[k]===undefined && colRe[k].test(t)) c[k]=j; } });
+      if(c.code!==undefined && c.store!==undefined){ hi = i; col = c; break; }
+    }
+    if(hi<0) throw new Error('找不到表頭（需要「裝箱單號」「店鋪」欄）');
+    let shipDate = '', batch = '';
+    for(let i=0;i<hi;i++){ (rows[i]||[]).forEach(v=>{
+      const t = cellStr(v);
+      let m = t.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/) || t.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+      if(m && !shipDate) shipDate = m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+      if(!batch && /批次/.test(t)) batch = t;
+    }); }
+    if(!shipDate) throw new Error('找不到出貨日期（標題列需要像「日期：2026年9月11日」）');
+    const order = [], map = {};
+    for(let i=hi+1;i<rows.length;i++){
+      const r = rows[i] || [];
+      const code = cellStr(r[col.code]);
+      if(!code) continue;
+      if(!map[code]){ map[code] = { no: col.no!==undefined ? cellStr(r[col.no]) : '', code, store: cellStr(r[col.store]), items: [] }; order.push(code); }
+      map[code].items.push({ barcode: cellStr(r[col.barcode]), style: cellStr(r[col.style]), name: cellStr(r[col.name]), spec: cellStr(r[col.spec]), qty: Number(r[col.qty]) || 0 });
+    }
+    const boxes = order.map(c=>map[c]);
+    return { file: fileName, shipDate, batch, boxes, pcs: boxes.reduce((s,b)=>s+b.items.reduce((a,it)=>a+it.qty,0),0) };
+  }
+  function parseManifestWorkbook(wb, fileName){
+    let lastErr = null;
+    for(const name of wb.SheetNames){
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, defval:'', raw:true });
+      try{ return parseManifestRows(rows, fileName); }catch(e){ lastErr = e; }
+    }
+    throw lastErr || new Error('讀不到資料');
+  }
+  window.__gcParseManifest = parseManifestWorkbook;   // 測試用
+
+  function readFileBuf(f){ return new Promise((res,rej)=>{ const fr = new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=()=>rej(fr.error); fr.readAsArrayBuffer(f); }); }
+  $('mFiles').addEventListener('change', async (e)=>{
+    mPending = [];
+    const files = Array.from(e.target.files || []);
+    if(!manifestOn()){ $('mPreview').innerHTML = '<div class="note" style="color:var(--red)">尚未設定出貨單後端網址（MANIFEST_URL）</div>'; return; }
+    if(typeof XLSX==='undefined'){ $('mPreview').innerHTML = '<div class="note" style="color:var(--red)">Excel 讀取套件沒有載入（需要網路），請重新整理頁面</div>'; return; }
+    for(const f of files){
+      try{
+        const wb = XLSX.read(new Uint8Array(await readFileBuf(f)), { type:'array' });
+        mPending.push({ ok:true, data: parseManifestWorkbook(wb, f.name) });
+      }catch(err){ mPending.push({ ok:false, file:f.name, err:String(err.message||err) }); }
+    }
+    renderPending();
+  });
+  function renderPending(){
+    $('mPreview').innerHTML = mPending.map(p=> p.ok
+      ? `<div class="mrow"><div><div class="a">${escapeHtml(p.data.file)}</div><div class="b" style="text-align:left">出貨 ${escapeHtml(p.data.shipDate)}${p.data.batch?'・'+escapeHtml(p.data.batch):''}</div></div><div class="b">${p.data.boxes.length} 箱・${p.data.pcs} 件</div></div>`
+      : `<div class="mrow"><div class="a">${escapeHtml(p.file)}</div><div class="b" style="color:var(--red)">${escapeHtml(p.err)}</div></div>`).join('');
+    $('mImportBtn').style.display = mPending.some(p=>p.ok) ? 'block' : 'none';
+  }
+  $('mImportBtn').addEventListener('click', async ()=>{
+    const btn = $('mImportBtn'); btn.disabled = true;
+    const lines = [];
+    for(const p of mPending.filter(x=>x.ok)){
+      btn.textContent = '匯入中：'+p.data.file;
+      try{
+        const res = await fetch(MANIFEST_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(Object.assign({ action:'import' }, p.data)) });
+        const j = await res.json();
+        if(!j || !j.success) throw new Error((j&&j.error)||'匯入失敗');
+        lines.push(`✓ ${p.data.file}：新增 ${j.added} 箱${j.skipped?`，略過 ${j.skipped} 箱（已匯入過）`:''}`);
+      }catch(err){ lines.push(`✗ ${p.data.file}：${err.message||err}`); }
+    }
+    btn.disabled = false; btn.textContent = '匯入全部'; btn.style.display = 'none';
+    $('mPreview').innerHTML = lines.map(l=>`<div class="mrow"><div class="a" style="font-size:13px">${escapeHtml(l)}</div></div>`).join('');
+    mPending = []; $('mFiles').value = '';
+    await loadManifest(true);
+  });
+
+  async function loadManifest(force){
+    if(!manifestOn()){ $('mMissing').innerHTML = '<div class="placeholder">尚未設定出貨單後端網址（MANIFEST_URL）</div>'; return; }
+    try{
+      const res = await fetch(MANIFEST_URL + '?t=' + Date.now());
+      const j = await res.json();
+      manifestBoxes = (j && j.boxes) || []; manifestLoaded = true;
+    }catch(e){ console.error(e); if($('mMissing')) $('mMissing').innerHTML = '<div class="placeholder">讀取出貨單失敗，請稍後再試</div>'; return; }
+    renderManifest();
+  }
+  function manifestDates(){ return Array.from(new Set(manifestBoxes.map(b=>b.shipDate))).sort().reverse(); }
+  function renderManifest(){
+    const dates = manifestDates(), keep = $('mDateSel').value;
+    $('mDateSel').innerHTML = dates.length ? dates.map(d=>`<option value="${d}">${escapeHtml(d)}（${manifestBoxes.filter(b=>b.shipDate===d).length} 箱）</option>`).join('') : '<option value="">尚未匯入出貨單</option>';
+    if(keep && dates.indexOf(keep)>=0) $('mDateSel').value = keep;
+    if(!dates.length){ $('mMissing').innerHTML = '<div class="placeholder">還沒有匯入任何出貨單</div>'; return; }
+    $('mMissing').innerHTML = dates.map(d=>{
+      const list = manifestBoxes.filter(b=>b.shipDate===d);
+      const miss = list.filter(b=>!arrivedRec(b.code));
+      const batch = list[0] && list[0].batch ? '・'+escapeHtml(list[0].batch) : '';
+      return `<div style="margin-bottom:14px;"><div style="font-weight:800; margin-bottom:6px;">${escapeHtml(d)}${batch}　<span class="mtag ${miss.length?'miss':'ok'}">已到 ${list.length-miss.length}/${list.length}</span></div>`
+        + (miss.length ? miss.map(b=>`<div class="mrow"><div><div class="a">箱 ${escapeHtml(b.no)}・${escapeHtml(storeLabel(b.store))}</div><div class="b" style="text-align:left">${escapeHtml(b.code)}</div></div><div style="text-align:right"><span class="mtag miss">未到</span><div class="b">${b.styles}款 ${b.qty}件</div></div></div>`).join('') : '<div class="note" style="color:var(--green)">✓ 這批的箱子都到齊了</div>')
+        + '</div>';
+    }).join('');
+  }
+
+  // 標籤破損：用出貨日期 + 箱號查詢，確認後手動登記到倉
+  let mFound = null, mType = '新品';
+  function findBoxes(date, q){
+    q = String(q||'').trim(); if(!q) return [];
+    const list = manifestBoxes.filter(b=>b.shipDate===date);
+    const exact = list.filter(b=> String(b.no)===q || b.code===q);
+    if(exact.length) return exact;
+    return list.filter(b=> b.code.endsWith(q));
+  }
+  $('mSearchBtn').addEventListener('click', async ()=>{
+    if(!manifestLoaded) await loadManifest();
+    const date = $('mDateSel').value, q = $('mBoxNo').value;
+    const hits = findBoxes(date, q);
+    if(!date){ $('mResult').innerHTML = '<div class="note">請先匯入出貨單</div>'; return; }
+    if(!hits.length){ $('mResult').innerHTML = `<div class="note" style="color:var(--red)">這個出貨日期找不到箱號「${escapeHtml(q)}」</div>`; return; }
+    if(hits.length>1){ $('mResult').innerHTML = hits.map(b=>`<div class="mrow"><div class="a">箱 ${escapeHtml(b.no)}・${escapeHtml(b.code)}</div><button class="refreshsmall" data-pick="${escapeHtml(b.code)}">選這箱</button></div>`).join(''); return; }
+    showFound(hits[0]);
+  });
+  $('mResult').addEventListener('click', (e)=>{ const b = e.target.closest('[data-pick]'); if(b){ const box = manifestBoxes.find(x=>x.code===b.dataset.pick && x.shipDate===$('mDateSel').value); if(box) showFound(box); } });
+  async function showFound(b){
+    mFound = b; mType = '新品';
+    const ar = arrivedRec(b.code);
+    $('mResult').innerHTML = `<div style="background:var(--panel-2); border-radius:14px; padding:12px;">
+      <div class="a" style="font-family:var(--font-mono); font-weight:800;">${escapeHtml(b.code)}</div>
+      <div style="margin:4px 0 8px;">箱 ${escapeHtml(b.no)}・${escapeHtml(storeLabel(b.store))}・${b.styles} 款 ${b.qty} 件　${ar?`<span class="mtag ok">已到倉 ${escapeHtml(fmtTime(ar.arrivedAt))}</span>`:'<span class="mtag miss">尚未到倉</span>'}</div>
+      <details><summary style="cursor:pointer; font-size:14px;">看箱內品項</summary><div id="mItems" class="note">讀取中...</div></details>
+      ${ar ? '' : `<div class="field" style="margin-top:12px;"><label>類型</label><div class="filterrow"><button class="filterchip active" type="button" data-mtype="新品">新品</button><button class="filterchip" type="button" data-mtype="追加">追加</button></div></div>
+      <label style="display:flex; gap:8px; align-items:center; margin:8px 0;"><input type="checkbox" id="mDamaged" checked> 標籤破損</label>
+      <input type="text" class="searchbox" id="mNote" placeholder="備註（選填）">
+      <button class="btn accent" id="mArriveBtn">確認到倉登記</button>`}
+      <div id="mMsg" class="note"></div></div>`;
+    fetch(MANIFEST_URL+'?action=items&code='+encodeURIComponent(b.code)).then(r=>r.json()).then(j=>{
+      const its = (j&&j.items)||[];
+      $('mItems').innerHTML = its.length ? its.map(it=>`${escapeHtml(it.style)} ${escapeHtml(it.name)} ${escapeHtml(it.spec)} × ${it.qty}`).join('<br>') : '沒有品項資料';
+    }).catch(()=>{ const el=$('mItems'); if(el) el.textContent='讀取失敗'; });
+  }
+  $('mResult').addEventListener('click', (e)=>{
+    const t = e.target.closest('[data-mtype]'); if(t){ mType = t.dataset.mtype; document.querySelectorAll('#mResult [data-mtype]').forEach(x=>x.classList.toggle('active', x===t)); }
+  });
+  $('mResult').addEventListener('click', async (e)=>{
+    if(!e.target.closest('#mArriveBtn') || !mFound) return;
+    const btn = $('mArriveBtn'); btn.disabled = true; btn.textContent = '登記中...';
+    const json = await submitScan(mFound.code, mFound.qty || 1, 'arrive', mType);
+    if(!json){ btn.disabled = false; btn.textContent = '確認到倉登記'; return; }
+    if(json.success && (json.stage==='arrive' || json.stage==='already_arrived')){
+      try{ await fetch(MANIFEST_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'note', code:mFound.code, shipDate:mFound.shipDate, damaged:$('mDamaged').checked, note:$('mNote').value, operator: operatorName }) }); }catch(err){ console.error(err); }
+      $('mMsg').innerHTML = json.stage==='arrive' ? `<span style="color:var(--green); font-weight:700;">✓ 已登記到倉（${escapeHtml(mFound.code)}）</span>` : '⚠ 這箱之前已經進倉過了';
+      btn.style.display = 'none';
+      await refreshData(); renderManifest(); renderHomeStats();
+    }else{ btn.disabled = false; btn.textContent = '確認到倉登記'; $('mMsg').innerHTML = '<span style="color:var(--red)">送出失敗，請檢查網路後再試一次</span>'; }
+  });
 
   // ---- week progress tab ----
   function fridayAnchorDate(dateStr){
@@ -729,6 +933,7 @@
   // init
   loadOperator();
   refreshData();
+  if(manifestOn()) loadManifest();
 })();
 </script>
 </body>
