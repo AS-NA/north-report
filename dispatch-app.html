@@ -610,23 +610,47 @@
     if(!rec || !rec.state) return null;
     try{ const p = typeof rec.state==='string' ? JSON.parse(rec.state) : rec.state; return (p && p.leave) ? p.leave : null; }catch(e){ return null; }
   }
+  let regionPick = null;   // 正在選休假類別的司機名字
   function renderRegionList(){
     const list = DRIVERS.filter(d=>d.region===currentRegion);
     const leaveN = list.filter(d=>driverLeaveToday(d)).length;
+    const btnCss = 'font-size:12.5px; font-weight:700; padding:7px 12px; border-radius:10px; border:1px solid var(--accent-2); background:var(--panel); color:var(--accent-2); cursor:pointer; font-family:var(--font-body); white-space:nowrap;';
     $('regionDriverList').innerHTML = (leaveN ? `<div class="hint" style="margin:0 0 10px; font-size:12.5px; color:var(--text-mute);">今天休假：${leaveN} 人（${LEAVE_TYPES.map(t=>t+' '+list.filter(d=>{const l=driverLeaveToday(d);return l&&l.type===t;}).length).join('、')}）</div>` : '') + list.map(d=>{
-      const lv = driverLeaveToday(d);
+      const lv = driverLeaveToday(d), n = escapeHtml(d.name);
+      let right;
+      if(lv) right = `<div style="display:flex; align-items:center; gap:8px;"><span style="font-size:12.5px; font-weight:800; color:var(--accent-2); background:rgba(255,140,60,.14); padding:5px 11px; border-radius:999px; white-space:nowrap;">🏖 今日${leaveLabel(lv)}</span><button type="button" data-leave-cancel="${n}" style="${btnCss}">取消</button></div>`;
+      else if(regionPick===d.name) right = `<div style="display:flex; align-items:center; gap:6px;">${LEAVE_TYPES.map(t=>`<button type="button" data-leave-type="${t}" data-leave-name="${n}" style="${btnCss}">${t}</button>`).join('')}<button type="button" data-leave-x="1" style="${btnCss} border-color:var(--line); color:var(--text-mute);">✕</button></div>`;
+      else right = `<div style="display:flex; align-items:center; gap:10px;"><button type="button" data-leave-open="${n}" style="${btnCss}">🏖 休假</button><div class="arrow">›</div></div>`;
       return `
-      <div class="drivercard" data-name="${escapeHtml(d.name)}" style="${lv?'opacity:.75;':''}">
-        <div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.code} · ${d.hours}</div></div>
-        ${lv ? `<div style="font-size:12.5px; font-weight:800; color:var(--accent-2); background:rgba(255,140,60,.14); padding:5px 11px; border-radius:999px; white-space:nowrap;">🏖 今日${leaveLabel(lv)}</div>` : '<div class="arrow">›</div>'}
+      <div class="drivercard" data-name="${n}" style="${lv?'opacity:.8;':''}">
+        <div><div class="n">${n}</div><div class="c">${d.code} · ${d.hours}</div></div>
+        ${right}
       </div>`;
     }).join('');
     document.querySelectorAll('#regionDriverList .drivercard').forEach(c=>{
-      c.addEventListener('click', ()=>openDriver(currentRegion, c.dataset.name));
+      c.addEventListener('click', e=>{ if(e.target.closest('button')) return; openDriver(currentRegion, c.dataset.name); });
     });
+    document.querySelectorAll('#regionDriverList [data-leave-open]').forEach(b=> b.addEventListener('click', ()=>{ regionPick = b.dataset.leaveOpen; renderRegionList(); }));
+    document.querySelectorAll('#regionDriverList [data-leave-x]').forEach(b=> b.addEventListener('click', ()=>{ regionPick = null; renderRegionList(); }));
+    document.querySelectorAll('#regionDriverList [data-leave-type]').forEach(b=> b.addEventListener('click', ()=> setDriverLeave(b.dataset.leaveName, b.dataset.leaveType)));
+    document.querySelectorAll('#regionDriverList [data-leave-cancel]').forEach(b=> b.addEventListener('click', ()=>{ if(confirm('要取消 '+b.dataset.leaveCancel+' 的休假嗎？')) setDriverLeave(b.dataset.leaveCancel, null); }));
+  }
+  // 直接在區域名單替某位司機登記／取消休假（不用進到司機頁）
+  async function setDriverLeave(name, type){
+    const d = findDriver(currentRegion, name); if(!d) return;
+    regionPick = null;
+    const prevDriver = currentDriver, prevState = currentState;
+    currentDriver = d;
+    loadCurrentState();                       // 合併本機＋雲端，保留他當天已有的打卡紀錄
+    if(type){ currentState.leave = { at: new Date().toISOString(), type }; }
+    else { currentState.leave = null; currentState.leaveCancelAt = new Date().toISOString(); }
+    const ok = await saveCurrentState();
+    currentDriver = prevDriver; currentState = prevState;
+    if(!ok) alert('同步失敗，已先存在這台裝置；請確認網路後再試一次。');
+    renderRegionList();
   }
   function openRegion(region){
-    currentRegion = region;
+    currentRegion = region; regionPick = null;
     $('regionTitle').textContent = region+'區';
     renderRegionList();
     showView('view-region');
