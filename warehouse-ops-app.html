@@ -144,11 +144,15 @@
   <div class="view active" id="view-entry">
     <div id="cfgBanner" class="banner" style="display:none;">還沒設定 Apps Script 網址：請把程式最上面的 API_URL 換成你部署後的網址。</div>
     <div class="sumgrid">
-      <div class="sumcard"><div class="ttl">今日進貨 <small>(撤退貨)</small></div>
+      <div class="sumcard"><div class="ttl">今日進貨 <small>(新品)</small></div>
+        <div class="pbar"><i id="nwBar" style="width:0%;background:#1a5fd0"></i></div>
+        <div class="big" id="nwTxt">-</div>
+        <div class="two"><div>昨日<b id="nwPrev">-</b></div><div>近7日均<b id="nwAvg">-</b></div></div></div>
+      <div class="sumcard"><div class="ttl">今日撤退貨</div>
         <div class="pbar"><i id="inBar" style="width:0%;background:var(--green)"></i></div>
         <div class="big" id="inTxt">-</div>
-        <div class="two"><div>待上架<b id="inWait">-</b></div><div>已上架<b id="inDone">-</b></div></div></div>
-      <div class="sumcard"><div class="ttl">今日出貨 <small>(訂單)</small></div>
+        <div class="two"><div>累計待上架<b id="inWait">-</b></div><div>今日上架<b id="inDone">-</b></div></div></div>
+      <div class="sumcard" style="grid-column:1 / -1"><div class="ttl">今日出貨 <small>(訂單)</small></div>
         <div class="pbar"><i id="outBar" style="width:0%;background:var(--orange)"></i></div>
         <div class="big" id="outTxt">-</div>
         <div class="two"><div>撤貨出倉<b id="outPkg">-</b></div><div>撤貨處理<b id="outTrip">-</b></div></div></div>
@@ -306,11 +310,7 @@
     $('remainOut').textContent = remainPreview();
   }
   // 累計未上架：前一天剩餘 + 進倉 − 上架（最低 0）；新增模式則在當天已存的剩餘上再加減
-  function prevRemain(date){
-    let best = null;
-    records.forEach(r=>{ if(r.date < date && r.returnRemaining!=='' && r.returnRemaining!=null && (!best || r.date > best.date)) best = r; });
-    return best ? num(best.returnRemaining) : 0;
-  }
+  function prevRemain(date){ return activeRemain(date, false); }
   function remainPreview(){
     const date = $('dateIn') ? $('dateIn').value : '';
     const delta = retIn() - num(val('returnShelved'));
@@ -319,15 +319,27 @@
     const base = (cur && !overwrite && cur.returnRemaining!=='' && cur.returnRemaining!=null) ? num(cur.returnRemaining) : prevRemain(date);
     return Math.max(0, base + delta);
   }
+  // 累計待上架：取「最後一個有撤退貨進倉或上架」那天的累計剩餘（沒有進出的日子不變）
+  function activeRemain(uptoDate, inclusive){
+    const act = records.filter(x=> (inclusive ? x.date<=uptoDate : x.date<uptoDate) && (num(x.returnIn)||num(x.returnShelved))).sort((a,b)=> a.date<b.date?-1:1);
+    return act.length ? num(act[act.length-1].returnRemaining) : 0;
+  }
   function renderSummary(dateStr){
     const r = records.find(x=>x.date===dateStr);
     const sorted = [...records].sort((a,b)=> a.date<b.date?-1:1).filter(x=>x.date<dateStr).slice(-7);
     const dt = x => (x.total!==''&&x.total!==undefined) ? num(x.total) : CHANNELS.reduce((s,[k])=>s+num(x[k]),0);
     const rin = r?num(r.returnIn):0, rsh = r?num(r.returnShelved):0, tot = r?dt(r):0;
     const avg = sorted.length ? sorted.reduce((s,x)=>s+dt(x),0)/sorted.length : 0;
+    // 進貨（新品追加上架）
+    const nw = r?num(r.newArrival):0, nwAvg = sorted.length ? sorted.reduce((s,x)=>s+num(x.newArrival),0)/sorted.length : 0, nwPrev = sorted.length ? num(sorted[sorted.length-1].newArrival) : 0;
+    $('nwBar').style.width = (nwAvg? Math.min(100,Math.round(nw/nwAvg*100)):(nw?100:0))+'%';
+    $('nwTxt').innerHTML = r ? ('<span class="n">'+nw+'</span><span class="of"> 件</span><div class="sub">新品追加上架</div>') : '尚未登錄';
+    $('nwPrev').textContent = sorted.length ? nwPrev : '-'; $('nwAvg').textContent = sorted.length ? Math.round(nwAvg) : '-';
+    // 撤退貨（EC退貨＋門市撤貨）
+    const wait = r ? activeRemain(dateStr, true) : '-';
     $('inBar').style.width = (rin? Math.min(100,Math.round(rsh/rin*100)):0)+'%';
-    $('inTxt').innerHTML = r ? ('<span class="n">'+rsh+'</span><span class="of"> / '+rin+' 件</span><div class="sub">上架率 '+(rin?Math.round(rsh/rin*100):0)+'%</div>') : '尚未登錄';
-    $('inWait').textContent = r ? Math.max(0,rin-rsh) : '-'; $('inDone').textContent = r ? rsh : '-';
+    $('inTxt').innerHTML = r ? ('<span class="n">'+rin+'</span><span class="of"> 件進倉</span><div class="sub">'+((num(r.ecReturn)||num(r.storeRecall))?'EC '+num(r.ecReturn)+'／門市 '+num(r.storeRecall):'EC退貨＋門市撤貨')+'</div>') : '尚未登錄';
+    $('inWait').textContent = wait; $('inDone').textContent = r ? rsh : '-';
     $('outBar').style.width = (avg? Math.min(100,Math.round(tot/avg*100)):(tot?100:0))+'%';
     $('outTxt').innerHTML = r ? ('<span class="n">'+tot+'</span><span class="of"> 單</span><div class="sub">'+(avg?'近7日均 '+Math.round(avg):'今日合計')+'</div>') : '尚未登錄';
     $('outPkg').textContent = r ? num(r.recoveredPackages) : '-'; $('outTrip').textContent = r ? num(r.storeHandle) : '-';
