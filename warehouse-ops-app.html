@@ -186,11 +186,8 @@
   </div>
 
   <div class="view" id="view-refurb">
-    <div class="card"><h3>整理日期（記錄做的是哪一天）</h3>
+    <div class="card"><h3>整理日期</h3>
       <input type="date" id="rfDate" class="wksel" style="width:100%;font-size:17px" aria-label="整理日期"></div>
-    <div class="card"><h3>整新週期（選日期會自動帶出，也可以自己選）</h3>
-      <select id="rfWeekSel" class="wksel" style="width:100%" aria-label="選擇週別"></select>
-      <div class="hint" id="rfCycleHint" style="margin-top:8px"></div></div>
     <div class="card"><h3>今天整理的同仁 <small style="color:var(--text-mute);font-weight:600;">（輪值，最多選 2 位）</small></h3><div class="chips" id="rfStaff"></div></div>
     <div class="rangebar" id="rfGroups"></div>
     <div class="card" id="rfSum"></div>
@@ -604,12 +601,12 @@
     renderDashRf();
   }
 
-  // 儀表板：本週門市整新進度
+  // 儀表板：目前這一期門市整新進度
   function renderDashRf(){
     const el = $('dashRf'); if(!el) return;
     const wk = rfWeekInfo(cycleMon(new Date()));
-    if(!rfStores.length){ el.innerHTML = `<h3>本週門市整新　${cycleLabel(cycleMon(new Date()))}</h3><div class="hint">${apiReady()?'讀取中，或還沒有門市清單。':'還沒設定網址。'}</div>`; return; }
-    const recs = rfRecs.filter(r=>r.week===wk.key);
+    if(!rfStores.length){ el.innerHTML = `<h3>門市整新進度　${cycleLabel(cycleMon(new Date()))}</h3><div class="hint">${apiReady()?'讀取中，或還沒有門市清單。':'還沒設定網址。'}</div>`; return; }
+    const recs = rfRecs.filter(r=>r.wk===wk.key);
     const rows = RF_GROUPS.map(g=>{
       const st = rfStores.filter(s=>s.group===g);
       const done = st.filter(s=>{ const r=recs.find(x=>String(x.code)===String(s.code)); return r && r.status==='完成'; });
@@ -618,7 +615,7 @@
       return {g, total:st.length, done:done.length, going:going.length, avg: mins.length?Math.round(mins.reduce((a,b)=>a+b,0)/mins.length):0};
     }).filter(x=>x.total);
     const allT = rows.reduce((s,x)=>s+x.total,0), allD = rows.reduce((s,x)=>s+x.done,0);
-    el.innerHTML = `<h3>本週門市整新　${cycleLabel(cycleMon(new Date()))}</h3>
+    el.innerHTML = `<h3>門市整新進度　${cycleLabel(cycleMon(new Date()))}</h3>
       <div class="hint" style="margin:0 0 8px">全部 ${allT} 間，已完成 ${allD} 間（${allT?Math.round(allD/allT*100):0}%）</div>
       ${rows.map(x=>`<div class="barrow" data-tip="${x.g}排程\n完成 ${x.done} / ${x.total}\n整理中 ${x.going}${x.avg?'\n平均用時 '+x.avg+' 分鐘':''}"><div class="n">${x.g}</div><div class="t"><div class="f" style="width:${Math.round(x.done/x.total*100)}%;background:var(--s3)"></div></div><div class="c">${x.done}/${x.total}</div></div>${x.avg?`<div class="hint" style="margin:-4px 0 6px 94px">平均用時 ${x.avg} 分鐘</div>`:''}`).join('')}`;
   }
@@ -655,7 +652,7 @@
   const md = d => d ? String(d).slice(5).replace('-','/') : '';
   function dtMin(d,t){ const a=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d||'')), b=/^(\d{1,2}):(\d{2})/.exec(String(t||'')); return (a&&b) ? Date.UTC(+a[1],+a[2]-1,+a[3],+b[1],+b[2])/60000 : null; }
   function rfSay(t, cls){ const el=$('rfMsg'); el.textContent=t||''; el.className='rfmsg '+(cls||''); }
-  function rfRec(week, code){ return rfRecs.find(r=>r.week===week && String(r.code)===String(code)); }
+  function rfRec(week, code){ return rfRecs.find(r=>r.wk===week && String(r.code)===String(code)); }
 
   async function loadRefurb(){
     if(!apiReady()){ rfSay('還沒設定 Apps Script 網址','err'); return false; }
@@ -663,21 +660,13 @@
       const res = await fetchWithTimeout(API_URL + (API_URL.indexOf('?')>=0?'&':'?') + 'type=refurb&t=' + Date.now(), {}, 15000);
       const json = await res.json();
       if(!json || !Array.isArray(json.stores)){ rfSay('⚠ 大表程式還沒更新到「門市整新」功能：請貼上新版 Apps Script，並用「新版本」重新部署','err'); renderRefurb(); return false; }
-      rfStores = json.stores; rfRecs = json.records || []; rfSay('');
+      rfStores = json.stores; rfRecs = (json.records || []).map(r=>{ const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(r.startDate||''); r.wk = m ? rfWeekInfo(cycleMon(new Date(+m[1],+m[2]-1,+m[3]))).key : r.week; return r; }); rfSay('');
     }catch(e){ console.error(e); rfSay('讀取失敗，請按「重新整理」或稍後再試','err'); }
     renderRefurb(); return true;
   }
 
   function renderRefurb(){
     const wk = rfWeekInfo(rfMon);
-    (function(){
-      const base = cycleMon(new Date()), cur = Math.round((rfMon-base)/604800000);
-      const lo = Math.min(-30, cur-2), hi = Math.max(30, cur+2);
-      let h = '';
-      for(let o=hi; o>=lo; o--){ const m=new Date(base); m.setDate(m.getDate()+o*7); h += `<option value="${o}"${o===cur?' selected':''}>${cycleLabel(m)}${o===0?'　★目前':''}</option>`; }
-      $('rfWeekSel').innerHTML = h;
-    })();
-    $('rfCycleHint').innerHTML = '整新週期：<b>'+fmtMD(addD(rfMon,-3))+'</b>（第一天）→ '+fmtMD(rfMon)+' → '+fmtMD(addD(rfMon,1))+' → <b>'+fmtMD(addD(rfMon,2))+'</b>（最後一天）。每週五開始新的一週。';
     $('rfStaff').innerHTML = RF_STAFF.map(n=>`<button type="button" class="chip${rfStaffSel.indexOf(n)>=0?' on':''}" data-name="${esc(n)}">${esc(n)}</button>`).join('');
     $('rfGroups').innerHTML = RF_GROUPS.map(g=>{
       const n = rfStores.filter(s=>s.group===g).length;
@@ -730,7 +719,7 @@
     const card = document.querySelector('#rfList .rfcard[data-code="'+(window.CSS&&CSS.escape?CSS.escape(code):code)+'"]');
     const origV = card.querySelector('.rfexp').value, finV = card.querySelector('.rfcon').value;
     const cur = rfRec(wk.key, code) || {};
-    const payload = { type:'refurb', week:wk.key, group:store.group, code:store.code, name:store.name, staff:rfStaffSel.join('、') };
+    const payload = { type:'refurb', week:(cur.week||wk.key), group:store.group, code:store.code, name:store.name, staff:rfStaffSel.join('、') };
     if(origV!=='') payload.original = num(origV);
     if(finV!=='') payload.finished = num(finV);
     if(act==='save'){ if(origV===''&&finV===''){ rfSay('請先填箱數','err'); return; } }
@@ -764,7 +753,6 @@
   });
   $('rfGroups').addEventListener('click', e=>{ const b=e.target.closest('[data-g]'); if(!b) return; rfGroup=b.dataset.g; renderRefurb(); });
   $('rfDate').addEventListener('change', e=>{ const v=e.target.value; if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return; const [y,m,dd]=v.split('-').map(Number); rfMon = cycleMon(new Date(y,m-1,dd)); rfDraft = {}; renderRefurb(); });
-  $('rfWeekSel').addEventListener('change', e=>{ const m=cycleMon(new Date()); m.setDate(m.getDate()+Number(e.target.value)*7); rfMon=m; rfDraft = {}; renderRefurb(); });
   $('rfList').addEventListener('click', e=>{
     const el = e.target.closest('[data-act]'); if(!el || el.disabled) return;
     const card = el.closest('.rfcard'); if(card) rfAct(card.dataset.code, el.dataset.act);
