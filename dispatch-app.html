@@ -619,7 +619,7 @@
       const lv = driverLeaveToday(d), n = escapeHtml(d.name);
       let right;
       if(lv) right = `<div style="display:flex; align-items:center; gap:8px;"><span style="font-size:12.5px; font-weight:800; color:var(--accent-2); background:rgba(255,140,60,.14); padding:5px 11px; border-radius:999px; white-space:nowrap;">🏖 今日${leaveLabel(lv)}</span><button type="button" data-leave-cancel="${n}" style="${btnCss}">取消</button></div>`;
-      else if(regionPick===d.name) right = `<div style="display:flex; align-items:center; gap:6px;">${LEAVE_TYPES.map(t=>`<button type="button" data-leave-type="${t}" data-leave-name="${n}" style="${btnCss}">${t}</button>`).join('')}<button type="button" data-leave-x="1" style="${btnCss} border-color:var(--line); color:var(--text-mute);">✕</button></div>`;
+      else if(regionPick===d.name) right = `<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; max-width:62%;">${LEAVE_TYPES.map(t=>`<button type="button" data-leave-type="${t}" data-leave-name="${n}" style="${btnCss}">${t}</button>`).join('')}<button type="button" data-leave-x="1" style="${btnCss} border-color:var(--line); color:var(--text-mute);">✕</button></div>`;
       else right = `<div style="display:flex; align-items:center; gap:10px;"><button type="button" data-leave-open="${n}" style="${btnCss}">🏖 休假</button><div class="arrow">›</div></div>`;
       return `
       <div class="drivercard" data-name="${n}" style="${lv?'opacity:.8;':''}">
@@ -948,7 +948,7 @@
       renderDriverView(); await saveCurrentState();
     });
   }
-  const LEAVE_TYPES = ['特休','請假'];
+  const LEAVE_TYPES = ['特休','請假','病假','公假'];   // 要增減類別就改這一行
   const leaveLabel = lv => (lv && lv.type) ? lv.type : '休假';
   $('leaveBtn').addEventListener('click', ()=>{
     if(!currentState) return;
