@@ -267,7 +267,8 @@
           <div id="staffRows"></div>
           <button type="button" id="addStaff" class="addbtn">＋ 新增同仁</button>
           <div class="staffsum"><span>處理量合計</span><b id="staffTotal">0</b></div></div>
-        ${numRow('recoveredPackages','撤貨出倉數量')}
+        <div class="row"><label for="f_ecInTo">EC 進倉到幾號（例：10/18、第12號）</label><input type="text" id="f_ecInTo" data-key="ecInTo" placeholder="例：10/18 或 第12號" autocomplete="off"></div>
+        ${numRow('recoveredPackages','撤貨出倉數量（EC 進倉幾件）')}
       </div>`;
     document.querySelectorAll('#formArea input').forEach(i=> i.addEventListener('input', recalc));
     $('addStaff').addEventListener('click', ()=>{ addStaffRow('',''); });
@@ -342,7 +343,7 @@
     $('inWait').textContent = wait; $('inDone').textContent = r ? rsh : '-';
     $('outBar').style.width = (avg? Math.min(100,Math.round(tot/avg*100)):(tot?100:0))+'%';
     $('outTxt').innerHTML = r ? ('<span class="n">'+tot+'</span><span class="of"> 單</span><div class="sub">'+(avg?'近7日均 '+Math.round(avg):'今日合計')+'</div>') : '尚未登錄';
-    $('outPkg').textContent = r ? num(r.recoveredPackages) : '-'; $('outTrip').textContent = r ? num(r.storeHandle) : '-';
+    $('outPkg').textContent = r ? (num(r.recoveredPackages) + (r.ecInTo ? '（EC至'+r.ecInTo+'）' : '')) : '-'; $('outTrip').textContent = r ? num(r.storeHandle) : '-';
   }
   $('qEntry').addEventListener('click', ()=> $('dateCard').scrollIntoView({behavior:'smooth'}));
   $('qRecords').addEventListener('click', ()=> showTab('records'));
@@ -352,7 +353,7 @@
   function fillForm(dateStr){
     const rec = records.find(r=>r.date===dateStr);
     const ovr = $('ovrChk').checked;
-    const keys = [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['recoveredPackages'], ['newArrival']].map(a=>a[0]);
+    const keys = [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['recoveredPackages'], ['ecInTo'], ['newArrival']].map(a=>a[0]);
     keys.forEach(k=>{
       const el = $('f_'+k); if(!el) return;
       const v = (ovr && rec) ? rec[k] : '';
@@ -391,8 +392,8 @@
       records = (json.records||[]).filter(r=>r.date && hasData(r));
       const bn = $('backendNote');
       if(bn){
-        if(num(json.cols) >= 23){ bn.style.color = '#1a7f37'; bn.textContent = '✓ 大表程式版本正常（'+(json.ver||'')+'，'+json.cols+' 欄）'; }
-        else { bn.style.color = '#d93025'; bn.textContent = '⚠ 大表程式是舊版（它回報：'+(json.cols!==undefined?json.cols+' 欄':'沒有欄數')+'、'+(json.ver?json.ver:'沒有版本標記')+'）。需要新版：23 欄、版本 v3-累計剩餘。請貼上新版 Apps Script，並在「管理部署作業」用「新版本」重新部署；網址需和這個 APP 設定的相同。'; }
+        if(num(json.cols) >= 24){ bn.style.color = '#1a7f37'; bn.textContent = '✓ 大表程式版本正常（'+(json.ver||'')+'，'+json.cols+' 欄）'; }
+        else { bn.style.color = '#d93025'; bn.textContent = '⚠ 大表程式是舊版（它回報：'+(json.cols!==undefined?json.cols+' 欄':'沒有欄數')+'、'+(json.ver?json.ver:'沒有版本標記')+'）。需要新版：24 欄、版本 v4-EC進倉號。請貼上新版 Apps Script，並在「管理部署作業」用「新版本」重新部署；網址需和這個 APP 設定的相同。'; }
       }
       return true;
     }catch(e){ console.error(e); return false; }
@@ -407,6 +408,7 @@
     [...CHANNELS, ...RETURN_FIELDS, ...OTHER_FIELDS, ['recoveredPackages'], ['newArrival','新品追加上架']].forEach(([k])=>{
       const v = val(k); if(v!=='') payload[k] = num(v);
     });
+    if(val('ecInTo').trim()!=='') payload.ecInTo = val('ecInTo').trim();
     const st = readStaff(); if(st.total){ payload.storeHandle = st.total; payload.storeHandleDetail = st.detail; }
     const anyChannel = CHANNELS.some(([k])=> val(k)!=='');
     if(anyChannel) payload.total = CHANNELS.reduce((s,[k])=> s+num(val(k)), 0);
@@ -429,7 +431,7 @@
     }
     btn.disabled = false; btn.textContent = '送出登錄';
     if(ok){
-      if(serverMode && serverCols < 23) setStatus('⚠ 大表程式不是最新版（送出時它回報 '+serverCols+' 欄、版本「'+(serverVer||'無')+'」，需要 23 欄）：請把新版 Apps Script 貼上、儲存，再「管理部署作業 → 編輯 → 新版本」部署。若頁面頂端顯示綠字，請按 Ctrl+F5 重新整理頁面（可能是舊的網頁快取）', 'err');
+      if(serverMode && serverCols < 24) setStatus('⚠ 大表程式不是最新版（送出時它回報 '+serverCols+' 欄、版本「'+(serverVer||'無')+'」，需要 24 欄；「EC 進倉到幾號」不會被存下來）：請把新版 Apps Script 貼上、儲存，再「管理部署作業 → 編輯 → 新版本」部署。若頁面頂端顯示綠字，請按 Ctrl+F5 重新整理頁面（可能是舊的網頁快取）', 'err');
       else if(!serverMode) setStatus('⚠ 已寫入，但大表程式還是舊版（不會累加）：請到 Apps Script 重新部署新版本，並確認網址是同一個部署', 'err');
       else setStatus($('ovrChk').checked ? '✓ 已修正大表（'+date+'）' : '✓ 已累加到大表（'+date+'）', 'ok');
       await loadRecords(); fillForm(date);
@@ -443,7 +445,7 @@
   function recRowHtml(r){
     const total = r.total!==''&&r.total!==undefined ? num(r.total) : CHANNELS.reduce((s,[k])=>s+num(r[k]),0);
     return `<div class="rec"><div><div class="d">${esc(r.date)}</div>
-      <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}${(num(r.ecReturn)||num(r.storeRecall))?'（EC '+num(r.ecReturn)+'／門市 '+num(r.storeRecall)+'）':''}・上架 ${num(r.returnShelved)}・門市撤貨處理 ${num(r.storeHandle)}・撤貨出倉 ${num(r.recoveredPackages)}・新品追加上架 ${num(r.newArrival)}</div></div>
+      <div class="m">訂單 ${total}・撤退貨進倉 ${num(r.returnIn)}${(num(r.ecReturn)||num(r.storeRecall))?'（EC '+num(r.ecReturn)+'／門市 '+num(r.storeRecall)+'）':''}・上架 ${num(r.returnShelved)}・門市撤貨處理 ${num(r.storeHandle)}・撤貨出倉 ${num(r.recoveredPackages)}${r.ecInTo?'（EC 進倉到 '+r.ecInTo+'）':''}・新品追加上架 ${num(r.newArrival)}</div></div>
       <button class="smallbtn" data-edit="${esc(r.date)}">編輯</button></div>`;
   }
   function renderRecords(){
