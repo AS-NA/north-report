@@ -267,7 +267,7 @@
           <div id="staffRows"></div>
           <button type="button" id="addStaff" class="addbtn">＋ 新增同仁</button>
           <div class="staffsum"><span>處理量合計</span><b id="staffTotal">0</b></div></div>
-        <div class="row"><label for="f_ecInTo">EC 進倉到幾號（例：10/18、第12號）</label><input type="text" id="f_ecInTo" data-key="ecInTo" placeholder="例：10/18 或 第12號" autocomplete="off"></div>
+        <div class="row"><label for="f_ecInTo">EC 進倉到幾號</label><input type="text" id="f_ecInTo" data-key="ecInTo" placeholder="" autocomplete="off"></div>
         ${numRow('recoveredPackages','撤貨出倉數量（EC 進倉幾件）')}
       </div>`;
     document.querySelectorAll('#formArea input').forEach(i=> i.addEventListener('input', recalc));
