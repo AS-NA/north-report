@@ -471,7 +471,7 @@
         E:[T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5]),T('佶傳',[1,2,3,4,5])],
         F:[T('撤貨抓貨',[1]),T('區內勻貨',[1,2]),T('跨區勻貨',[1,2]),T('支援EC撤貨',[2,3]),T('新品區整理',[2]),T('整倉併袋',[3,4]),T('新品入倉',[3,4]),T('勻補貨歸倉',[4]),T('商品歸倉',[5]),T('倉庫整理',[5])]
       },
-      dailyStops:[ {site:'一中',time:'10:40-11:00',table:'B'}, {site:'文心',time:'11:20-11:30',table:'B'}, {site:'遠百',time:'11:50-12:00',table:'B'}, {site:'一中OL(寄貨)',time:'12:30-13:00',table:'E'}, {site:'一中/一中OL(門市作業)',time:'15:00-17:00',table:'A'}, {site:'遠百週1~2~3/逢甲週4~5(門市作業)',time:'16:20-19:30',table:'F',storeOptions:['遠百','逢甲']} ]
+      dailyStops:[ {site:'一中',time:'10:40-11:00',table:'B'}, {site:'文心',time:'11:20-11:30',table:'B'}, {site:'遠百',time:'11:50-12:00',table:'B'}, {site:'一中OL(寄貨)',time:'12:30-13:00',table:'E'}, {site:'一中/一中OL(門市作業)',time:'15:00-17:00',table:'A'}, {site:'遠百/逢甲(門市作業)',time:'16:20-19:30',table:'F',siteByDay:{1:'遠百(門市作業)',2:'遠百(門市作業)',3:'逢甲(門市作業)',4:'逢甲(門市作業)',5:'逢甲(門市作業)'}} ]
     },
     { region:'台中', code:'中2', name:'吳昀彥', hours:'10:30-19:30',
       tables:{
@@ -534,8 +534,12 @@
   function findDriver(region, name){ return DRIVERS.find(d=>d.region===region && d.name===name); }
   function getStopsFor(driver, weekday){
     if(driver.noSchedule) return [];
-    if(driver.weeklyStops) return driver.weeklyStops[weekday] || [];
-    return driver.dailyStops || [];
+    const list = driver.weeklyStops ? (driver.weeklyStops[weekday] || []) : (driver.dailyStops || []);
+    // siteByDay：同一站依星期固定去不同門市（例如週一二遠百、週三四五逢甲），不用司機選
+    return list.map(st=>{
+      const fixed = st.siteByDay && st.siteByDay[weekday];
+      return fixed ? { ...st, site: fixed } : st;
+    });
   }
   // 台中區：司機可以在每一站自己加臨時工作（不固定每天每站都有），常用的兩項放在快速選項
   const EXTRA_QUICK = ['抓no show','洗濾網'];
