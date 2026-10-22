@@ -142,7 +142,7 @@
     const f = e.target.files && e.target.files[0]; if(!f) return;
     const url = URL.createObjectURL(f);
     const im = new Image();
-    im.onload = ()=>{ img = im; rot = 0; render(); $('photoTools').style.display='flex'; say('readMsg','照片是橫的就按旋轉，把字轉成正的再按「讀取稅單」'); };
+    im.onload = ()=>{ img = im; rot = 0; render(); $('photoTools').style.display='flex'; say('readMsg', $('readBtn').style.display==='none' ? '照片是橫的就按旋轉，轉正後存檔比較好看；資料請在下面填寫' : '照片是橫的就按旋轉，把字轉成正的再按「讀取稅單」'); };
     im.onerror = ()=> say('readMsg','這張照片打不開，請換一張','err');
     im.src = url;
     e.target.value = '';
@@ -251,6 +251,13 @@
   }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+  // 手動模式：後端沒有讀圖金鑰時，拍照只存檔，資料由人填
+  function manualMode(){
+    $('readBtn').style.display = 'none';
+    const n=$('setupNote'); n.style.display='block';
+    n.innerHTML='目前是<b>手動模式</b>：拍照後照片會存到雲端硬碟，下面的資料請對照稅單自己填，按「確認並寫入」即可。';
+    say('readMsg','');
+  }
   async function init(){
     $('f_recipient').value = DEFAULT_RECIPIENT;
     validate();
@@ -259,7 +266,7 @@
       const res = await fetch(API_URL+'?pass='+encodeURIComponent(pass));
       const j = await res.json();
       if(j.error==='auth'){ askPass(pass?'密碼不對，請重新輸入':'請輸入通關密碼'); return; }
-      if(j.success && !j.hasKey){ const n=$('setupNote'); n.style.display='block'; n.innerHTML='⚠ 後端還沒設定 ANTHROPIC_API_KEY，目前無法自動讀取照片（仍可手動輸入）。'; }
+      if(j.success && !j.hasKey){ manualMode(); }
     }catch(e){}
     loadRecent();
   }
