@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>稅單拍照上傳</title>
+<style>
+  :root{ --bg:#f4f6f8; --panel:#ffffff; --line:#d9dee5; --text:#1b2430; --mute:#6b7685; --accent:#1f3d99; --ok:#1a7f37; --warn:#b54708; --err:#c0392b; }
+  @media (prefers-color-scheme: dark){ :root{ --bg:#14181f; --panel:#1d232d; --line:#2e3744; --text:#e8ecf2; --mute:#97a2b3; --accent:#7ea2ff; --ok:#4cc27a; --warn:#f0a04b; --err:#ff7b6b; } }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{ margin:0; background:var(--bg); color:var(--text); font:16px/1.5 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif; }
+  .wrap{ max-width:520px; margin:0 auto; padding:18px 16px 40px; min-height:100%; display:flex; flex-direction:column; gap:14px; }
+  h1{ font-size:19px; margin:4px 0 0; }
+  .sub{ color:var(--mute); font-size:13px; }
+  .btn{ appearance:none; border:0; border-radius:14px; font-size:18px; font-weight:700; cursor:pointer; background:var(--accent); color:#fff; padding:20px 16px; width:100%; }
+  .btn.ghost{ background:transparent; color:var(--accent); border:2px solid var(--accent); font-size:16px; padding:14px; }
+  .btn:disabled{ opacity:.55; cursor:default; }
+  #preview{ width:100%; max-height:46vh; object-fit:contain; background:#0002; border-radius:12px; display:none; }
+  .result{ border-radius:16px; padding:22px 18px; text-align:center; display:none; border:2px solid var(--line); background:var(--panel); }
+  .result .big{ font-size:44px; line-height:1.1; }
+  .result .t{ font-size:19px; font-weight:700; margin-top:8px; }
+  .result .d{ font-size:14px; color:var(--mute); margin-top:8px; }
+  .result.ok{ border-color:var(--ok); } .result.ok .t{ color:var(--ok); }
+  .result.review, .result.dup{ border-color:var(--warn); } .result.review .t, .result.dup .t{ color:var(--warn); }
+  .result.error{ border-color:var(--err); } .result.error .t{ color:var(--err); }
+  .busy{ display:none; text-align:center; color:var(--mute); padding:18px; }
+  .spin{ width:34px; height:34px; border:4px solid var(--line); border-top-color:var(--accent); border-radius:50%; margin:0 auto 10px; animation:sp 0.9s linear infinite; }
+  @keyframes sp{ to{ transform:rotate(360deg); } }
+  .cnt{ text-align:center; color:var(--mute); font-size:13px; }
+  .setup{ display:none; background:var(--panel); border:1px solid var(--warn); color:var(--warn); border-radius:12px; padding:12px; font-size:14px; }
+  .overlay{ position:fixed; inset:0; background:#000a; display:none; align-items:center; justify-content:center; z-index:9; padding:20px; }
+  .overlay.on{ display:flex; }
+  .box{ background:var(--panel); border-radius:14px; padding:18px; width:100%; max-width:340px; }
+  .box input{ width:100%; padding:12px; font-size:16px; border-radius:9px; border:1px solid var(--line); background:var(--bg); color:var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>稅單拍照上傳</h1>
+    <div class="sub" id="sub">拍一張稅單 → 上傳 → 自動讀取並填進雲端表，完成後會通知你</div>
+  </div>
+
+  <div class="setup" id="setupNote"></div>
+
+  <input type="file" id="fileIn" accept="image/*" capture="environment" style="display:none;">
+  <img id="preview" alt="稅單預覽">
+
+  <button class="btn" id="camBtn" type="button">📷 拍照</button>
+  <button class="btn" id="upBtn" type="button" style="display:none;">⬆ 上傳</button>
+  <button class="btn ghost" id="retakeBtn" type="button" style="display:none;">重拍</button>
+
+  <div class="busy" id="busy"><div class="spin"></div><div id="busyTxt">上傳並讀取中…（約 10–20 秒，請不要離開此頁）</div></div>
+
+  <div class="result" id="result"><div class="big" id="rBig"></div><div class="t" id="rTitle"></div><div class="d" id="rDetail"></div></div>
+  <button class="btn" id="nextBtn" type="button" style="display:none;">📷 再拍下一張</button>
+
+  <div class="cnt" id="cnt"></div>
+</div>
+
+<div class="overlay" id="passOv"><div class="box">
+  <div style="font-weight:700; margin-bottom:8px;">請輸入通關密碼</div>
+  <input type="password" id="passIn" autocomplete="off">
+  <div id="passMsg" style="color:var(--err); font-size:13px; min-height:18px; margin-top:6px;"></div>
+  <button class="btn" id="passBtn" type="button" style="margin-top:8px; padding:12px; font-size:16px;">確定</button>
+</div></div>
+
+<script>
+(function(){
+  // ====== 設定 ======
+  const API_URL = 'https://script.google.com/macros/s/AKfycbwDg4CAA2aT9ACbLeMPhvxQKTWYDTrppBqb6a0dy5O1qvOTgeWXIXAxpF0D1d4KSxFgMg/exec';
+  // ==================
+  const $ = id => document.getElementById(id);
+  let photoB64 = '', pass = '', done = 0, busy = false;
+  try{ pass = localStorage.getItem('customs-pass') || ''; }catch(e){}
+
+  const show = (id, on, disp) => { $(id).style.display = on ? (disp || 'block') : 'none'; };
+
+  function askPass(m){ $('passMsg').textContent = m||''; $('passOv').classList.add('on'); setTimeout(()=>$('passIn').focus(),50); }
+  $('passBtn').addEventListener('click', ()=>{ pass = $('passIn').value; try{ localStorage.setItem('customs-pass', pass); }catch(e){} $('passOv').classList.remove('on'); init(); });
+
+  function resetUI(){
+    photoB64 = ''; show('preview', false); show('result', false); show('nextBtn', false); show('upBtn', false); show('retakeBtn', false); show('busy', false); show('camBtn', true);
+    $('cnt').textContent = done ? ('這次已處理 '+done+' 張') : '';
+  }
+
+  $('camBtn').addEventListener('click', ()=> $('fileIn').click());
+  $('nextBtn').addEventListener('click', ()=>{ resetUI(); $('fileIn').click(); });
+  $('retakeBtn').addEventListener('click', ()=>{ resetUI(); $('fileIn').click(); });
+
+  $('fileIn').addEventListener('change', e=>{
+    const f = e.target.files && e.target.files[0]; e.target.value = '';
+    if(!f) return;
+    const url = URL.createObjectURL(f), im = new Image();
+    im.onload = ()=>{
+      const MAX = 1600, k = Math.min(1, MAX/Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth*k); c.height = Math.round(im.naturalHeight*k);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      const data = c.toDataURL('image/jpeg', 0.85);
+      photoB64 = data.split(',')[1];
+      $('preview').src = data; show('preview', true);
+      show('result', false); show('nextBtn', false); show('camBtn', false); show('upBtn', true); show('retakeBtn', true);
+      URL.revokeObjectURL(url);
+    };
+    im.onerror = ()=>{ alert('這張照片打不開，請重拍'); };
+    im.src = url;
+  });
+
+  function showResult(status, title, detail){
+    const r = $('result'); r.className = 'result ' + status; r.style.display = 'block';
+    $('rBig').textContent = status==='ok' ? '✅' : (status==='error' ? '❌' : '⚠️');
+    $('rTitle').textContent = title; $('rDetail').textContent = detail || '';
+    show('nextBtn', true);
+  }
+
+  $('upBtn').addEventListener('click', async ()=>{
+    if(!photoB64 || busy) return;
+    busy = true; show('upBtn', false); show('retakeBtn', false); show('busy', true);
+    try{
+      const res = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'auto', image: photoB64, mime:'image/jpeg', pass }) });
+      const j = await res.json();
+      show('busy', false); show('preview', false);
+      if(j && j.error === 'auth'){ askPass('密碼不對，請重新輸入'); show('upBtn', true); show('retakeBtn', true); show('preview', true); return; }
+      if(j && j.success && j.status === 'ok'){
+        done++;
+        showResult('ok', '已上傳並填入雲端表', (j.sheet ? '「'+j.sheet+'」第 '+j.row+' 列' : '') + (j.taxNo ? '\n稅單 '+j.taxNo : '') + (j.total!=null ? '\n進口稅 '+j.dutyTax+'＋營業稅 '+j.vat+'＝'+j.total+' 元' : ''));
+        $('rDetail').style.whiteSpace = 'pre-line';
+      }else if(j && j.success && j.status === 'saved'){
+        done++;
+        showResult('ok', '照片已上傳到雲端硬碟', j.note || '資料請之後對照照片登錄');
+      }else if(j && j.success && j.status === 'dup'){
+        showResult('dup', '這張已經登錄過', j.message || '');
+      }else if(j && j.success && j.status === 'review'){
+        done++;
+        showResult('review', '照片已上傳，需要人工確認', j.message || '');
+      }else{
+        showResult('error', '沒有完成', (j && j.message) || ('失敗原因：'+((j&&j.error)||'未知')+'。請再試一次。'));
+      }
+      $('cnt').textContent = done ? ('這次已處理 '+done+' 張') : '';
+    }catch(e){
+      show('busy', false);
+      showResult('error', '連線失敗', '照片可能沒有送出，請確認網路後重拍再試一次。');
+    }finally{ busy = false; }
+  });
+
+  async function init(){
+    try{
+      const res = await fetch(API_URL + '?pass=' + encodeURIComponent(pass));
+      const j = await res.json();
+      if(j.error === 'auth'){ askPass(pass ? '密碼不對，請重新輸入' : '請輸入通關密碼'); return; }
+      if(j.success && !j.hasKey){ const n = $('setupNote'); n.style.display = 'block'; n.style.color = 'var(--mute)'; n.style.borderColor = 'var(--line)'; n.textContent = '目前是僅存檔模式：拍照後照片會上傳到雲端硬碟，資料之後再人工登錄。'; $('sub').textContent = '拍一張稅單 → 上傳到雲端硬碟，完成後會通知你'; }
+    }catch(e){ const n = $('setupNote'); n.style.display = 'block'; n.textContent = '連不上後端，請確認網路或後端設定。'; }
+  }
+  resetUI(); init();
+})();
+</script>
+</body>
+</html>
