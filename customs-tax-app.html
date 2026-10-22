@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>海關稅單登錄</title>
+<style>
+  :root{ --bg:#f4f6f8; --panel:#ffffff; --line:#d9dee5; --text:#1b2430; --mute:#6b7685; --accent:#1f3d99; --ok:#1a7f37; --warn:#b54708; --err:#c0392b; }
+  @media (prefers-color-scheme: dark){ :root{ --bg:#14181f; --panel:#1d232d; --line:#2e3744; --text:#e8ecf2; --mute:#97a2b3; --accent:#7ea2ff; --ok:#4cc27a; --warn:#f0a04b; --err:#ff7b6b; } }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif; }
+  .wrap{ max-width:560px; margin:0 auto; padding:16px; padding-bottom:60px; }
+  h1{ font-size:19px; margin:4px 0 2px; }
+  .sub{ color:var(--mute); font-size:13px; margin-bottom:14px; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:14px; }
+  .btn{ appearance:none; border:0; border-radius:10px; padding:12px 14px; font-size:15px; font-weight:600; cursor:pointer; background:var(--accent); color:#fff; }
+  .btn.ghost{ background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .btn.small{ padding:7px 10px; font-size:13px; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .grow{ flex:1; }
+  #preview{ width:100%; max-height:340px; object-fit:contain; background:#0002; border-radius:10px; margin-bottom:10px; display:none; }
+  label{ display:block; font-size:12.5px; color:var(--mute); margin:10px 0 3px; }
+  input[type=text], input[type=number], input[type=password]{ width:100%; padding:10px; font-size:16px; border-radius:9px; border:1px solid var(--line); background:var(--bg); color:var(--text); }
+  input.flag{ border-color:var(--warn); }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .hint{ font-size:12px; margin-top:3px; color:var(--warn); min-height:16px; }
+  .msg{ margin-top:10px; font-size:14px; }
+  .msg.ok{ color:var(--ok); } .msg.err{ color:var(--err); } .msg.warn{ color:var(--warn); }
+  .total{ font-size:22px; font-weight:700; padding:6px 0; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th,td{ text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); }
+  th{ color:var(--mute); font-weight:600; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; }
+  .setup{ background:#fff3cd33; border:1px solid var(--warn); }
+  .overlay{ position:fixed; inset:0; background:#000a; display:none; align-items:center; justify-content:center; z-index:9; padding:20px; }
+  .overlay.on{ display:flex; }
+  .box{ background:var(--panel); border-radius:14px; padding:18px; width:100%; max-width:340px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>海關稅單登錄</h1>
+  <div class="sub">拍一張稅單 → 自動讀出 → 你確認 → 寫進「<span id="monthName">當月</span>」分頁</div>
+
+  <div class="card setup" id="setupNote" style="display:none;"></div>
+
+  <div class="card">
+    <input type="file" id="fileIn" accept="image/*" capture="environment" style="display:none;">
+    <input type="file" id="fileIn2" accept="image/*" style="display:none;">
+    <img id="preview" alt="稅單預覽">
+    <div class="row">
+      <button class="btn grow" id="camBtn" type="button">📷 拍照</button>
+      <button class="btn ghost" id="pickBtn" type="button">選擇照片</button>
+    </div>
+    <div class="row" id="photoTools" style="margin-top:10px; display:none;">
+      <button class="btn ghost small" id="rotL" type="button">↺ 左轉</button>
+      <button class="btn ghost small" id="rotR" type="button">↻ 右轉</button>
+      <button class="btn grow" id="readBtn" type="button">讀取稅單</button>
+    </div>
+    <div class="msg" id="readMsg"></div>
+  </div>
+
+  <div class="card" id="formCard">
+    <div style="font-weight:700; margin-bottom:2px;">確認資料</div>
+    <div style="font-size:12.5px; color:var(--mute);">讀出的資料請對照紙本，金額要特別確認；也可以不拍照，直接手動輸入。</div>
+    <div class="grid2">
+      <div><label for="f_importDate">進口日期（民國）</label><input type="text" id="f_importDate" placeholder="115/10/20" inputmode="numeric"></div>
+      <div><label for="f_pieces">件數</label><input type="number" id="f_pieces" inputmode="numeric" value="1"></div>
+    </div>
+    <label for="f_taxNo">稅單號碼</label><input type="text" id="f_taxNo" autocapitalize="characters" autocomplete="off">
+    <div class="hint" id="h_taxNo"></div>
+    <label for="f_declNo">報單號碼</label><input type="text" id="f_declNo" autocapitalize="characters" autocomplete="off">
+    <div class="hint" id="h_declNo"></div>
+    <label for="f_waybill">提裝貨單號</label><input type="text" id="f_waybill" autocapitalize="characters" autocomplete="off">
+    <div class="hint" id="h_waybill"></div>
+    <div class="grid2">
+      <div><label for="f_dutyTax">進口稅（元）</label><input type="number" id="f_dutyTax" inputmode="numeric"></div>
+      <div><label for="f_vat">營業稅（元）</label><input type="number" id="f_vat" inputmode="numeric"></div>
+    </div>
+    <label>稅費合計（自動＝進口稅＋營業稅）</label>
+    <div class="total" id="totalOut">0</div>
+    <div class="hint" id="h_total"></div>
+    <label for="f_recipient">收件者</label><input type="text" id="f_recipient" autocomplete="off">
+    <div class="row" style="margin-top:14px;">
+      <button class="btn grow" id="saveBtn" type="button">確認並寫入</button>
+      <button class="btn ghost" id="clearBtn" type="button">清除</button>
+    </div>
+    <div class="msg" id="saveMsg"></div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:700; margin-bottom:6px;">最近登錄 <span id="recentSheet" style="color:var(--mute); font-weight:400; font-size:13px;"></span></div>
+    <div id="recentList" style="font-size:13px; color:var(--mute);">載入中…</div>
+  </div>
+</div>
+
+<div class="overlay" id="passOv"><div class="box">
+  <div style="font-weight:700; margin-bottom:8px;">請輸入通關密碼</div>
+  <input type="password" id="passIn" autocomplete="off">
+  <div class="msg err" id="passMsg"></div>
+  <div class="row" style="margin-top:10px;"><button class="btn grow" id="passBtn" type="button">確定</button></div>
+</div></div>
+
+<script>
+(function(){
+  // ====== 設定：部署好 Apps Script 後，把網址貼在這裡 ======
+  const API_URL = 'https://script.google.com/macros/s/AKfycbwDg4CAA2aT9ACbLeMPhvxQKTWYDTrppBqb6a0dy5O1qvOTgeWXIXAxpF0D1d4KSxFgMg/exec';
+  const DEFAULT_RECIPIENT = 'AIRSPACE INTERNATIONAL CO., LTD.';
+  // ========================================================
+
+  const $ = id => document.getElementById(id);
+  let img = null;            // 目前的照片（Image 物件）
+  let rot = 0;               // 旋轉角度 0/90/180/270
+  let photoB64 = '';         // 轉好、壓縮好的 jpeg base64（不含前綴）
+  let pass = '';
+  try{ pass = localStorage.getItem('customs-pass') || ''; }catch(e){}
+
+  const numv = v => { const n = Number(String(v==null?'':v).replace(/[^\d.-]/g,'')); return isFinite(n) ? n : 0; };
+  const val = k => $('f_'+k).value.trim();
+  const rocMonth = d => { const m = String(d||'').match(/^(\d{2,3})[\/.\-年](\d{1,2})/); return m ? (Number(m[1])+'年'+Number(m[2])+'月') : ''; };
+  const say = (id, text, cls) => { $(id).textContent = text || ''; $(id).className = 'msg ' + (cls||''); };
+
+  function apiOk(){ if(!API_URL){ const n=$('setupNote'); n.style.display='block'; n.innerHTML='⚠ 還沒設定後端網址（API_URL）。可以先試用畫面和手動輸入，但不會真的寫入。'; return false; } return true; }
+
+  async function call(payload){
+    const res = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ ...payload, pass }) });
+    const j = await res.json();
+    if(j && j.error === 'auth'){ askPass('密碼不對，請重新輸入'); throw new Error('auth'); }
+    return j;
+  }
+
+  // ---------- 通關密碼 ----------
+  function askPass(m){ $('passMsg').textContent = m||''; $('passOv').classList.add('on'); setTimeout(()=>$('passIn').focus(),50); }
+  $('passBtn').addEventListener('click', ()=>{ pass = $('passIn').value; try{ localStorage.setItem('customs-pass', pass); }catch(e){} $('passOv').classList.remove('on'); init(); });
+
+  // ---------- 照片 ----------
+  $('camBtn').addEventListener('click', ()=> $('fileIn').click());
+  $('pickBtn').addEventListener('click', ()=> $('fileIn2').click());
+  [$('fileIn'), $('fileIn2')].forEach(inp=> inp.addEventListener('change', e=>{
+    const f = e.target.files && e.target.files[0]; if(!f) return;
+    const url = URL.createObjectURL(f);
+    const im = new Image();
+    im.onload = ()=>{ img = im; rot = 0; render(); $('photoTools').style.display='flex'; say('readMsg','照片是橫的就按旋轉，把字轉成正的再按「讀取稅單」'); };
+    im.onerror = ()=> say('readMsg','這張照片打不開，請換一張','err');
+    im.src = url;
+    e.target.value = '';
+  }));
+  $('rotL').addEventListener('click', ()=>{ rot = (rot+270)%360; render(); });
+  $('rotR').addEventListener('click', ()=>{ rot = (rot+90)%360; render(); });
+
+  function render(){   // 依旋轉角度畫到 canvas，最長邊縮到 1600，輸出 jpeg
+    const MAX = 1600, sw = img.naturalWidth, sh = img.naturalHeight;
+    const swap = rot===90 || rot===270;
+    const w = swap ? sh : sw, h = swap ? sw : sh;
+    const k = Math.min(1, MAX/Math.max(w,h));
+    const c = document.createElement('canvas'); c.width = Math.round(w*k); c.height = Math.round(h*k);
+    const g = c.getContext('2d'); g.translate(c.width/2, c.height/2); g.rotate(rot*Math.PI/180);
+    const dw = sw*k, dh = sh*k; g.drawImage(img, -dw/2, -dh/2, dw, dh);
+    const url = c.toDataURL('image/jpeg', 0.85);
+    photoB64 = url.split(',')[1];
+    $('preview').src = url; $('preview').style.display = 'block';
+  }
+
+  // ---------- 讀取 ----------
+  $('readBtn').addEventListener('click', async ()=>{
+    if(!photoB64) return;
+    if(!apiOk()){ say('readMsg','還沒設定後端網址，無法自動讀取','err'); return; }
+    $('readBtn').disabled = true; say('readMsg','讀取中…（約 5–15 秒）');
+    try{
+      const j = await call({ action:'extract', image: photoB64, mime:'image/jpeg' });
+      if(!j.success){
+        const m = j.error==='no_key' ? '後端還沒設定 ANTHROPIC_API_KEY（Apps Script → 專案設定 → 指令碼屬性）' : ('讀取失敗：'+(j.error||'')+(j.detail?' '+j.detail:''));
+        say('readMsg', m, 'err'); return;
+      }
+      fill(j.fields || {});
+      say('readMsg', '已讀出，請對照紙本確認下面的資料' + ((j.fields&&j.fields.note) ? '。注意：'+j.fields.note : ''), (j.fields&&j.fields.note)?'warn':'ok');
+    }catch(e){ if(e.message!=='auth') say('readMsg','連線失敗，請檢查網路後再試','err'); }
+    finally{ $('readBtn').disabled = false; }
+  });
+
+  function fill(f){
+    const set = (k, v) => { if(v!==null && v!==undefined && v!=='') $('f_'+k).value = String(v).trim(); };
+    set('importDate', f.importDate); set('taxNo', f.taxNo); set('declNo', f.declNo); set('waybill', f.waybill);
+    set('pieces', f.pieces); set('dutyTax', f.dutyTax); set('vat', f.vat);
+    if(f.recipient) $('f_recipient').value = String(f.recipient).trim(); else if(!val('recipient')) $('f_recipient').value = DEFAULT_RECIPIENT;
+    window.__readTotal = (f.total==null||f.total==='') ? null : numv(f.total);
+    validate();
+  }
+
+  // ---------- 驗證 ----------
+  function validate(){
+    const taxNo = val('taxNo').replace(/\s/g,'').toUpperCase();
+    const declNo = val('declNo').toUpperCase();
+    const wb = val('waybill').replace(/\s/g,'').toUpperCase();
+    const flags = {};
+    flags.taxNo = taxNo && !/^CXI[0-9A-Z]{11}$/.test(taxNo) ? '稅單號碼通常是 CXI 開頭共 14 碼，請對照紙本' : '';
+    flags.declNo = declNo && !/^CX ?\d{5}[0-9A-Z]{5}$/.test(declNo) ? '報單號碼格式不像（例：CX 15709W8JWP），請對照紙本' : '';
+    flags.waybill = wb && !/^SF\d{13}$/.test(wb) ? '提裝貨單號通常是 SF 加 13 位數字，請對照紙本' : '';
+    ['taxNo','declNo','waybill'].forEach(k=>{ $('h_'+k).textContent = flags[k]; $('f_'+k).classList.toggle('flag', !!flags[k]); });
+    const total = numv(val('dutyTax')) + numv(val('vat'));
+    $('totalOut').textContent = total;
+    const rt = window.__readTotal;
+    $('h_total').textContent = (rt!=null && rt !== total) ? ('⚠ 稅單上讀到的稅費合計是 '+rt+'，和進口稅＋營業稅（'+total+'）不一致，請確認金額') : '';
+    $('monthName').textContent = rocMonth(val('importDate')) || '當月';
+  }
+  ['importDate','taxNo','declNo','waybill','dutyTax','vat','pieces','recipient'].forEach(k=> $('f_'+k).addEventListener('input', validate));
+
+  // ---------- 寫入 ----------
+  $('saveBtn').addEventListener('click', ()=> save(false));
+  async function save(force){
+    const rec = { importDate: val('importDate'), taxNo: val('taxNo'), declNo: val('declNo'), waybill: val('waybill'),
+      pieces: numv(val('pieces')) || 1, dutyTax: numv(val('dutyTax')), vat: numv(val('vat')), recipient: val('recipient') || DEFAULT_RECIPIENT };
+    if(!rec.importDate || !rocMonth(rec.importDate)){ say('saveMsg','進口日期要像 115/10/20','err'); return; }
+    if(!rec.taxNo){ say('saveMsg','請填稅單號碼','err'); return; }
+    if(!apiOk()){ say('saveMsg','還沒設定後端網址，無法寫入','err'); return; }
+    $('saveBtn').disabled = true; say('saveMsg','寫入中…');
+    try{
+      const j = await call({ action:'save', record: rec, image: photoB64, mime:'image/jpeg', force: !!force });
+      if(j.dup){
+        if(confirm('這張稅單號碼已經登錄過（'+j.where+'）。要重複再記一筆嗎？')){ $('saveBtn').disabled=false; return save(true); }
+        say('saveMsg','已取消，沒有重複寫入','warn'); return;
+      }
+      if(!j.success){ say('saveMsg','寫入失敗：'+(j.error||''),'err'); return; }
+      say('saveMsg','✓ 已寫入「'+j.sheet+'」第 '+j.row+' 列（稅費合計 '+j.total+' 元）','ok');
+      resetForm(true); loadRecent();
+    }catch(e){ if(e.message!=='auth') say('saveMsg','連線失敗，請檢查網路後再試','err'); }
+    finally{ $('saveBtn').disabled = false; }
+  }
+  function resetForm(keepMsg){
+    ['importDate','taxNo','declNo','waybill','dutyTax','vat'].forEach(k=> $('f_'+k).value='');
+    $('f_pieces').value='1'; $('f_recipient').value = DEFAULT_RECIPIENT;
+    window.__readTotal = null; img=null; photoB64=''; $('preview').style.display='none'; $('photoTools').style.display='none';
+    say('readMsg',''); if(!keepMsg) say('saveMsg',''); validate();
+  }
+  $('clearBtn').addEventListener('click', ()=> resetForm(false));
+
+  // ---------- 最近登錄 ----------
+  async function loadRecent(){
+    if(!API_URL){ $('recentList').textContent='（設定好後端網址後會顯示）'; return; }
+    try{
+      const res = await fetch(API_URL+'?action=recent&pass='+encodeURIComponent(pass));
+      const j = await res.json();
+      if(j.error==='auth'){ askPass('請輸入通關密碼'); return; }
+      $('recentSheet').textContent = j.sheet ? '（'+j.sheet+'）' : '';
+      if(!j.rows || !j.rows.length){ $('recentList').textContent='還沒有紀錄'; return; }
+      $('recentList').innerHTML = '<table><tr><th>日期</th><th>稅單號碼</th><th class="n">進口稅</th><th class="n">營業稅</th><th class="n">合計</th></tr>' +
+        j.rows.map(r=>`<tr><td>${esc(r.importDate)}</td><td>${esc(r.taxNo)}</td><td class="n">${esc(r.dutyTax)}</td><td class="n">${esc(r.vat)}</td><td class="n">${esc(r.total)}</td></tr>`).join('') + '</table>';
+    }catch(e){ $('recentList').textContent='載入失敗'; }
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  async function init(){
+    $('f_recipient').value = DEFAULT_RECIPIENT;
+    validate();
+    if(!API_URL){ apiOk(); $('recentList').textContent='（設定好後端網址後會顯示）'; return; }
+    try{
+      const res = await fetch(API_URL+'?pass='+encodeURIComponent(pass));
+      const j = await res.json();
+      if(j.error==='auth'){ askPass(pass?'密碼不對，請重新輸入':'請輸入通關密碼'); return; }
+      if(j.success && !j.hasKey){ const n=$('setupNote'); n.style.display='block'; n.innerHTML='⚠ 後端還沒設定 ANTHROPIC_API_KEY，目前無法自動讀取照片（仍可手動輸入）。'; }
+    }catch(e){}
+    loadRecent();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
