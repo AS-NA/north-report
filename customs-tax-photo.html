@@ -69,7 +69,12 @@
 <script>
 (function(){
   // ====== 設定 ======
-  const API_URL = 'https://script.google.com/macros/s/AKfycbwDg4CAA2aT9ACbLeMPhvxQKTWYDTrppBqb6a0dy5O1qvOTgeWXIXAxpF0D1d4KSxFgMg/exec';
+  // 公司網域帳號建立的後端，網址可能要用 /a/macros/網域/ 這種格式才連得到；兩種都放，連線時自動挑能用的那個
+  const API_URLS = [
+    'https://script.google.com/a/macros/airspaceonline.com/s/AKfycbwDg4CAA2aT9ACbLeMPhvxQKTWYDTrppBqb6a0dy5O1qvOTgeWXIXAxpF0D1d4KSxFgMg/exec',
+    'https://script.google.com/macros/s/AKfycbwDg4CAA2aT9ACbLeMPhvxQKTWYDTrppBqb6a0dy5O1qvOTgeWXIXAxpF0D1d4KSxFgMg/exec'
+  ];
+  let API_URL = API_URLS[0];
   // ==================
   const $ = id => document.getElementById(id);
   let photoB64 = '', pass = '', done = 0, busy = false;
@@ -158,12 +163,19 @@
     return '手機連不到後端（'+((e&&e.message)||'網路錯誤')+'）。若用的是 LINE、Gmail 等 App 內建瀏覽器，請改用 Safari 或 Chrome 開啟。';
   }
   async function init(){
-    try{
-      const res = await fetch(API_URL + '?pass=' + encodeURIComponent(pass));
-      const j = await readJson(res);
-      if(j.error === 'auth'){ askPass(pass ? '密碼不對，請重新輸入' : '請輸入通關密碼'); return; }
-      if(j.success && !j.hasKey){ const n = $('setupNote'); n.style.display = 'block'; n.style.color = 'var(--mute)'; n.style.borderColor = 'var(--line)'; n.textContent = '目前是僅存檔模式：拍照後照片會上傳到雲端硬碟，資料之後再人工登錄。'; $('sub').textContent = '拍一張稅單 → 上傳到雲端硬碟，完成後會通知你'; }
-    }catch(e){ const n = $('setupNote'); n.style.display = 'block'; n.textContent = whyText(e); }
+    let lastErr = null;
+    for(const u of API_URLS){
+      try{
+        const res = await fetch(u + '?pass=' + encodeURIComponent(pass));
+        const j = await readJson(res);
+        API_URL = u;   // 這個網址連得到，之後上傳就用它
+        if(j.error === 'auth'){ askPass(pass ? '密碼不對，請重新輸入' : '請輸入通關密碼'); return; }
+        if(j.success && !j.hasKey){ const n = $('setupNote'); n.style.display = 'block'; n.style.color = 'var(--mute)'; n.style.borderColor = 'var(--line)'; n.textContent = '目前是僅存檔模式：拍照後照片會上傳到雲端硬碟，資料之後再人工登錄。'; $('sub').textContent = '拍一張稅單 → 上傳到雲端硬碟，完成後會通知你'; }
+        if(j.ver && !/^customs-v([3-9]|\d{2,})/.test(j.ver)){ const n = $('setupNote'); n.style.display = 'block'; n.textContent = '後端還是舊版（'+j.ver+'），拍照上傳會失敗。請到 Apps Script 用「新版本」重新部署。'; }
+        return;
+      }catch(e){ lastErr = e; }
+    }
+    const n = $('setupNote'); n.style.display = 'block'; n.textContent = whyText(lastErr) + '　[頁面版本 2]';
   }
   resetUI(); init();
 })();
