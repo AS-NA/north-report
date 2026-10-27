@@ -119,7 +119,7 @@
     busy = true; show('upBtn', false); show('retakeBtn', false); show('busy', true);
     try{
       const res = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'auto', image: photoB64, mime:'image/jpeg', pass }) });
-      const j = await res.json();
+      const j = await readJson(res);
       show('busy', false); show('preview', false);
       if(j && j.error === 'auth'){ askPass('密碼不對，請重新輸入'); show('upBtn', true); show('retakeBtn', true); show('preview', true); return; }
       if(j && j.success && j.status === 'ok'){
@@ -140,17 +140,30 @@
       $('cnt').textContent = done ? ('這次已處理 '+done+' 張') : '';
     }catch(e){
       show('busy', false);
-      showResult('error', '連線失敗', '照片可能沒有送出，請確認網路後重拍再試一次。');
+      showResult('error', '連線失敗', whyText(e));
     }finally{ busy = false; }
   });
 
+  // 讀後端回應：不是 JSON（例如 Google 的登入或授權頁面）時，丟出看得懂的原因
+  async function readJson(res){
+    const t = await res.text();
+    try{ return JSON.parse(t); }
+    catch(e){
+      const plain = t.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>|<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,90);
+      const err = new Error('NOT_JSON'); err.detail = plain || '（空白回應）'; throw err;
+    }
+  }
+  function whyText(e){
+    if(e && e.message === 'NOT_JSON') return '後端回的不是資料，而是一個網頁：「'+e.detail+'」。常見原因：程式更新後還沒重新授權，或部署的「誰可以存取」不是「任何人」。';
+    return '手機連不到後端（'+((e&&e.message)||'網路錯誤')+'）。若用的是 LINE、Gmail 等 App 內建瀏覽器，請改用 Safari 或 Chrome 開啟。';
+  }
   async function init(){
     try{
       const res = await fetch(API_URL + '?pass=' + encodeURIComponent(pass));
-      const j = await res.json();
+      const j = await readJson(res);
       if(j.error === 'auth'){ askPass(pass ? '密碼不對，請重新輸入' : '請輸入通關密碼'); return; }
       if(j.success && !j.hasKey){ const n = $('setupNote'); n.style.display = 'block'; n.style.color = 'var(--mute)'; n.style.borderColor = 'var(--line)'; n.textContent = '目前是僅存檔模式：拍照後照片會上傳到雲端硬碟，資料之後再人工登錄。'; $('sub').textContent = '拍一張稅單 → 上傳到雲端硬碟，完成後會通知你'; }
-    }catch(e){ const n = $('setupNote'); n.style.display = 'block'; n.textContent = '連不上後端，請確認網路或後端設定。'; }
+    }catch(e){ const n = $('setupNote'); n.style.display = 'block'; n.textContent = whyText(e); }
   }
   resetUI(); init();
 })();
