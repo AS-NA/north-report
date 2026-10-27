@@ -39,15 +39,17 @@
 <div class="wrap">
   <div>
     <h1>稅單拍照上傳</h1>
-    <div class="sub" id="sub">拍一張稅單 → 上傳 → 自動讀取並填進雲端表，完成後會通知你</div>
+    <div class="sub" id="sub">拍一張（或從相簿選很多張）→ 上傳 → 自動讀取並填進雲端表，完成後會通知你</div>
   </div>
 
   <div class="setup" id="setupNote"></div>
 
   <input type="file" id="fileIn" accept="image/*" capture="environment" style="display:none;">
+  <input type="file" id="fileMulti" accept="image/*" multiple style="display:none;">
   <img id="preview" alt="稅單預覽">
 
   <button class="btn" id="camBtn" type="button">📷 拍照</button>
+  <button class="btn ghost" id="galBtn" type="button">🖼 從相簿選多張（一次傳很多張）</button>
   <button class="btn" id="upBtn" type="button" style="display:none;">⬆ 上傳</button>
   <button class="btn ghost" id="retakeBtn" type="button" style="display:none;">重拍</button>
 
@@ -86,7 +88,7 @@
   $('passBtn').addEventListener('click', ()=>{ pass = $('passIn').value; try{ localStorage.setItem('customs-pass', pass); }catch(e){} $('passOv').classList.remove('on'); init(); });
 
   function resetUI(){
-    photoB64 = ''; show('preview', false); show('result', false); show('nextBtn', false); show('upBtn', false); show('retakeBtn', false); show('busy', false); show('camBtn', true);
+    photoB64 = ''; show('preview', false); show('result', false); show('nextBtn', false); show('upBtn', false); show('retakeBtn', false); show('busy', false); show('camBtn', true); show('galBtn', true);
     $('cnt').textContent = done ? ('這次已處理 '+done+' 張') : '';
   }
 
@@ -105,11 +107,59 @@
       const data = c.toDataURL('image/jpeg', 0.85);
       photoB64 = data.split(',')[1];
       $('preview').src = data; show('preview', true);
-      show('result', false); show('nextBtn', false); show('camBtn', false); show('upBtn', true); show('retakeBtn', true);
+      show('result', false); show('nextBtn', false); show('camBtn', false); show('galBtn', false); show('upBtn', true); show('retakeBtn', true);
       URL.revokeObjectURL(url);
     };
     im.onerror = ()=>{ alert('這張照片打不開，請重拍'); };
     im.src = url;
+  });
+
+
+  // ===== 一次選很多張：依序縮圖、上傳，最後給總結 =====
+  function toB64(f){
+    return new Promise((ok, no)=>{
+      const url = URL.createObjectURL(f), im = new Image();
+      im.onload = ()=>{
+        const MAX = 1600, k = Math.min(1, MAX/Math.max(im.naturalWidth, im.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth*k); c.height = Math.round(im.naturalHeight*k);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+      };
+      im.onerror = ()=>{ URL.revokeObjectURL(url); no(new Error('照片打不開')); };
+      im.src = url;
+    });
+  }
+  async function postOne(b64){
+    const res = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'auto', image: b64, mime:'image/jpeg', pass }) });
+    return await readJson(res);
+  }
+  $('galBtn').addEventListener('click', ()=> $('fileMulti').click());
+  $('fileMulti').addEventListener('change', async e=>{
+    const files = Array.from(e.target.files || []); e.target.value = '';
+    if(!files.length || busy) return;
+    busy = true; resetUI(); show('camBtn', false); show('galBtn', false); show('busy', true);
+    const t = { ok:0, saved:0, dup:0, review:0, error:0 }, bad = [];
+    let stopped = false;
+    for(let i=0; i<files.length; i++){
+      $('busyTxt').textContent = '上傳中 '+(i+1)+' / '+files.length+'（請不要離開此頁）';
+      try{
+        const j = await postOne(await toB64(files[i]));
+        if(j && j.error === 'auth'){ stopped = true; askPass('密碼不對，請重新輸入'); break; }
+        const s = (j && j.success && t.hasOwnProperty(j.status)) ? j.status : 'error';
+        t[s]++;
+        if(s === 'error') bad.push((files[i].name||('第'+(i+1)+'張'))+'：'+((j && (j.message||j.error))||'未知原因'));
+        if(s === 'review') bad.push((files[i].name||('第'+(i+1)+'張'))+'：需人工確認');
+      }catch(err){ t.error++; bad.push((files[i].name||('第'+(i+1)+'張'))+'：'+whyText(err)); }
+    }
+    show('busy', false);
+    const good = t.ok + t.saved + t.review; done += good;
+    if(!stopped){
+      const line = '共選 '+files.length+' 張：已上傳 '+(t.ok+t.saved)+'、已登錄過 '+t.dup+'、需確認 '+t.review+'、失敗 '+t.error;
+      showResult(t.error ? 'error' : (t.review ? 'review' : 'ok'), t.error ? '有幾張沒成功' : '全部上傳完成', line + (bad.length ? '\n' + bad.join('\n') : ''));
+      $('rDetail').style.whiteSpace = 'pre-line';
+    }else{ show('camBtn', true); show('galBtn', true); }
+    $('cnt').textContent = done ? ('這次已處理 '+done+' 張') : '';
+    busy = false;
   });
 
   function showResult(status, title, detail){
@@ -170,12 +220,12 @@
         const j = await readJson(res);
         API_URL = u;   // 這個網址連得到，之後上傳就用它
         if(j.error === 'auth'){ askPass(pass ? '密碼不對，請重新輸入' : '請輸入通關密碼'); return; }
-        if(j.success && !j.hasKey){ const n = $('setupNote'); n.style.display = 'block'; n.style.color = 'var(--mute)'; n.style.borderColor = 'var(--line)'; n.textContent = '目前是僅存檔模式：拍照後照片會上傳到雲端硬碟，資料之後再人工登錄。'; $('sub').textContent = '拍一張稅單 → 上傳到雲端硬碟，完成後會通知你'; }
+        if(j.success && !j.hasKey){ const n = $('setupNote'); n.style.display = 'block'; n.style.color = 'var(--mute)'; n.style.borderColor = 'var(--line)'; n.textContent = '目前是僅存檔模式：拍照後照片會上傳到雲端硬碟，資料之後再人工登錄。'; $('sub').textContent = '拍一張（或從相簿選很多張）→ 上傳到雲端硬碟，完成後會通知你'; }
         if(j.ver && !/^customs-v([3-9]|\d{2,})/.test(j.ver)){ const n = $('setupNote'); n.style.display = 'block'; n.textContent = '後端還是舊版（'+j.ver+'），拍照上傳會失敗。請到 Apps Script 用「新版本」重新部署。'; }
         return;
       }catch(e){ lastErr = e; }
     }
-    const n = $('setupNote'); n.style.display = 'block'; n.textContent = whyText(lastErr) + '　[頁面版本 3]';
+    const n = $('setupNote'); n.style.display = 'block'; n.textContent = whyText(lastErr) + '　[頁面版本 4]';
   }
   resetUI(); init();
 })();
