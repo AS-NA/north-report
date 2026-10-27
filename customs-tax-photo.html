@@ -71,8 +71,8 @@
   // ====== 設定 ======
   // 公司網域帳號建立的後端，網址可能要用 /a/macros/網域/ 這種格式才連得到；兩種都放，連線時自動挑能用的那個
   const API_URLS = [
-    'https://script.google.com/a/macros/airspaceonline.com/s/AKfycbwDg4CAA2aT9ACbLeMPhvxQKTWYDTrppBqb6a0dy5O1qvOTgeWXIXAxpF0D1d4KSxFgMg/exec',
-    'https://script.google.com/macros/s/AKfycbwDg4CAA2aT9ACbLeMPhvxQKTWYDTrppBqb6a0dy5O1qvOTgeWXIXAxpF0D1d4KSxFgMg/exec'
+    'https://script.google.com/a/macros/airspaceonline.com/s/AKfycbx8c73l6Wcytquwf-VH8xHCBRd2vA7vQXLFtH5yYTXm2f-tQyR47NbxGHFcU_-Y5npKQQ/exec',
+    'https://script.google.com/macros/s/AKfycbx8c73l6Wcytquwf-VH8xHCBRd2vA7vQXLFtH5yYTXm2f-tQyR47NbxGHFcU_-Y5npKQQ/exec'
   ];
   let API_URL = API_URLS[0];
   // ==================
@@ -175,7 +175,7 @@
         return;
       }catch(e){ lastErr = e; }
     }
-    const n = $('setupNote'); n.style.display = 'block'; n.textContent = whyText(lastErr) + '　[頁面版本 2]';
+    const n = $('setupNote'); n.style.display = 'block'; n.textContent = whyText(lastErr) + '　[頁面版本 3]';
   }
   resetUI(); init();
 })();
