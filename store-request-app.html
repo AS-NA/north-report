@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>門市工作需求提交</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F6FC; --panel:#FFFFFF; --panel-2:#EEF2FA; --line:#DCE3F0;
+    --accent:#2FA5D6; --accent-2:#8B7FEF; --green:#3AAE72; --red:#D9604B;
+    --text:#1C2536; --text-mute:#6E7996;
+    --font-display:'Noto Sans TC',sans-serif;
+    --font-body:'Noto Sans TC',sans-serif;
+    --font-mono:'JetBrains Mono','Courier New',monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--bg); color:var(--text); font-family:var(--font-body); font-weight:500; min-height:100vh; display:flex; justify-content:center; }
+  .app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); position:relative; z-index:2; }
+  .watermark{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-28deg); z-index:1; pointer-events:none; font-family:var(--font-display); font-weight:800; font-size:15vw; letter-spacing:0.06em; color:var(--accent); opacity:0.15; text-transform:uppercase; white-space:nowrap; }
+  .view{ position:relative; z-index:2; }
+  .topbar{ background:linear-gradient(135deg,#D7ECFB,#E8E3FB); padding:20px; border-bottom:1px solid var(--line); }
+  .topbar .eyebrow{ font-family:var(--font-mono); font-size:12.5px; letter-spacing:0.1em; color:#3E7FA8; text-transform:uppercase; }
+  .topbar h1{ font-family:var(--font-display); font-size:24px; margin:5px 0 0; font-weight:800; }
+  main{ padding:20px; padding-bottom:60px; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:16px; margin-bottom:14px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:13px; font-weight:700; color:var(--text-mute); margin-bottom:6px; }
+  .field select, .field input{ width:100%; padding:12px 13px; border-radius:12px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:16px; }
+  .datebadge{ display:inline-block; background:var(--panel-2); border:1px solid var(--line); border-radius:20px; padding:6px 14px; font-family:var(--font-mono); font-size:13px; color:var(--accent); font-weight:700; }
+  .checklist{ display:flex; flex-direction:column; gap:8px; }
+  .checkitem{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:var(--panel-2); cursor:pointer; user-select:none; }
+  .checkitem.checked{ background:rgba(47,165,214,0.12); border-color:var(--accent); }
+  .checkitem input{ width:18px; height:18px; accent-color:var(--accent); flex-shrink:0; }
+  .checkitem span{ font-size:14.5px; font-weight:600; }
+  .btn{ display:block; width:100%; padding:14px; border-radius:14px; border:none; font-size:16px; font-weight:800; cursor:pointer; font-family:var(--font-display); text-align:center; }
+  .btn.accent{ background:var(--accent); color:#fff; }
+  .btn:disabled{ opacity:0.5; }
+  .statusline{ text-align:center; font-size:13px; font-family:var(--font-mono); margin-top:10px; min-height:16px; }
+  .statusline.ok{ color:var(--green); } .statusline.err{ color:var(--red); }
+  .note{ font-size:12px; color:var(--text-mute); margin-top:10px; line-height:1.6; }
+  .warnbox{ background:rgba(217,96,75,0.1); border:1px solid rgba(217,96,75,0.3); border-radius:12px; padding:12px 14px; font-size:13px; color:var(--red); margin-bottom:14px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="watermark">AIR <span style="color:var(--accent-2);">SPACE</span></div>
+  <div class="view">
+    <div class="topbar">
+      <div class="eyebrow">AIR SPACE</div>
+      <h1>門市工作需求提交</h1>
+    </div>
+    <main>
+      <div class="warnbox">⚠ 提交後，隔天司機到這家店的工作項目會<b>直接變成你勾選的這些</b>，原本排定的項目會被取代，請確認清楚再送出。</div>
+
+      <div class="card">
+        <div class="field">
+          <label>你的門市 / 站點</label>
+          <select id="siteSelect"><option value="">請選擇門市</option></select>
+        </div>
+        <div class="field">
+          <label>適用日期</label>
+          <div class="datebadge" id="dateBadge"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="field" style="margin-bottom:10px;">
+          <label>勾選隔天需要的工作項目</label>
+        </div>
+        <div class="checklist" id="checklist"></div>
+      </div>
+
+      <button class="btn accent" id="submitBtn">送出</button>
+      <div class="statusline" id="submitStatus"></div>
+      <div class="note">送出後司機那邊的 App 會自動套用，不需要另外通知。同一家店同一天如果重新提交，會覆蓋掉上一次的內容。</div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpNQnSSTS_aFf_CbXH2q2JtxTP_1_veEJBkw43hwjNTF4_YiMypSF3t75l-2fKaIBY/exec';
+
+  const SITES = ["一中(門市作業)","一中/OL","一中LADY店","一中大碼/OL","一中門市(支援)","三多","中山一店","南紡","台南南紡LADY店","南西AS店","南西LADY店","南西r.fav店","台茂","嘉義文化一店","嘉義秀泰店","高雄夢時代店","夢時代(收貨)","大安店","大江","岡山秀泰LADY店","左營新光店","巨城","台北倉","支援門市","敦南AS店","敦南LADY店","敦南大碼店","文心秀泰LADY店/文心秀泰大碼店","新光","新光/遠百(支援)","台南FOCUS店","台南FOCUS大碼店","新莊宏匯店","高雄漢神LADY店","台中漢神店","漢神洲際(支援)","秀泰大碼","統領","西門店","西門r.fav店","西門大碼店","逢甲店","逢甲店/台中遠百店"];
+  const TASKS = ["勻貨歸倉","區內勻貨","商品歸倉","寄新竹物流","寄黑貓","撤貨抓貨","撤貨抓貨(只抓倉庫)","收送貨","收送貨確認","新品入倉","新品整理","濾網清潔","補貨歸倉","跨區勻貨","追加歸倉"];
+
+  $('siteSelect').innerHTML += SITES.map(s=>`<option value="${s}">${s}</option>`).join('');
+
+  function tomorrowDateStr(){
+    const d = new Date();
+    d.setDate(d.getDate()+1);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  const tomorrow = tomorrowDateStr();
+  $('dateBadge').textContent = new Date(tomorrow).toLocaleDateString('zh-TW',{month:'2-digit',day:'2-digit',weekday:'short'}) + '（明天）';
+
+  $('checklist').innerHTML = TASKS.map((t,i)=>`
+    <label class="checkitem" data-idx="${i}">
+      <input type="checkbox" value="${t}">
+      <span>${t}</span>
+    </label>
+  `).join('');
+  document.querySelectorAll('.checkitem').forEach(item=>{
+    item.addEventListener('click', (e)=>{
+      // let the native checkbox click also fire; just sync the visual state after
+      setTimeout(()=>{
+        const cb = item.querySelector('input');
+        item.classList.toggle('checked', cb.checked);
+      }, 0);
+    });
+  });
+
+  $('submitBtn').addEventListener('click', async ()=>{
+    const site = $('siteSelect').value;
+    if(!site){ $('submitStatus').textContent = '請先選擇門市'; $('submitStatus').className='statusline err'; return; }
+    const checked = [...document.querySelectorAll('.checkitem input:checked')].map(cb=>cb.value);
+    if(checked.length===0){ $('submitStatus').textContent = '請至少勾選一項工作項目'; $('submitStatus').className='statusline err'; return; }
+
+    $('submitBtn').disabled = true; $('submitBtn').textContent = '送出中...';
+    $('submitStatus').textContent=''; $('submitStatus').className='statusline';
+    try{
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({ action:'store_override', site, date: tomorrow, tasks: checked })
+      });
+      const json = await res.json();
+      if(json && json.success){
+        $('submitStatus').textContent = '✓ 已成功提交，司機那邊會自動套用';
+        $('submitStatus').className = 'statusline ok';
+      }else{
+        $('submitStatus').textContent = '✗ 送出失敗，請檢查網路連線';
+        $('submitStatus').className = 'statusline err';
+      }
+    }catch(e){
+      console.error(e);
+      $('submitStatus').textContent = '✗ 送出失敗，請檢查網路連線';
+      $('submitStatus').className = 'statusline err';
+    }
+    $('submitBtn').disabled = false; $('submitBtn').textContent = '送出';
+  });
+})();
+</script>
+</body>
+</html>
