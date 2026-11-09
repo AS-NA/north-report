@@ -259,6 +259,13 @@
   .shipblock .shipitem .rmv{ color:var(--red); cursor:pointer; font-size:11px; margin-left:8px; }
   .scanbtn{ width:100%; padding:9px; border-radius:8px; border:1px solid var(--accent); background:transparent; color:var(--accent); font-size:12.5px; cursor:pointer; font-family:var(--font-body); }
   .shipbtnrow{ display:flex; gap:8px; }
+  .piecesrow{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .piecesrow .plabel{ font-size:12px; font-weight:600; color:var(--text-mute); flex:1 1 100%; }
+  .piecesrow button{ width:40px; padding:8px 0; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:16px; cursor:pointer; }
+  .piecesrow input{ width:84px; text-align:center; padding:9px 8px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:16px; }
+  .piecesrow .plan{ flex:1 1 100%; font-size:13px; color:var(--text); background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:7px 10px; }
+  .piecesrow .plan.diff{ color:var(--red); }
+  .piecesrow .punit{ font-size:12px; color:var(--text-mute); }
   .shipbtnrow .scanbtn{ flex:1; }
   .scanbtn.manual{ border-color:var(--text-mute); color:var(--text-mute); }
   .modal img{max-width:100%; max-height:78vh; border-radius:8px; display:block;}
@@ -428,18 +435,18 @@
         C:[T('勻貨歸倉',[2,3,4,5]),T('補貨歸倉',[3,4,5]),T('追加歸倉',[3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5]),T('收送貨',[1,2,3,4,5])],
         D:[T('商品歸倉',[1,2,3,4,5]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])]
       },
-      dailyStops:[ {site:'岡山秀泰',time:'09:00-11:00',table:'A'}, {site:'左營新光',time:'11:55-13:50',table:'C'}, {site:'漢神',time:'15:25-16:55',table:'C'}, {site:'岡山門市',time:'17:30-18:00',table:'D'} ]
+      dailyStops:[ {site:'岡山秀泰LADY店',time:'09:00-11:00',table:'A'}, {site:'左營新光店',time:'11:55-13:50',table:'C'}, {site:'高雄漢神LADY店',time:'15:25-16:55',table:'C'}, {site:'岡山秀泰LADY店',time:'17:30-18:00',table:'D'} ]
     },
     { region:'高雄', code:'南高2', name:'李尚鴻', hours:'07:00-16:00',
       tables:{
         B:[T('收送貨',[1,2,3,4,5])],
         D:[T('勻貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('整倉並袋',[1,2,3,4,5]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])]
       },
-      dailyStops:[ {site:'夢時代',time:'07:00-08:00',table:'B'}, {site:'岡山秀泰',time:'09:00-09:30',table:'B'}, {site:'三多遠百',time:'10:30-11:00',table:'B'}, {site:'夢時代商圈',time:'12:30-15:00',table:'D',storeOptions:['夢時代大碼','夢時代IP','夢時代CA']} ]
+      dailyStops:[ {site:'高雄夢時代店',time:'07:00-08:00',table:'B'}, {site:'岡山秀泰LADY店',time:'09:00-09:30',table:'B'}, {site:'三多遠百店',time:'10:30-11:00',table:'B'}, {site:'夢時代商圈',time:'12:30-15:00',table:'D',storeOptions:['高雄夢時代大碼店','高雄夢時代r.fav店','高雄夢時代CHIC.A店']} ]
     },
     { region:'台南', code:'南台1', name:'陳琮斌', hours:'12:00-21:00',
       tables:{ A:[T('勻貨歸倉',[2,3,4,5]),T('補貨歸倉',[4,5]),T('追加歸倉',[4,5]),T('撤貨抓貨(只抓倉庫)',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])] },
-      dailyStops:[ {site:'南紡CA',time:'12:00-14:00',table:'A'}, {site:'南紡OL',time:'14:00-16:00',table:'A'}, {site:'新台南',time:'16:30-18:00',table:'A'}, {site:'新台南(晚班)',time:'19:00-21:00',table:'A'} ]
+      dailyStops:[ {site:'台南南紡LADY店',time:'14:00-16:00',table:'A'}, {site:'台南FOCUS店',time:'16:30-18:00',table:'A'}, {site:'台南FOCUS大碼店',time:'19:00-21:00',table:'A'} ]
     },
     { region:'嘉義', code:'南嘉1', name:'王柏淵', hours:'09:00-18:00',
       tables:{
@@ -447,20 +454,20 @@
         B:[T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])]
       },
       weeklyStops:{
-        1:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化店',time:'09:25-09:30',free:['收送貨']},{site:'南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化',time:'15:00-18:00',free:['店務協助']}],
-        2:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化店',time:'09:25-09:30',free:['收送貨']},{site:'南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義秀泰',time:'15:00-18:00',free:['店務協助']}],
-        3:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化店',time:'09:25-09:30',free:['收送貨']},{site:'南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化',time:'15:00-18:00',free:['店務協助']}],
-        4:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化店',time:'09:25-09:30',free:['收送貨']},{site:'南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義秀泰',time:'15:00-18:00',free:['店務協助']}],
-        5:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化店',time:'09:25-09:30',free:['收送貨']},{site:'南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化',time:'15:00-18:00',free:['店務協助']}]
+        1:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化一店',time:'15:00-18:00',free:['店務協助']}],
+        2:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義秀泰店',time:'15:00-18:00',free:['店務協助']}],
+        3:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化一店',time:'15:00-18:00',free:['店務協助']}],
+        4:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義秀泰店',time:'15:00-18:00',free:['店務協助']}],
+        5:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化一店',time:'15:00-18:00',free:['店務協助']}]
       }
     },
     { region:'桃園', code:'北桃1', name:'陳兆晏', hours:'11:00-20:00',
       tables:{ A:[T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('勻貨歸倉',[4,5]),T('官網補貨歸倉',[4,5]),T('追加整理歸倉',[5])], B:[T('收送貨',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('勻貨歸倉',[4,5]),T('官網補貨歸倉',[4,5]),T('追加整理歸倉',[5])], C:[T('接北區補貨',[1,2,3,4,5]),T('收送貨',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('勻貨歸倉',[4,5]),T('官網補貨歸倉',[4,5]),T('追加整理歸倉',[5])] },
-      dailyStops:[ {site:'統領店+統領PLUS(同棟)',time:'11:00-11:30',table:'B'}, {site:'大江接貨',time:'11:45-12:00',table:'C'}, {site:'台茂店+台茂二店(同層)',time:'12:00-16:00',table:'A'}, {site:'統領店(補晚班)',time:'17:20-20:00',table:'A'} ]
+      dailyStops:[ {site:'桃園統領店/桃園統領大碼店',time:'11:00-11:30',table:'B'}, {site:'桃園大江店',time:'11:45-12:00',table:'C'}, {site:'桃園台茂AS店/桃園台茂店',time:'12:00-16:00',table:'A'}, {site:'桃園統領店',time:'17:20-20:00',table:'A'} ]
     },
     { region:'桃園', code:'北桃2', name:'陳狄獻', hours:'09:30-18:30',
       tables:{ A:[T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('勻貨歸倉',[4,5]),T('官網補貨歸倉',[4,5]),T('追加整理歸倉',[5])], B:[T('接北區補貨',[1,2,3,4,5]),T('收送貨',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('勻貨歸倉',[4,5]),T('官網補貨歸倉',[4,5]),T('追加整理歸倉',[5])], D:[T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('勻貨歸倉',[4,5]),T('官網補貨歸倉',[4,5]),T('追加整理歸倉',[5]),T('下貨',[1,2,3,4,5])] },
-      dailyStops:[ {site:'大江店+大江PLUS(同棟)',time:'09:30-12:50',table:'B'}, {site:'巨城LADY(新竹)',time:'14:35-17:00',table:'A'}, {site:'回大江下貨&支援大江PLUS',time:'17:30-18:30',table:'D'} ]
+      dailyStops:[ {site:'桃園大江店/桃園大江大碼店',time:'09:30-12:50',table:'B'}, {site:'新竹巨城LADY店',time:'14:35-17:00',table:'A'}, {site:'桃園大江店/桃園大江大碼店',time:'17:30-18:30',table:'D'} ]
     },
     { region:'台中', code:'中1', name:'王郁文', hours:'10:30-19:30',
       tables:{
@@ -469,7 +476,7 @@
         E:[T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5]),T('佶傳',[1,2,3,4,5])],
         F:[T('撤貨抓貨',[1]),T('區內勻貨',[1,2]),T('跨區勻貨',[1,2]),T('支援EC撤貨',[2,3]),T('新品區整理',[2]),T('整倉併袋',[3,4]),T('新品入倉',[3,4]),T('勻補貨歸倉',[4]),T('商品歸倉',[5]),T('倉庫整理',[5])]
       },
-      dailyStops:[ {site:'一中',time:'10:40-11:00',table:'B'}, {site:'文心',time:'11:20-11:30',table:'B'}, {site:'遠百',time:'11:50-12:00',table:'B'}, {site:'一中OL(寄貨)',time:'12:30-13:00',table:'E'}, {site:'一中/一中OL(門市作業)',time:'15:00-17:00',table:'A'}, {site:'遠百/逢甲(門市作業)',time:'16:20-19:30',table:'F',siteByDay:{1:'遠百(門市作業)',2:'遠百(門市作業)',3:'逢甲(門市作業)',4:'逢甲(門市作業)',5:'逢甲(門市作業)'}} ]
+      dailyStops:[ {site:'一中店',time:'10:40-11:00',table:'B'}, {site:'文心秀泰LADY店/文心秀泰大碼店',time:'11:20-11:30',table:'B'}, {site:'逢甲店/台中遠百店',time:'11:50-12:00',table:'B'}, {site:'一中LADY店',time:'12:30-13:00',table:'E'}, {site:'一中店/一中LADY店',time:'15:00-17:00',table:'A'}, {site:'遠百/逢甲(門市作業)',time:'16:20-19:30',table:'F',siteByDay:{1:'遠百(門市作業)',2:'遠百(門市作業)',3:'逢甲(門市作業)',4:'逢甲(門市作業)',5:'逢甲(門市作業)'}} ]
     },
     { region:'台中', code:'中2', name:'吳昀彥', hours:'10:30-19:30',
       tables:{
@@ -478,26 +485,26 @@
         E:[T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5]),T('佶傳',[1,2,3,4,5])],
         G:[T('撤貨抓貨',[1,2]),T('區內勻貨',[1,2]),T('跨區勻貨',[1,2]),T('支援EC撤貨',[2,3]),T('新品區整理',[2]),T('整倉併袋',[3,4]),T('新品入倉',[3]),T('勻補貨歸倉',[4]),T('商品歸倉',[5]),T('倉庫整理',[5])]
       },
-      dailyStops:[ {site:'一中',time:'10:40-11:00',table:'B'}, {site:'漢神',time:'11:20-11:40',table:'B'}, {site:'逢甲',time:'12:00-12:10',table:'B'}, {site:'一中OL(寄貨)',time:'12:30-13:00',table:'E'}, {site:'一中A+/一中IP(門市作業)/一中CA(開了IP就不用支援)',time:'15:00-17:00',table:'A',storeOptions:['一中IP','一中CA']}, {site:'漢神洲際(門市作業)',time:'17:20-19:30',table:'G'} ]
+      dailyStops:[ {site:'一中店',time:'10:40-11:00',table:'B'}, {site:'台中漢神店',time:'11:20-11:40',table:'B'}, {site:'逢甲店',time:'12:00-12:10',table:'B'}, {site:'一中LADY店',time:'12:30-13:00',table:'E'}, {site:'一中大碼店/一中r.fav店',time:'15:00-17:00',table:'A',storeOptions:['一中r.fav店','一中CHIC.A店']}, {site:'台中漢神店',time:'17:20-19:30',table:'G'} ]
     },
     { region:'台北', code:'北1', name:'林柏均', hours:'依當日排程',
       tables:{ A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3,4]),T('新品整理',[3,4,5]),T('濾網清潔',[2,3])] },
       weeklyStops:{
-        1:[{site:'南西AS店',time:'10:30-12:30',table:'A'},{site:'中山一店',time:'12:30-13:30',table:'A'},{site:'南西一店',time:'14:30-17:30',table:'A'},{site:'南西LADY',time:'17:40-18:40',table:'A'},{site:'南西三店',time:'18:40-19:30',table:'A'}],
-        2:[{site:'南西LADY',time:'10:30-12:00',table:'A'},{site:'中山一店',time:'12:00-14:00',table:'A'},{site:'南西AS',time:'15:00-17:30',table:'A'},{site:'敦南OL',time:'17:35-19:30',table:'A'}],
+        1:[{site:'南西AS店',time:'10:30-12:30',table:'A'},{site:'中山一店',time:'12:30-13:30',table:'A'},{site:'南西AS店',time:'14:30-17:30',table:'A'},{site:'南西LADY店',time:'17:40-18:40',table:'A'},{site:'南西r.fav店',time:'18:40-19:30',table:'A'}],
+        2:[{site:'南西LADY店',time:'10:30-12:00',table:'A'},{site:'中山一店',time:'12:00-14:00',table:'A'},{site:'南西AS店',time:'15:00-17:30',table:'A'},{site:'敦南LADY店',time:'17:35-19:30',table:'A'}],
         3:[{site:'中山一店',time:'09:30-12:30',table:'A'}],
         4:[],
-        5:[{site:'延平倉',time:'09:30-18:30',table:'A'}]
+        5:[{site:'台北倉',time:'09:30-18:30',table:'A'}]
       }
     },
     { region:'台北', code:'北2', name:'朱銘澤', hours:'依當日排程',
       tables:{ A:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3,5]),T('濾網清潔',[2,3])] },
       weeklyStops:{
-        1:[{site:'大安',time:'10:30-12:00',table:'A'},{site:'敦南AS',time:'15:40-17:40',table:'A'},{site:'敦南OL',time:'17:40-19:30',table:'A'}],
-        2:[{site:'大安',time:'10:30-12:00',table:'A'},{site:'敦南AS',time:'15:40-17:40',table:'A'},{site:'敦南OL',time:'17:40-19:30',table:'A'}],
-        3:[{site:'大安',time:'09:30-12:30',table:'A'},{site:'敦南AS',time:'13:40-15:30',table:'A'},{site:'敦南OL',time:'15:30-17:00',table:'A'},{site:'敦南大碼',time:'17:00-18:30',table:'A'}],
-        4:[{site:'敦南AS',time:'09:30-13:30',table:'A'},{site:'敦南OL',time:'09:30-13:30',table:'A'},{site:'支援門市',time:'14:30-18:30',table:'A'}],
-        5:[{site:'延平倉',time:'09:30-18:30',table:'A'}]
+        1:[{site:'大安店',time:'10:30-12:00',table:'A'},{site:'敦南AS店',time:'15:40-17:40',table:'A'},{site:'敦南LADY店',time:'17:40-19:30',table:'A'}],
+        2:[{site:'大安店',time:'10:30-12:00',table:'A'},{site:'敦南AS店',time:'15:40-17:40',table:'A'},{site:'敦南LADY店',time:'17:40-19:30',table:'A'}],
+        3:[{site:'大安店',time:'09:30-12:30',table:'A'},{site:'敦南AS店',time:'13:40-15:30',table:'A'},{site:'敦南LADY店',time:'15:30-17:00',table:'A'},{site:'敦南大碼店',time:'17:00-18:30',table:'A'}],
+        4:[{site:'敦南AS店',time:'09:30-13:30',table:'A'},{site:'敦南LADY店',time:'09:30-13:30',table:'A'},{site:'支援門市',time:'14:30-18:30',table:'A'}],
+        5:[{site:'台北倉',time:'09:30-18:30',table:'A'}]
       }
     },
     { region:'台北', code:'北3', name:'賴昱誠', hours:'依當日排程',
@@ -506,16 +513,16 @@
         B:[T('勻貨歸倉',[1,2,3,4,5]),T('補貨歸倉',[1,2,3,4,5]),T('追加歸倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[4]),T('新品整理',[4]),T('濾網清潔',[2,3])]
       },
       weeklyStops:{
-        1:[{site:'新莊宏匯',time:'10:30-19:30',table:'A'}],
-        2:[{site:'西門AS',time:'10:30-19:30',table:'B'},{site:'西門大碼',time:'10:30-19:30',table:'B'}],
-        3:[{site:'新莊宏匯',time:'09:30-18:30',table:'A'}],
-        4:[{site:'西門AS',time:'09:30-18:30',table:'B'},{site:'西門三店(IP)',time:'09:30-18:30',table:'B'}],
-        5:[{site:'延平倉',time:'09:30-18:30',table:'A'}]
+        1:[{site:'新莊宏匯店',time:'10:30-19:30',table:'A'}],
+        2:[{site:'西門店',time:'10:30-19:30',table:'B'},{site:'西門大碼店',time:'10:30-19:30',table:'B'}],
+        3:[{site:'新莊宏匯店',time:'09:30-18:30',table:'A'}],
+        4:[{site:'西門店',time:'09:30-18:30',table:'B'},{site:'西門r.fav店',time:'09:30-18:30',table:'B'}],
+        5:[{site:'台北倉',time:'09:30-18:30',table:'A'}]
       }
     },
     { region:'台北', code:'北4', name:'NANA', hours:'依當日排程',
       tables:{ A:[ T('黑貓宅急便',[1,2,3,4,5]), T('新竹物流',[1,2,3,4,5]), T('佶傳',[1,2,3,4,5]) ] },
-      dailyStops:[ {site:'延平倉(寄貨)',time:'依當日排程',table:'A'} ]
+      dailyStops:[ {site:'台北倉',time:'依當日排程',table:'A'} ]
     }
   ];
 
@@ -717,6 +724,7 @@
       checkinsLoadedOnce = true;
       lastLoadedAt = new Date();
     }catch(e){ allCheckins = allCheckins || []; console.error(e); }
+    await loadWithdrawPlan();
     try{
       const res2 = await fetch(APPS_SCRIPT_URL + '?action=overrides');
       const data2 = await res2.json();
@@ -1208,6 +1216,35 @@
   const SHIP_SITES = ['延平倉','夢時代','麗寶','南紡','台南FOCUS','嘉義文化','嘉義秀泰'];
   const SHIP_CARRIER_MAP = { '寄黑貓':'黑貓宅急便', '黑貓宅急便':'黑貓宅急便', '寄新竹物流':'新竹物流', '新竹物流':'新竹物流', '佶傳':'佶傳' };
   function shipCarrierFor(taskName){ return SHIP_CARRIER_MAP[taskName] || null; }
+  function isWithdrawTask(name){ return /撤/.test(name||''); }
+
+  // ============ 商控：各店需撤出件數 ============
+  // 部署 withdraw-apps-script.txt 後，把網頁應用程式網址貼在這裡；留空＝不顯示「需撤件數」，只保留司機填實際件數。
+  const WITHDRAW_URL = '';
+  let withdrawPlan = {}; // 店名 -> 需撤出件數（今天）
+  async function loadWithdrawPlan(){
+    if(!WITHDRAW_URL) return;
+    const date = todayDateStr();
+    const ck = 'wd_plan_'+date;
+    try{
+      const res = await fetch(WITHDRAW_URL + '?action=withdraw&date=' + encodeURIComponent(date));
+      const j = await res.json();
+      if(j && j.success && Array.isArray(j.items)){
+        const m = {}; j.items.forEach(it=>{ if(it && it.site) m[String(it.site).trim()] = Number(it.qty)||0; });
+        withdrawPlan = m;
+        try{ localStorage.setItem(ck, JSON.stringify(m)); }catch(e){}
+        return;
+      }
+    }catch(e){ console.error(e); }
+    try{ const c = localStorage.getItem(ck); if(c) withdrawPlan = JSON.parse(c) || {}; }catch(e){}
+  }
+  function plannedPieces(stop, st){
+    const names = [st && st.selectedStore, st && st.site, stop && stop.site];
+    for(const n of names){
+      if(n && Object.prototype.hasOwnProperty.call(withdrawPlan, String(n).trim())) return withdrawPlan[String(n).trim()];
+    }
+    return null;
+  }
 
   function renderTaskRows(stop, st, weekday, locked){
     const tasks = getStopTasks(currentDriver, stop, weekday, st);
@@ -1263,6 +1300,23 @@
           </div>`}
         </div>`;
       }
+      // 撤貨類工作：登記「該店需要撤出的件數」
+      let piecesHtml = '';
+      if(!shipCarrier && isWithdrawTask(t.name)){
+        const pv = (typeof rec.pieces==='number') ? rec.pieces : '';
+        const plan = plannedPieces(stop, st);
+        const planLine = (plan===null) ? '' : `<div class="plan">商控通知：本店需撤出 <b>${plan}</b> 件</div>`;
+        const diffLine = (plan!==null && typeof rec.pieces==='number' && rec.pieces!==plan) ? `<div class="plan diff">與商控件數相差 ${rec.pieces-plan>0?'+':''}${rec.pieces-plan} 件</div>` : '';
+        piecesHtml = `<div class="piecesrow" data-pieces-task="${escapeHtml(t.name)}" data-planned="${plan===null?'':plan}">
+          ${planLine}
+          <div class="plabel">實際撤出件數</div>
+          <button type="button" data-pc="-1" ${dis}>－</button>
+          <input type="number" inputmode="numeric" min="0" step="1" value="${pv}" placeholder="0" data-pieces-input="${escapeHtml(t.name)}" ${dis}>
+          <button type="button" data-pc="1" ${dis}>＋</button>
+          <span class="punit">件</span>
+          ${diffLine}
+        </div>`;
+      }
       const taskBtnsHtml = shipCarrier ? '' : `<div class="taskbtns">
             <button class="tbtn done ${status==='done'?'active':''}" data-val="done" ${dis}>完成</button>
             <button class="tbtn notdone ${status==='partial'?'active':''}" data-val="partial" ${dis}>未完成</button>
@@ -1276,6 +1330,7 @@
         ${extraHtml}
         ${t.extra && !locked ? `<span class="extrarmv" data-extra-rm="${escapeHtml(t.name)}">移除這項</span>` : ''}
         ${shipHtml}
+        ${piecesHtml}
       </div>`;
     }).join('');
 
@@ -1309,7 +1364,10 @@
         const prev = st.tasks[taskName] || {};
         // 標記完成/未完成/不適用時，之前登記的箱數（boxes）要一起帶過去，
         // 不然點狀態按鈕會把剛剛登記的箱數整個蓋掉、看起來像資料消失了。
-        const carryBoxes = prev.boxes ? { boxes: prev.boxes } : {};
+        const carryBoxes = {};
+        if(prev.boxes) carryBoxes.boxes = prev.boxes;
+        if(typeof prev.pieces==='number') carryBoxes.pieces = prev.pieces;
+        if(typeof prev.planned==='number') carryBoxes.planned = prev.planned;
         if(prev.status === val){
           st.tasks[taskName] = { ...carryBoxes }; // toggle off
         }else if(val==='done'){
@@ -1330,6 +1388,28 @@
         inp.closest('.pctrow').querySelector('.pctval').textContent = e.target.value+'%';
       });
       inp.addEventListener('change', async ()=>{ await saveCurrentState(); });
+    });
+    document.querySelectorAll('#taskRows .piecesrow[data-pieces-task]').forEach(box=>{
+      const taskName = box.dataset.piecesTask;
+      const inp = box.querySelector('input[data-pieces-input]');
+      const commit = async ()=>{
+        if(!st.tasks) st.tasks = {};
+        if(!st.tasks[taskName]) st.tasks[taskName] = {};
+        const raw = inp.value.trim();
+        if(raw===''){ delete st.tasks[taskName].pieces; }
+        else{ st.tasks[taskName].pieces = Math.max(0, Math.floor(+raw) || 0); inp.value = st.tasks[taskName].pieces; }
+        if(box.dataset.planned!=='') st.tasks[taskName].planned = +box.dataset.planned;
+        await saveCurrentState();
+        renderTaskRows(stop, st, weekday, locked);
+      };
+      inp.addEventListener('change', commit);
+      box.querySelectorAll('button[data-pc]').forEach(b=>{
+        b.addEventListener('click', async ()=>{
+          const cur = Math.max(0, Math.floor(+inp.value) || 0);
+          inp.value = Math.max(0, cur + (+b.dataset.pc));
+          await commit();
+        });
+      });
     });
     document.querySelectorAll('#taskRows textarea[data-note-task]').forEach(ta=>{
       ta.addEventListener('change', async (e)=>{
@@ -1604,6 +1684,7 @@
     const online = [], notOnline = [], anomalies = [], onLeave = [];
     let totalTasks=0, totalDone=0;
     const byTaskType = {}; // name -> {totalWeighted, count}
+    const piecesByTask = {}; const plannedByTask = {};
     const reasonMap = {}; NA_REASONS.forEach(r=> reasonMap[r.code]=r.label);
     DRIVERS.forEach(d=>{
       const stops = getStopsFor(d, weekday);
@@ -1632,6 +1713,11 @@
         tasks.forEach(t=>{
           if(shipCarrierFor(t.name)) return; // 寄貨類工作（登記箱數）不算在完成度統計內
           const rec2 = st.tasks && st.tasks[t.name];
+          if(rec2 && typeof rec2.pieces==='number'){
+            if(!piecesByTask[t.name]) piecesByTask[t.name] = 0;
+            piecesByTask[t.name] += rec2.pieces;
+            if(typeof rec2.planned==='number') plannedByTask[t.name] = (plannedByTask[t.name]||0) + rec2.planned;
+          }
           if(rec2 && rec2.status==='na'){
             const reasonLabel = reasonMap[rec2.reason] || '尚未選擇原因';
             anomalies.push({type:'na', driver:d, stop, detail:`${t.name}　${reasonLabel}`, stopIdx:i, taskName:t.name, dateStr});
@@ -1651,7 +1737,7 @@
       });
     });
     const taskTypeList = Object.keys(byTaskType).map(name=>({
-      name, total: byTaskType[name].count,
+      name, total: byTaskType[name].count, pieces: piecesByTask[name] || 0, planned: plannedByTask[name] || 0,
       pct: byTaskType[name].count ? Math.round(byTaskType[name].weighted/byTaskType[name].count) : 0
     })).sort((a,b)=> a.pct - b.pct);
     return { online, notOnline, onLeave, anomalies, totalTasks, totalDone, taskTypeList, overallPct: totalTasks ? Math.round(totalDone/totalTasks*100) : 0 };
@@ -1871,7 +1957,7 @@
         body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">全台完成度 · ${a.overallPct}%</div></div>`;
         body += a.taskTypeList.length ? a.taskTypeList.map(t=>`
           <div class="taskpct">
-            <div class="trow"><b>${escapeHtml(t.name)}</b><span>${t.done}/${t.total} · ${t.pct}%</span></div>
+            <div class="trow"><b>${escapeHtml(t.name)}</b><span>${(t.pieces||t.planned)?`撤出 ${t.pieces}${t.planned?'/'+t.planned:''} 件 · `:''}${t.done}/${t.total} · ${t.pct}%</span></div>
             <div class="barbg"><div class="barfg" style="width:${t.pct}%"></div></div>
           </div>
         `).join('') : `<div class="placeholder">今天還沒有任何工作項目資料</div>`;
