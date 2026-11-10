@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>門市簽核</title>
+<style>
+  :root{ --bg:#F4F7FA; --card:#fff; --ink:#1B2A38; --mute:#6B7C8C; --line:#E1E8EE; --accent:#2A9BD0; --ok:#2E9B6B; --warn:#E39B2B; --bad:#D4503F; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC",sans-serif; font-size:15px; line-height:1.5; padding-bottom:40px; }
+  header{ padding:20px 16px 12px; }
+  .eyebrow{ font-size:11px; letter-spacing:.16em; color:var(--accent); }
+  h1{ margin:2px 0 0; font-size:24px; }
+  .wrap{ padding:0 16px; max-width:640px; margin:0 auto; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:12px 0; }
+  label{ display:block; font-size:12.5px; color:var(--mute); margin:10px 0 4px; }
+  select,input[type=text],input[type=date],input[type=password],textarea{ width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; font-size:16px; background:#fff; color:var(--ink); }
+  button{ font:inherit; cursor:pointer; }
+  .btn{ width:100%; padding:13px; border:none; border-radius:12px; background:var(--accent); color:#fff; font-weight:700; font-size:16px; margin-top:12px; }
+  .btn.ghost{ background:#EAF3F9; color:var(--accent); }
+  .btn:disabled{ opacity:.45; }
+  .row{ display:flex; gap:8px; align-items:center; }
+  .muted{ color:var(--mute); font-size:13px; }
+  .head{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .driver{ font-weight:700; font-size:17px; }
+  .chip{ display:inline-block; padding:2px 9px; border-radius:20px; font-size:12px; font-weight:700; }
+  .chip.done{ background:#E3F5EC; color:var(--ok); } .chip.partial{ background:#FFF1D9; color:#B26F0A; }
+  .chip.signed{ background:#E3F5EC; color:var(--ok); } .chip.pending{ background:#EEF1F4; color:var(--mute); }
+  .item{ border-top:1px solid var(--line); padding:10px 0; }
+  .item .name{ font-weight:600; }
+  .item .extra{ font-size:12.5px; color:var(--mute); margin-top:2px; }
+  .choice{ display:flex; gap:8px; margin-top:8px; }
+  .choice button{ flex:1; padding:10px; border-radius:10px; border:1.5px solid var(--line); background:#fff; font-weight:700; }
+  .choice button.on-ok{ background:var(--ok); border-color:var(--ok); color:#fff; }
+  .choice button.on-bad{ background:var(--bad); border-color:var(--bad); color:#fff; }
+  .reason{ margin-top:8px; display:none; } .reason.show{ display:block; }
+  .note{ font-size:12.5px; color:var(--mute); background:#F7F9FB; border-radius:8px; padding:6px 8px; margin-top:6px; }
+  .msg{ padding:12px; border-radius:10px; background:#FFF5E0; color:#8A5A00; font-size:14px; margin:12px 0; }
+  .msg.err{ background:#FDECE9; color:#A63A2C; }
+  .sum{ display:flex; gap:8px; margin:6px 0 2px; }
+  .sum div{ flex:1; text-align:center; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 4px; }
+  .sum b{ display:block; font-size:20px; }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <div class="eyebrow">AIR SPACE</div>
+  <h1>門市簽核</h1>
+  <div class="muted">確認物流同仁今天在本店做了哪些工作</div>
+</header>
+<div class="wrap">
+
+  <div class="card" id="loginCard">
+    <label>門市</label>
+    <select id="storeSel"><option value="">載入門市中…</option></select>
+    <label>門市代碼（4 位數，由主管取得）</label>
+    <input type="password" id="codeIn" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="請輸入代碼">
+    <label>簽核人姓名</label>
+    <input type="text" id="mgrIn" placeholder="請輸入姓名">
+    <button class="btn" id="enterBtn">查看今日物流工作</button>
+  </div>
+
+  <div id="setupMsg" class="msg hidden"></div>
+
+  <div id="mainArea" class="hidden">
+    <div class="card" style="margin-top:0">
+      <div class="head">
+        <div><div style="font-weight:700;font-size:18px" id="storeTitle"></div><div class="muted" id="mgrTitle"></div></div>
+        <button class="btn ghost" style="width:auto;padding:8px 12px;margin:0" id="logoutBtn">換人</button>
+      </div>
+      <label>日期</label>
+      <div class="row"><input type="date" id="dateIn"><button class="btn ghost" style="width:90px;margin:0;padding:11px" id="reloadBtn">重新整理</button></div>
+    </div>
+    <div class="sum" id="sumRow"></div>
+    <div id="visits"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ====== 設定 ======
+  const DISPATCH_URL = 'https://script.google.com/macros/s/AKfycbxpNQnSSTS_aFf_CbXH2q2JtxTP_1_veEJBkw43hwjNTF4_YiMypSF3t75l-2fKaIBY/exec';
+  // 門市簽核專用的 Apps Script 網址（見 signoff-apps-script.txt，部署後貼在這裡；留空就不啟用）
+  const SIGNOFF_URL = '';
+  // ====================
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const store = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }, del(k){ try{ localStorage.removeItem(k); }catch(e){} } };
+  let session = null;              // {store, code, manager}
+  let visits = [];                 // 當天本店的拜訪
+  let signed = {};                 // visitId -> {manager,time,items:{task:{result,reason}}}
+  const choice = {};               // visitId|task -> {result, reason}
+
+  function todayStr(){ const d = new Date(); const z = n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
+  function hhmm(iso){ if(!iso) return ''; const d = new Date(iso); if(isNaN(d)) return ''; return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+  function showMsg(t, err){ const m=$('setupMsg'); m.textContent=t; m.className='msg'+(err?' err':''); }
+  function hideMsg(){ $('setupMsg').className='msg hidden'; }
+
+  async function loadStores(){
+    if(!SIGNOFF_URL){ showMsg('尚未設定簽核後端網址（SIGNOFF_URL），請管理員完成部署。', false); $('storeSel').innerHTML='<option value="">（尚未啟用）</option>'; return; }
+    try{
+      const r = await fetch(SIGNOFF_URL+'?action=stores'); const j = await r.json();
+      const list = (j && j.stores) || [];
+      $('storeSel').innerHTML = '<option value="">請選擇門市</option>' + list.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+      const saved = store.get('so_store'); if(saved && list.indexOf(saved)>=0) $('storeSel').value = saved;
+    }catch(e){ showMsg('無法載入門市名單，請檢查網路後重新整理頁面。', true); }
+  }
+
+  $('enterBtn').addEventListener('click', ()=>{
+    const s=$('storeSel').value, c=$('codeIn').value.trim(), m=$('mgrIn').value.trim();
+    if(!s||!c||!m){ showMsg('請選門市、輸入代碼與姓名。', true); return; }
+    session = { store:s, code:c, manager:m };
+    store.set('so_store', s); store.set('so_mgr', m);
+    $('dateIn').value = todayStr();
+    load();
+  });
+  $('logoutBtn').addEventListener('click', ()=>{ session=null; $('mainArea').classList.add('hidden'); $('loginCard').classList.remove('hidden'); $('codeIn').value=''; hideMsg(); });
+  $('reloadBtn').addEventListener('click', load);
+  $('dateIn').addEventListener('change', load);
+
+  function stopMatches(stop, name){
+    const names = [];
+    if(stop.selectedStore) names.push(stop.selectedStore);
+    String(stop.site||'').split('/').forEach(x=>names.push(x.trim()));
+    return names.indexOf(name) >= 0;
+  }
+
+  async function load(){
+    hideMsg();
+    const date = $('dateIn').value || todayStr();
+    $('visits').innerHTML = '<div class="muted" style="padding:12px">載入中…</div>';
+    $('loginCard').classList.add('hidden'); $('mainArea').classList.remove('hidden');
+    $('storeTitle').textContent = session.store; $('mgrTitle').textContent = '簽核人：'+session.manager;
+    let checkins = [], so = null;
+    try{
+      const [a,b] = await Promise.all([ fetch(DISPATCH_URL), fetch(SIGNOFF_URL+'?action=signoffs&date='+encodeURIComponent(date)+'&store='+encodeURIComponent(session.store)+'&code='+encodeURIComponent(session.code)) ]);
+      const dj = await a.json(); checkins = Array.isArray(dj) ? dj : [];
+      so = await b.json();
+    }catch(e){ $('visits').innerHTML=''; showMsg('載入失敗，請檢查網路後按「重新整理」。', true); return; }
+    if(!so || !so.success){ $('mainArea').classList.add('hidden'); $('loginCard').classList.remove('hidden'); showMsg('門市代碼不正確，請重新輸入。', true); return; }
+    // 本店的拜訪
+    visits = [];
+    checkins.forEach(r=>{
+      if(!r || !r.key) return; const parts = String(r.key).split('|'); if(parts[2] !== date) return;
+      let st; try{ st = typeof r.state==='string' ? JSON.parse(r.state) : r.state; }catch(e){ return; }
+      ((st&&st.stops)||[]).forEach(stop=>{
+        if(!stopMatches(stop, session.store)) return;
+        const tasks = Object.keys(stop.tasks||{}).filter(k=>{ const s=(stop.tasks[k]||{}).status; return s==='done'||s==='partial'; }).map(k=>({ name:k, rec:stop.tasks[k] }));
+        if(!tasks.length) return;
+        visits.push({ id: parts[1]+'|'+(stop.time||'')+'|'+(stop.site||''), driver: parts[1], region: parts[0], slot: stop.time||'', arrive: stop.arrivedAt, depart: stop.departedAt, note: stop.note||'', tasks });
+      });
+    });
+    visits.sort((a,b)=>String(a.slot).localeCompare(String(b.slot)));
+    // 已簽核紀錄（同一項目取最後一筆）
+    signed = {};
+    (so.items||[]).forEach(it=>{
+      const id = it.driver+'|'+it.slot+'|'; // site 無法還原，用 driver+slot 比對
+      signed[id] = signed[id] || { manager: it.manager, time: it.time, items:{} };
+      signed[id].items[it.task] = { result: it.result, reason: it.reason };
+      signed[id].manager = it.manager; signed[id].time = it.time;
+    });
+    render(date);
+  }
+
+  function signedFor(v){ return signed[v.driver+'|'+v.slot+'|']; }
+
+  function render(date){
+    const total = visits.length, done = visits.filter(v=>signedFor(v) && v.tasks.every(t=>signedFor(v).items[t.name])).length;
+    $('sumRow').innerHTML = `<div><b>${total}</b><span class="muted">今日拜訪</span></div><div><b>${done}</b><span class="muted">已簽核</span></div><div><b>${total-done}</b><span class="muted">待簽核</span></div>`;
+    if(!total){ $('visits').innerHTML = `<div class="card muted">${esc(date)} 沒有物流同仁在本店完成工作的紀錄。若同仁剛離開，請稍後按「重新整理」。</div>`; return; }
+    $('visits').innerHTML = visits.map(v=>{
+      const sg = signedFor(v); const allSigned = sg && v.tasks.every(t=>sg.items[t.name]);
+      const items = v.tasks.map(t=>{
+        const r = t.rec; const key = v.id+'|'+t.name; const ch = choice[key] || (sg && sg.items[t.name] ? { result: sg.items[t.name].result, reason: sg.items[t.name].reason } : null);
+        const extras = [];
+        if(r.status==='partial') extras.push('完成度 '+(r.percent||'')+'%'+(r.reason?'（原因 '+esc(r.reason)+'）':''));
+        if(r.boxes && r.boxes.length) extras.push('寄貨：'+r.boxes.map(b=>esc(b.site)+' '+b.qty+'箱').join('、'));
+        if(r.pieces!=null && r.pieces!=='') extras.push('實際撤出 '+r.pieces+' 件'+(r.planned!=null && r.planned!==''?'（商控通知 '+r.planned+' 件）':''));
+        if(r.note) extras.push('備註：'+esc(r.note));
+        return `<div class="item" data-k="${esc(key)}">
+          <div class="head"><span class="name">${esc(t.name)}</span><span class="chip ${r.status}">${r.status==='done'?'完成':'部分完成'}</span></div>
+          ${extras.length?`<div class="extra">${extras.join('<br>')}</div>`:''}
+          <div class="choice">
+            <button data-act="ok" class="${ch&&ch.result==='確認'?'on-ok':''}">✓ 確認有做</button>
+            <button data-act="bad" class="${ch&&ch.result==='異議'?'on-bad':''}">✗ 有異議</button>
+          </div>
+          <div class="reason ${ch&&ch.result==='異議'?'show':''}"><input type="text" placeholder="請說明異議原因（必填）" value="${esc(ch&&ch.reason||'')}"></div>
+        </div>`;
+      }).join('');
+      return `<div class="card" data-v="${esc(v.id)}">
+        <div class="head"><div><div class="driver">${esc(v.driver)} <span class="muted" style="font-weight:400">${esc(v.region)}</span></div>
+        <div class="muted">${esc(v.slot)}　實際 ${hhmm(v.arrive)||'—'} 到 ${hhmm(v.depart)||'—'}</div></div>
+        <span class="chip ${allSigned?'signed':'pending'}">${allSigned?'已簽核':'待簽核'}</span></div>
+        ${v.note?`<div class="note">司機備註：${esc(v.note)}</div>`:''}
+        ${items}
+        ${allSigned?`<div class="muted" style="margin-top:8px">由 ${esc(sg.manager)} 於 ${esc(sg.time)} 簽核。如需更正可重新選擇後再送出。</div>`:''}
+        <div class="row" style="margin-top:8px"><button class="btn ghost" data-all style="margin-top:4px">全部確認</button><button class="btn" data-submit style="margin-top:4px">${allSigned?'重新送出簽核':'送出簽核'}</button></div>
+      </div>`;
+    }).join('');
+  }
+
+  $('visits').addEventListener('click', async e=>{
+    const card = e.target.closest('[data-v]'); if(!card) return;
+    const v = visits.find(x=>x.id===card.dataset.v); if(!v) return;
+    const itemEl = e.target.closest('.item');
+    if(itemEl && e.target.dataset.act){
+      const key = itemEl.dataset.k; const act = e.target.dataset.act;
+      choice[key] = { result: act==='ok'?'確認':'異議', reason: (choice[key]&&choice[key].reason)||'' };
+      itemEl.querySelector('[data-act=ok]').className = act==='ok'?'on-ok':'';
+      itemEl.querySelector('[data-act=bad]').className = act==='bad'?'on-bad':'';
+      itemEl.querySelector('.reason').classList.toggle('show', act==='bad');
+      return;
+    }
+    if(e.target.hasAttribute('data-all')){
+      v.tasks.forEach(t=>{ choice[v.id+'|'+t.name] = { result:'確認', reason:'' }; });
+      render($('dateIn').value); return;
+    }
+    if(e.target.hasAttribute('data-submit')){
+      const items = [];
+      for(const t of v.tasks){
+        const key = v.id+'|'+t.name; const itemEl = card.querySelector(`.item[data-k="${CSS.escape(key)}"]`);
+        const sg = signedFor(v); let ch = choice[key] || (sg&&sg.items[t.name] ? { result: sg.items[t.name].result, reason: sg.items[t.name].reason } : null);
+        if(!ch){ alert('請先選擇「'+t.name+'」：確認或有異議'); return; }
+        if(ch.result==='異議'){ const rv = itemEl.querySelector('.reason input').value.trim(); if(!rv){ alert('「'+t.name+'」有異議，請填原因'); return; } ch = { result:'異議', reason:rv }; }
+        items.push({ task:t.name, result:ch.result, reason:ch.reason||'' });
+      }
+      const btn = e.target; btn.disabled = true; btn.textContent = '送出中…';
+      try{
+        const body = { action:'signoff', code:session.code, store:session.store, manager:session.manager, date:$('dateIn').value||todayStr(), driver:v.driver, region:v.region, slot:v.slot, arrive:hhmm(v.arrive), depart:hhmm(v.depart), note:v.note, items };
+        const r = await fetch(SIGNOFF_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(body) });
+        const j = await r.json();
+        if(!j.success) throw new Error(j.error||'失敗');
+        v.tasks.forEach(t=>delete choice[v.id+'|'+t.name]);
+        await load();
+      }catch(err){ alert('送出失敗：'+err.message+'\n請檢查網路後再試一次。'); btn.disabled=false; btn.textContent='送出簽核'; }
+    }
+  });
+  $('visits').addEventListener('input', e=>{
+    if(e.target.matches('.reason input')){ const k = e.target.closest('.item').dataset.k; choice[k] = { result:'異議', reason:e.target.value }; }
+  });
+
+  const sm = store.get('so_mgr'); if(sm) $('mgrIn').value = sm;
+  loadStores();
+})();
+</script>
+</body>
+</html>
