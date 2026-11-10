@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -258,6 +259,11 @@
       <h3 id="scanModalTitle">掃描箱號</h3>
       <div id="scanReaderDiv"></div>
       <div class="scanhint" id="scanHintText">將條碼對準框框內</div>
+      <div id="contWrap" style="display:none; margin-bottom:8px;">
+        <div id="contStat" style="font-size:13px; font-weight:600; margin-bottom:6px;"></div>
+        <div id="contFeed" style="max-height:170px; overflow-y:auto; font-size:13px; line-height:1.5;"></div>
+        <button class="filterchip" type="button" id="contRetry" style="display:none; margin-top:6px; width:100%;"></button>
+      </div>
       <div id="photoWrap" style="text-align:center; margin:6px 0 10px;">
         <button class="filterchip" type="button" id="photoScanBtn">📷 掃不出來？改用拍照辨識</button>
         <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none;">
@@ -405,7 +411,7 @@
     });
   }
 
-  async function submitScan(boxCode, qty, mode, type){
+  async function submitScan(boxCode, qty, mode, type, ts){
     if(!operatorName){
       $('opNameInput').value='';
       $('opModalBg').classList.add('active');
@@ -415,7 +421,7 @@
       const res = await fetch(APPS_SCRIPT_URL, {
         method:'POST',
         headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action:'record', mode, boxCode, qty: qty||1, type: type||'', operator: operatorName, ts: new Date().toISOString() })
+        body: JSON.stringify({ action:'record', mode, boxCode, qty: qty||1, type: type||'', operator: operatorName, ts: ts || new Date().toISOString() })
       });
       const json = await res.json();
       if(json && json.record){
@@ -818,7 +824,6 @@
   // ============ SCAN / MANUAL ENTRY ============
   let scannerActive = false;
   let scannerPaused = false;
-  let quaggaDetectedHandler = null;
   let manualMode = false;
 
   let currentScanMode = 'arrive';
@@ -847,72 +852,169 @@
     $('typeWrap').style.display = mode==='arrive' ? 'block' : 'none';
     currentBoxType = '新品';
     document.querySelectorAll('#typeWrap .filterchip').forEach(c=> c.classList.toggle('active', c.dataset.type==='新品'));
+    if(!manual && !operatorName){ $('opNameInput').value=''; $('opModalBg').classList.add('active'); return; }
+    contMode = !manual; contCount = 0; contSeen = {}; contLastAt = 0;
+    $('contFeed').innerHTML = ''; $('contStat').textContent = '';
+    $('contWrap').style.display = contMode ? 'block' : 'none';
+    $('scanConfirmBtn').style.display = contMode ? 'none' : '';
+    $('scanCancelBtn').textContent = contMode ? '完成' : '取消';
+    const ql = document.querySelector('#qtyWrap label'); if(ql) ql.textContent = contMode ? '件數（每箱預設值，掃到自動送出）' : '件數';
+    if(contMode){ $('scanHintText').textContent = '連續掃描：掃到自動登記，直接對準下一箱'; updateContUI(); }
     $('scanModalBg').classList.add('active');
     scannerPaused = manual;
     if(!manual) startCamera();
     else setTimeout(()=> $('scanCodeInput').focus(), 50);
   }
   const BOX_RE = /^B\d{14}$/;
-  function startCamera(){
-    if(typeof Quagga === 'undefined'){
-      $('scanReaderDiv').innerHTML = '<div style="color:#fff; padding:24px; text-align:center; font-size:14px;">相機掃描功能載入失敗，請改用手動輸入</div>';
-      return;
-    }
-    Quagga.init({
-      inputStream: {
-        name: 'Live', type: 'LiveStream', target: document.getElementById('scanReaderDiv'),
-        constraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-      },
-      numOfWorkers: 0,
-      locate: true,
-      locator: { patchSize: 'large', halfSample: false },
-      frequency: 15,
-      decoder: { readers: ['code_128_reader','code_39_reader','code_93_reader','codabar_reader','i2of5_reader'], multiple: false }
-    }, function(err){
-      if(err){
-        $('scanReaderDiv').innerHTML = '<div style="color:#fff; padding:24px; text-align:center; font-size:14px;">無法開啟相機，請確認已允許相機權限</div>';
-        return;
+  // ====== 掃描引擎：優先用瀏覽器內建 BarcodeDetector，沒有就用 ZXing；Quagga 只留給拍照備援 ======
+  const SCAN_FORMATS = ['code_128','code_39','code_93','codabar','itf','qr_code'];
+  let camStream=null, camVideo=null, camTimer=0, camBusy=false, camToken=0, camFrameNo=0, camTrack=null, torchOn=false;
+  let bdDetector=null, bdTried=false, zxReader=null, recentReads=[], zxRotateEvery=false;
+  async function getBD(){
+    if(bdTried) return bdDetector;
+    bdTried = true;
+    try{
+      if(window.BarcodeDetector){
+        let fmts = SCAN_FORMATS;
+        if(BarcodeDetector.getSupportedFormats){ const sup = await BarcodeDetector.getSupportedFormats(); fmts = SCAN_FORMATS.filter(f=>sup.includes(f)); }
+        if(fmts.length) bdDetector = new BarcodeDetector({formats: fmts});
       }
-      const videoEl = document.querySelector('#scanReaderDiv video');
-      if(videoEl){
-        videoEl.setAttribute('playsinline','true'); videoEl.setAttribute('webkit-playsinline','true');
-        videoEl.muted = true; videoEl.play().catch(()=>{});
-        videoEl.style.width = '100%'; videoEl.style.borderRadius = '10px';
-      }
-      Quagga.start();
-      scannerActive = true;
-      try{
-        const tr = Quagga.CameraAccess.getActiveTrack();
-        const caps = tr && tr.getCapabilities ? tr.getCapabilities() : {};
-        const adv = [];
-        if(caps.focusMode && caps.focusMode.indexOf('continuous')>=0) adv.push({focusMode:'continuous'});
-        if(caps.zoom) adv.push({zoom: Math.min(caps.zoom.max||1, Math.max(caps.zoom.min||1, 1.5))});
-        if(adv.length) tr.applyConstraints({advanced: adv}).catch(()=>{});
-      }catch(_){}
-      const canvasEl = document.querySelector('#scanReaderDiv canvas');
-      if(canvasEl){ canvasEl.style.width='100%'; canvasEl.style.position='absolute'; canvasEl.style.top='0'; }
-    });
-
-    let recentReads = [];
-    const WINDOW_MS = 4000;
-    quaggaDetectedHandler = function(result){
-      if(scannerPaused) return;
-      const code = result && result.codeResult && result.codeResult.code;
-      if(!code) return;
-      const known = manifestBoxes.some(x=>x.code===code);          // 出貨單裡有這個碼：幾乎不可能是誤讀，直接採用
-      const fmtOk = BOX_RE.test(code);                              // 格式符合 B+14位數字
-      if(!known && !fmtOk) return;                                  // 亂碼、少讀一段的結果一律丟掉
-      const now = Date.now();
-      recentReads = recentReads.filter(r=> now - r.time < WINDOW_MS);
-      recentReads.push({ code, time: now });
-      const matches = recentReads.filter(r=>r.code===code).length;
-      if(!known && matches < 2){ $('scanHintText').textContent = '辨識中...（再靠近一點、保持穩定）'; return; }
-      recentReads = [];
-      acceptScan(code);
+    }catch(_){ bdDetector = null; }
+    return bdDetector;
+  }
+  function getZX(){
+    if(zxReader) return zxReader;
+    if(typeof ZXing==='undefined') return null;
+    const h = new Map(), F = ZXing.BarcodeFormat;
+    h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [F.CODE_128, F.CODE_39, F.CODE_93, F.ITF, F.CODABAR, F.QR_CODE]);
+    h.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    const r = new ZXing.MultiFormatReader(); r.setHints(h); zxReader = r; return r;
+  }
+  function zxDecodeCanvas(cv){
+    const r = getZX(); if(!r) return null;
+    const w = cv.width, h = cv.height; if(!w || !h) return null;
+    const d = cv.getContext('2d', {willReadFrequently:true}).getImageData(0,0,w,h).data;
+    const lum = new Uint8ClampedArray(w*h);
+    for(let i=0,j=0;j<lum.length;i+=4,j++) lum[j] = (d[i]*77 + d[i+1]*150 + d[i+2]*29) >> 8;
+    const tryOne = (arr)=>{
+      try{ return r.decodeWithState(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.RGBLuminanceSource(arr,w,h)))).getText(); }
+      catch(_){ return null; }
     };
-    Quagga.onDetected(quaggaDetectedHandler);
+    let t = tryOne(lum);
+    if(!t){ const inv = new Uint8ClampedArray(lum.length); for(let k=0;k<lum.length;k++) inv[k]=255-lum[k]; t = tryOne(inv); }
+    if(!t && (zxRotateEvery || camFrameNo % 3 === 0)){      // 條碼直著拿：轉 90 度再試一次（即時鏡頭每 3 幀試一次，拍照辨識每次都試）
+      const T = new Uint8ClampedArray(w*h);
+      for(let y=0;y<h;y++) for(let x=0;x<w;x++) T[x*h+(h-1-y)] = lum[y*w+x];
+      try{ t = r.decodeWithState(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.RGBLuminanceSource(T,h,w)))).getText(); }catch(_){ t = null; }
+    }
+    return t;
+  }
+  async function decodeCanvas(cv){
+    const bd = await getBD();
+    if(bd){ try{ const res = await bd.detect(cv); if(res && res.length && res[0].rawValue) return res[0].rawValue; }catch(_){} }
+    return zxDecodeCanvas(cv);
+  }
+  function msgBox(t){ $('scanReaderDiv').innerHTML = '<div style="color:#fff; padding:24px; text-align:center; font-size:14px;">'+t+'</div>'; }
+  async function startCamera(){
+    const host = $('scanReaderDiv');
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      msgBox('這個瀏覽器無法使用相機（需要 https 網址，且不要在 LINE／Facebook 內建瀏覽器開啟）。請改用 Safari 或 Chrome，或用手動輸入。'); return;
+    }
+    const myToken = ++camToken;
+    let stream;
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080} }, audio:false });
+    }catch(e){
+      if(myToken!==camToken) return;
+      msgBox('無法開啟相機，請確認已允許相機權限（'+(e && e.name || '錯誤')+'）。若在 LINE 內開啟，請改用 Safari／Chrome。'); return;
+    }
+    if(myToken!==camToken || !$('scanModalBg').classList.contains('active')){ stream.getTracks().forEach(t=>t.stop()); return; }
+    camStream = stream; camTrack = stream.getVideoTracks()[0]; torchOn = false;
+    host.innerHTML = '';
+    const v = document.createElement('video');
+    v.setAttribute('playsinline','true'); v.setAttribute('webkit-playsinline','true'); v.muted = true; v.autoplay = true;
+    v.style.cssText = 'width:100%; display:block; border-radius:10px;';
+    v.srcObject = stream; camVideo = v; host.appendChild(v);
+    try{ await v.play(); }catch(_){}
+    // 瞄準框
+    const guide = document.createElement('div');
+    guide.style.cssText = 'position:absolute; left:8%; right:8%; top:30%; height:40%; border:2px solid rgba(255,255,255,.85); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.28); pointer-events:none;';
+    host.appendChild(guide);
+    // 手電筒（裝置支援才顯示）
+    try{
+      const caps = camTrack.getCapabilities ? camTrack.getCapabilities() : {};
+      if(caps.torch){
+        const tb = document.createElement('button');
+        tb.type='button'; tb.textContent='🔦 補光';
+        tb.style.cssText = 'position:absolute; right:10px; top:10px; padding:8px 12px; border-radius:20px; border:none; background:rgba(0,0,0,.6); color:#fff; font-size:13px; z-index:2;';
+        tb.addEventListener('click', e=>{
+          e.stopPropagation(); torchOn = !torchOn;
+          camTrack.applyConstraints({advanced:[{torch:torchOn}]}).catch(()=>{});
+          tb.style.background = torchOn ? '#F2A93A' : 'rgba(0,0,0,.6)';
+        });
+        host.appendChild(tb);
+      }
+      const adv = [];
+      if(caps.focusMode && caps.focusMode.indexOf('continuous')>=0) adv.push({focusMode:'continuous'});
+      if(adv.length) camTrack.applyConstraints({advanced:adv}).catch(()=>{});
+    }catch(_){}
+    // 點畫面重新對焦
+    host.addEventListener('click', ()=>{
+      try{
+        const caps = camTrack.getCapabilities ? camTrack.getCapabilities() : {};
+        if(caps.focusMode && caps.focusMode.indexOf('single-shot')>=0){
+          camTrack.applyConstraints({advanced:[{focusMode:'single-shot'}]}).then(()=>setTimeout(()=>{
+            if(caps.focusMode.indexOf('continuous')>=0) camTrack.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
+          }, 1200)).catch(()=>{});
+        }
+      }catch(_){}
+    });
+    scannerActive = true; recentReads = []; camFrameNo = 0;
+    getBD(); getZX();
+    camLoop(myToken);
+  }
+  function grabFrame(crop){
+    const v = camVideo; if(!v || !v.videoWidth) return null;
+    const vw = v.videoWidth, vh = v.videoHeight;
+    let sx=0, sy=0, sw=vw, sh=vh;
+    if(crop){ sx = Math.round(vw*0.08); sw = Math.round(vw*0.84); sy = Math.round(vh*0.3); sh = Math.round(vh*0.4); }
+    const scale = Math.min(1, 1280 / sw);
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(sw*scale); cv.height = Math.round(sh*scale);
+    cv.getContext('2d', {willReadFrequently:true}).drawImage(v, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+    return cv;
+  }
+  async function camLoop(token){
+    if(token!==camToken || !camStream) return;
+    if(!scannerPaused && !camBusy){
+      camBusy = true;
+      try{
+        // 單數幀看瞄準框（放大、辨識較快），雙數幀看整個畫面
+        const cv = grabFrame(camFrameNo++ % 2 === 0);
+        if(cv){
+          const code = await decodeCanvas(cv);
+          if(code && token===camToken) onCodeDetected(code);
+        }
+      }catch(_){}
+      camBusy = false;
+    }
+    if(token===camToken) camTimer = setTimeout(()=>camLoop(token), 60);
+  }
+  function onCodeDetected(code){
+    if(scannerPaused) return;
+    const known = manifestBoxes.some(x=>x.code===code);          // 出貨單裡有這個碼：直接採用
+    const fmtOk = BOX_RE.test(code);                              // 格式符合 B+14位數字
+    if(!known && !fmtOk){ $('scanHintText').textContent = '讀到「'+code.slice(0,20)+'」，不是箱號格式，請對準箱號條碼'; return; }
+    const now = Date.now();
+    recentReads = recentReads.filter(r=> now - r.time < 4000);
+    recentReads.push({ code, time: now });
+    const matches = recentReads.filter(r=>r.code===code).length;
+    if(!known && matches < 2){ $('scanHintText').textContent = '辨識中...（保持穩定）'; return; }
+    recentReads = [];
+    acceptScan(code);
   }
   function acceptScan(code){
+    if(contMode){ contAccept(code); return; }
     scannerPaused = true;
     if(navigator.vibrate) navigator.vibrate(80);
     $('scanCodeInput').value = code;
@@ -920,14 +1022,37 @@
     $('scanHintText').textContent = '掃描成功，請確認箱號後按確認';
   }
   // 拍照辨識：用整張照片多種大小重試，比即時鏡頭容易成功
-  function decodePhoto(file){
+  async function decodePhotoNew(url){
+    const img = new Image(); img.src = url;
+    try{ await img.decode(); }catch(_){ return null; }
+    for(const W of [1600, 2400, 1200, 900, 3200]){
+      const sc = Math.min(1, W / Math.max(img.naturalWidth, 1));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.naturalWidth*sc); cv.height = Math.round(img.naturalHeight*sc);
+      cv.getContext('2d', {willReadFrequently:true}).drawImage(img, 0, 0, cv.width, cv.height);
+      const code = await decodeCanvas(cv);
+      if(code && (BOX_RE.test(code) || manifestBoxes.some(x=>x.code===code))) return code;
+    }
+    return null;
+  }
+  async function decodePhoto(file){
     $('scanHintText').textContent = '照片辨識中...';
     const url = URL.createObjectURL(file);
+    zxRotateEvery = true;
+    const got = await decodePhotoNew(url);
+    zxRotateEvery = false;
+    if(got){ URL.revokeObjectURL(url); acceptScan(got); photoRestart(); return; }
+    if(typeof Quagga==='undefined'){
+      URL.revokeObjectURL(url);
+      $('scanHintText').textContent = '照片也辨識不出來，請改用「手動輸入」，或到「出貨單」分頁用日期＋箱號查詢';
+      photoRestart(); return;
+    }
     const sizes = [1600, 2400, 1200, 800, 3200];
     const tryNext = (i)=>{
       if(i>=sizes.length){
         URL.revokeObjectURL(url);
         $('scanHintText').textContent = '照片也辨識不出來，請改用「手動輸入」，或到「出貨單」分頁用日期＋箱號查詢';
+        photoRestart();
         return;
       }
       Quagga.decodeSingle({
@@ -937,7 +1062,7 @@
       }, function(res){
         const code = res && res.codeResult && res.codeResult.code;
         if(code && (BOX_RE.test(code) || manifestBoxes.some(x=>x.code===code))){
-          URL.revokeObjectURL(url); acceptScan(code);
+          URL.revokeObjectURL(url); acceptScan(code); photoRestart();
         } else tryNext(i+1);
       });
     };
@@ -947,17 +1072,116 @@
   $('photoInput').addEventListener('change', e=>{
     const f = e.target.files && e.target.files[0];
     if(!f) return;
-    if(typeof Quagga==='undefined'){ $('scanHintText').textContent='辨識元件載入失敗，請改用手動輸入'; return; }
-    if(scannerActive){ try{ Quagga.stop(); }catch(_){} scannerActive=false; }
+    stopCamera();
     decodePhoto(f);
   });
   function stopCamera(){
-    if(scannerActive){
-      try{ if(quaggaDetectedHandler) Quagga.offDetected(quaggaDetectedHandler); Quagga.stop(); }catch(e){}
-      scannerActive = false; quaggaDetectedHandler = null;
+    camToken++; clearTimeout(camTimer); camBusy = false;
+    if(camStream){ try{ camStream.getTracks().forEach(t=>t.stop()); }catch(_){} }
+    camStream = null; camTrack = null; camVideo = null; scannerActive = false; torchOn = false;
+  }
+
+  // ====== 連續掃描模式 ======
+  let contMode = false, contCount = 0, contSeen = {}, contLastAt = 0, contAudio = null;
+  let failedQ = []; const rowMap = {};
+  try{ failedQ = JSON.parse(localStorage.getItem('gc_failed')||'[]') || []; }catch(_){ failedQ = []; }
+  function saveFailed(){ try{ localStorage.setItem('gc_failed', JSON.stringify(failedQ)); }catch(_){} }
+  function beep(){
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return;
+      contAudio = contAudio || new AC(); if(contAudio.state==='suspended') contAudio.resume();
+      const o = contAudio.createOscillator(), g = contAudio.createGain();
+      o.frequency.value = 1100; g.gain.value = 0.15; o.connect(g); g.connect(contAudio.destination);
+      o.start(); o.stop(contAudio.currentTime + 0.12);
+    }catch(_){}
+  }
+  function photoRestart(){ if(contMode && $('scanModalBg').classList.contains('active')){ $('scanReaderDiv').innerHTML=''; startCamera(); } }
+  function stageText(json, code){
+    const r = (json && json.record) || {};
+    const st = json && json.stage;
+    const inManifest = !(manifestLoaded && manifestBoxes.length) || manifestBoxes.some(x=>x.code===code);
+    const warn = inManifest ? '' : '　⚠ 不在出貨單';
+    if(st==='arrive') return {cls:'ok', t:'✓ 已進倉'+(r.zone?'　儲位 '+r.zone:'')+warn};
+    if(st==='depart') return {cls:'ok', t:'✓ 已出艙'+warn};
+    if(st==='organize') return {cls:'ok', t:'✓ 已整新'};
+    if(st==='already_arrived') return {cls:'warn', t:'⚠ 已進倉過'+(r.zone?'　儲位 '+r.zone:'')};
+    if(st==='already_departed') return {cls:'warn', t:'⚠ 已出艙過'};
+    if(st==='already_organized') return {cls:'warn', t:'⚠ 已整新過'};
+    if(st==='not_arrived') return {cls:'warn', t:'⚠ 還沒有進倉紀錄'};
+    return {cls:'ok', t:'✓ 已登記'+warn};
+  }
+  function updateContUI(){
+    const rows = $('contFeed').querySelectorAll('[data-s]');
+    let ok=0, warn=0, fail=0, send=0;
+    rows.forEach(r=>{ const s=r.dataset.s; if(s==='ok') ok++; else if(s==='warn') warn++; else if(s==='fail') fail++; else send++; });
+    $('contStat').textContent = '本次已掃 '+contCount+' 箱　成功 '+ok+(warn?'　提醒 '+warn:'')+(fail?'　失敗 '+fail:'')+(send?'　送出中 '+send:'');
+    const b = $('contRetry');
+    if(failedQ.length){ b.style.display='block'; b.textContent='⟳ 重送未成功的 '+failedQ.length+' 筆'; } else b.style.display='none';
+  }
+  function setRow(row, cls, text){
+    row.dataset.s = cls;
+    const color = cls==='ok' ? '#2e9d62' : (cls==='warn' ? '#d98a1f' : (cls==='fail' ? '#d9534f' : '#888'));
+    row.style.color = color;
+    row.querySelector('.rt').textContent = text;
+  }
+  async function contSend(item, row){
+    const json = await submitScan(item.code, item.qty, item.mode, item.type, item.ts);
+    if(!json || !json.success){
+      setRow(row, 'fail', '✗ 送出失敗，已先存在手機，稍後可重送');
+      if(!failedQ.some(f=>f.code===item.code && f.mode===item.mode)){ failedQ.push(item); saveFailed(); }
+      delete contSeen[item.code];
+    }else{
+      failedQ = failedQ.filter(f=>!(f.code===item.code && f.mode===item.mode)); saveFailed(); contSeen[item.code] = Date.now();
+      const x = stageText(json, item.code);
+      setRow(row, x.cls, x.t);
+      renderHomeStats();
+    }
+    updateContUI();
+  }
+  function contAccept(code){
+    const now = Date.now();
+    if(contSeen[code]){
+      if(now - contSeen[code] > 6000){ contSeen[code] = now; $('scanHintText').textContent = code+' 剛剛已掃過，不重複登記'; }
+      return;
+    }
+    if(now - contLastAt < 800) return;
+    contLastAt = now; contSeen[code] = now; contCount++;
+    beep(); if(navigator.vibrate) navigator.vibrate(60);
+    const mode = currentScanMode;
+    const item = { code, qty: Math.max(1, parseInt($('scanQtyInput').value,10)||1), mode, type: mode==='arrive' ? currentBoxType : '', ts: new Date().toISOString() };
+    const row = document.createElement('div');
+    row.innerHTML = '<b>'+escapeHtml(code)+'</b>　<span class="rt"></span>';
+    $('contFeed').insertBefore(row, $('contFeed').firstChild); rowMap[code] = row;
+    setRow(row, 'send', '送出中…');
+    $('scanHintText').textContent = '已掃 '+code+'，請對準下一箱';
+    updateContUI();
+    contSend(item, row);
+  }
+  async function retryFailed(){
+    const list = failedQ.slice();
+    for(const item of list){
+      let row = rowMap[item.code];
+      if(!row || !row.isConnected){
+        row = document.createElement('div');
+        row.innerHTML = '<b>'+escapeHtml(item.code)+'</b>　<span class="rt"></span>';
+        $('contFeed').insertBefore(row, $('contFeed').firstChild); rowMap[item.code] = row;
+      }
+      setRow(row, 'send', '重送中…');
+      await contSend(item, row);
     }
   }
+  $('contRetry').addEventListener('click', retryFailed);
+  window.addEventListener('online', ()=>{ if(failedQ.length) retryFailed(); });
+  if(failedQ.length) setTimeout(()=>{ if(navigator.onLine!==false) retryFailed(); }, 3000);
   function closeScanModal(){
+    if(contMode && contCount>0){
+      const board = $('resultBoard'); const fail = failedQ.length;
+      board.className = 'resultboard show';
+      board.innerHTML = '<div class="boxno">本次連續掃描</div><div class="zone">共掃 '+contCount+' 箱</div>'+(fail?'<div class="meta">有 '+fail+' 筆尚未送出，下次開啟掃描或網路恢復時會自動重送</div>':'<div class="meta">全部已送出，可到「今日紀錄」查看</div>');
+      renderHomeStats();
+    }
+    contMode = false;
+    $('contWrap').style.display = 'none';
     $('scanModalBg').classList.remove('active');
     stopCamera();
     scannerPaused = false;
