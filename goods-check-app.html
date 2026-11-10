@@ -865,7 +865,7 @@
     if(!manual) startCamera();
     else setTimeout(()=> $('scanCodeInput').focus(), 50);
   }
-  const BOX_RE = /^B\d{14}$/;
+  const BOX_RE = /^B\d{11,15}$/;   // 箱號：B + 11~15 位數字（實際標籤是 B+13 位，例如 B2610220000198）
   // ====== 掃描引擎：優先用瀏覽器內建 BarcodeDetector，沒有就用 ZXing；Quagga 只留給拍照備援 ======
   const SCAN_FORMATS = ['code_128','code_39','code_93','codabar','itf','qr_code'];
   let camStream=null, camVideo=null, camTimer=0, camBusy=false, camToken=0, camFrameNo=0, camTrack=null, torchOn=false;
@@ -1003,7 +1003,7 @@
   function onCodeDetected(code){
     if(scannerPaused) return;
     const known = manifestBoxes.some(x=>x.code===code);          // 出貨單裡有這個碼：直接採用
-    const fmtOk = BOX_RE.test(code);                              // 格式符合 B+14位數字
+    const fmtOk = BOX_RE.test(code);                              // 格式符合 B+數字
     if(!known && !fmtOk){ $('scanHintText').textContent = '讀到「'+code.slice(0,20)+'」，不是箱號格式，請對準箱號條碼'; return; }
     const now = Date.now();
     recentReads = recentReads.filter(r=> now - r.time < 4000);
