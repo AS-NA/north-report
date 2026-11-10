@@ -52,12 +52,11 @@
 <div class="wrap">
 
   <div class="card" id="loginCard">
-    <label>門市</label>
-    <select id="storeSel"><option value="">載入門市中…</option></select>
-    <label>門市代碼（4 位數，由主管取得）</label>
-    <input type="password" id="codeIn" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="請輸入代碼">
+    <label>門市代碼（例如 AS10，英文字母大小寫都可以）</label>
+    <input type="text" id="codeIn" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="輸入代碼，系統自動帶出門市">
     <label>簽核人姓名</label>
     <input type="text" id="mgrIn" placeholder="請輸入姓名">
+    <div id="pickBox" class="hidden"><label>這組代碼對應多間門市，請選擇</label><select id="storeSel"></select></div>
     <button class="btn" id="enterBtn">查看今日物流工作</button>
   </div>
 
@@ -97,25 +96,37 @@
   function showMsg(t, err){ const m=$('setupMsg'); m.textContent=t; m.className='msg'+(err?' err':''); }
   function hideMsg(){ $('setupMsg').className='msg hidden'; }
 
-  async function loadStores(){
-    if(!SIGNOFF_URL){ showMsg('尚未設定簽核後端網址（SIGNOFF_URL），請管理員完成部署。', false); $('storeSel').innerHTML='<option value="">（尚未啟用）</option>'; return; }
-    try{
-      const r = await fetch(SIGNOFF_URL+'?action=stores'); const j = await r.json();
-      const list = (j && j.stores) || [];
-      $('storeSel').innerHTML = '<option value="">請選擇門市</option>' + list.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-      const saved = store.get('so_store'); if(saved && list.indexOf(saved)>=0) $('storeSel').value = saved;
-    }catch(e){ showMsg('無法載入門市名單，請檢查網路後重新整理頁面。', true); }
+  function checkSetup(){
+    if(!SIGNOFF_URL){ showMsg('尚未設定簽核後端網址（SIGNOFF_URL），請管理員完成部署。', false); }
   }
 
-  $('enterBtn').addEventListener('click', ()=>{
-    const s=$('storeSel').value, c=$('codeIn').value.trim(), m=$('mgrIn').value.trim();
-    if(!s||!c||!m){ showMsg('請選門市、輸入代碼與姓名。', true); return; }
-    session = { store:s, code:c, manager:m };
-    store.set('so_store', s); store.set('so_mgr', m);
+  $('enterBtn').addEventListener('click', async ()=>{
+    const c=$('codeIn').value.trim().toUpperCase(), m=$('mgrIn').value.trim();
+    if(!c||!m){ showMsg('請輸入代碼與簽核人姓名。', true); return; }
+    if(!SIGNOFF_URL){ checkSetup(); return; }
+    let chosen = $('pickBox').classList.contains('hidden') ? '' : $('storeSel').value;
+    if(!chosen){
+      $('enterBtn').disabled = true;
+      try{
+        const r = await fetch(SIGNOFF_URL+'?action=login&code='+encodeURIComponent(c)); const j = await r.json();
+        if(!j || !j.success || !j.stores || !j.stores.length){ showMsg('代碼不正確，請重新輸入。', true); $('enterBtn').disabled=false; return; }
+        if(j.stores.length>1){
+          $('storeSel').innerHTML = j.stores.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+          $('pickBox').classList.remove('hidden'); showMsg('這組代碼有多間門市，請選擇後再按一次。', false);
+          $('enterBtn').disabled=false; return;
+        }
+        chosen = j.stores[0];
+      }catch(e){ showMsg('網路錯誤，請稍後再試。', true); $('enterBtn').disabled=false; return; }
+      $('enterBtn').disabled = false;
+    }
+    hideMsg();
+    session = { store:chosen, code:c, manager:m };
+    store.set('so_mgr', m);
     $('dateIn').value = todayStr();
     load();
   });
-  $('logoutBtn').addEventListener('click', ()=>{ session=null; $('mainArea').classList.add('hidden'); $('loginCard').classList.remove('hidden'); $('codeIn').value=''; hideMsg(); });
+  $('codeIn').addEventListener('input', ()=>{ $('pickBox').classList.add('hidden'); });
+  $('logoutBtn').addEventListener('click', ()=>{ session=null; $('mainArea').classList.add('hidden'); $('loginCard').classList.remove('hidden'); $('codeIn').value=''; $('pickBox').classList.add('hidden'); hideMsg(); });
   $('reloadBtn').addEventListener('click', load);
   $('dateIn').addEventListener('change', load);
 
@@ -241,7 +252,7 @@
   });
 
   const sm = store.get('so_mgr'); if(sm) $('mgrIn').value = sm;
-  loadStores();
+  checkSetup();
 })();
 </script>
 </body>
