@@ -205,6 +205,17 @@
   .heroCard{ margin:0 20px 18px; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px; text-align:center; }
   .heroCard .v{ font-family:var(--font-display); font-size:44px; font-weight:700; }
   .heroCard .l{ font-size:12px; color:var(--text-mute); margin-top:4px; font-family:var(--font-mono); }
+  select.needsel{ border:1.5px solid var(--red) !important; background:#FFF4F2; }
+  .needhint{ color:var(--red); font-size:12px; margin-top:4px; }
+  .pboard{ margin:6px 20px 0; }
+  .prow{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:8px; }
+  .prow.flag{ border-color:#E9B3AB; }
+  .prow .ph{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .prow .pn{ font-weight:700; font-size:14px; } .prow .pc{ color:var(--text-mute); font-size:12px; }
+  .prow .pp{ font-weight:700; font-size:15px; }
+  .prow .pchips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+  .pchip{ font-size:11.5px; padding:2px 8px; border-radius:20px; background:#FFE9E5; color:#B3402F; font-weight:600; }
+  .pchip.warn{ background:#FFF1D9; color:#9A6209; } .pchip.ok{ background:#E3F5EC; color:#2E7D5B; } .pchip.mute{ background:#EEF1F4; color:#6B7C8C; }
   .miniline{ margin:0 20px 10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; }
   .drillbar{ display:flex; align-items:center; gap:10px; margin:0 20px 14px; }
   .drillbar .back2{ background:var(--panel); border:1px solid var(--line); color:var(--text); width:34px; height:34px; border-radius:9px; cursor:pointer; font-size:16px; }
@@ -1283,10 +1294,11 @@
         </div>`;
       }else if(status==='na'){
         extraHtml = `<div class="taskextra">
-          <select data-reason-task="${escapeHtml(t.name)}" ${dis}>
-            <option value="">請選擇不適用原因</option>
+          <select class="${rec.reason?'':'needsel'}" data-reason-task="${escapeHtml(t.name)}" ${dis}>
+            <option value="">請選擇不適用原因（必填）</option>
             ${NA_REASONS.map(r=>`<option value="${r.code}" ${rec.reason===r.code?'selected':''}>${r.code} ${r.label}</option>`).join('')}
           </select>
+          ${rec.reason?'':'<div class="needhint">選「不適用」必須選原因，否則無法離店打卡</div>'}
         </div>`;
       }
       let shipHtml = '';
@@ -1295,8 +1307,10 @@
         const totalQty = boxes.reduce((s,b)=> s + (b.qty||0), 0);
         shipHtml = `<div class="shipblock" data-ship-task="${escapeHtml(t.name)}">
           <div class="shiplist">${boxes.length ? boxes.map((b,bi)=>`<div class="shipitem"><span>${escapeHtml(b.site)}　${b.qty}箱</span>${locked?'':`<span class="rmv" data-rm-idx="${bi}">移除</span>`}</div>`).join('') : `<div class="fieldhint">尚未登記任何箱數</div>`}</div>
+          ${(!boxes.length && rec.noShip) ? `<div class="fieldhint" style="color:var(--green,#2E7D5B)">✓ 本次無寄貨</div>` : ''}
           ${locked ? '' : `<div class="shipbtnrow">
             <button class="scanbtn" data-ship-open-task="${escapeHtml(t.name)}" type="button">📦 登記箱數${boxes.length?`（共 ${totalQty} 箱）`:''}</button>
+            ${boxes.length ? '' : `<button class="scanbtn" data-noship-task="${escapeHtml(t.name)}" type="button" style="margin-left:8px;opacity:.85">${rec.noShip?'取消「無寄貨」':'本次無寄貨'}</button>`}
           </div>`}
         </div>`;
       }
@@ -1341,6 +1355,16 @@
     document.querySelectorAll('#taskRows .scanbtn[data-ship-open-task]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         openShipModal(btn.dataset.shipOpenTask, stop, st, weekday);
+      });
+    });
+    document.querySelectorAll('#taskRows .scanbtn[data-noship-task]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const n = btn.dataset.noshipTask;
+        if(!st.tasks) st.tasks = {};
+        if(!st.tasks[n]) st.tasks[n] = {};
+        st.tasks[n].noShip = !st.tasks[n].noShip;
+        renderTaskRows(stop, st, weekday, locked);
+        await saveCurrentState();
       });
     });
     document.querySelectorAll('#taskRows .shipitem .rmv').forEach(el=>{
@@ -1557,7 +1581,23 @@
     const tasks = getStopTasks(currentDriver, stop, weekday, st).filter(t=>t.active && !shipCarrierFor(t.name));
     const unmarked = tasks.filter(t=> !(st.tasks && st.tasks[t.name] && st.tasks[t.name].status));
     if(unmarked.length>0){
-      setStopStatus(`⚠ 尚有工作項目未標記，請先完成以下項目再離店打卡：${unmarked.map(t=>t.name).join('、')}`, true);
+      setStopStatus(`⚠ 還有 ${unmarked.length} 項工作沒有回報，請先選「完成／未完成／不適用」再離店打卡：${unmarked.map(t=>t.name).join('、')}`, true);
+      renderTaskRows(stop, st, weekday, false);
+      return;
+    }
+    const naNoReason = tasks.filter(t=>{ const r = st.tasks && st.tasks[t.name]; return r && r.status==='na' && !r.reason; });
+    if(naNoReason.length>0){
+      setStopStatus(`⚠ 選「不適用」要選原因，請補上：${naNoReason.map(t=>t.name).join('、')}`, true);
+      renderTaskRows(stop, st, weekday, false);
+      return;
+    }
+    const shipPending = getStopTasks(currentDriver, stop, weekday, st).filter(t=>{
+      if(!t.active || !shipCarrierFor(t.name)) return false;
+      const r = (st.tasks && st.tasks[t.name]) || {};
+      return !(r.boxes && r.boxes.length) && !r.noShip;
+    });
+    if(shipPending.length>0){
+      setStopStatus(`⚠ 寄貨項目還沒回報：${shipPending.map(t=>t.name).join('、')}。有寄貨請登記箱數，沒有請按「本次無寄貨」`, true);
       renderTaskRows(stop, st, weekday, false);
       return;
     }
@@ -1681,7 +1721,7 @@
   }
 
   function buildAdminAnalytics(weekday, dateStr){
-    const online = [], notOnline = [], anomalies = [], onLeave = [];
+    const online = [], notOnline = [], anomalies = [], onLeave = [], rows = [];
     let totalTasks=0, totalDone=0;
     const byTaskType = {}; // name -> {totalWeighted, count}
     const piecesByTask = {}; const plannedByTask = {};
@@ -1699,6 +1739,39 @@
       const started = state.stops.some(s=>s && s.arrivedAt);
       const breakInfo = computeBreakInfo(state.breaks);
       if(started) online.push({d, prog, breakInfo}); else notOnline.push({d, prog, breakInfo});
+      // ---- 每位司機的進度與提醒旗標（即時看板用）
+      {
+        const isToday = dateStr===todayDateStr(), nowMs = Date.now();
+        const fl = []; let naCount=0, naNoReason=0, partialCount=0, shipMissing=0, maxLate=0; const openSites=[];
+        stops.forEach((stop,i)=>{
+          const st = state.stops[i] || {};
+          getStopTasks(d, stop, weekday, st).filter(t=>t.active).forEach(t=>{
+            const r = (st.tasks && st.tasks[t.name]) || {};
+            if(shipCarrierFor(t.name)){ if(st.departedAt && !(r.boxes&&r.boxes.length) && !r.noShip) shipMissing++; return; }
+            if(r.status==='na'){ naCount++; if(!r.reason) naNoReason++; }
+            else if(r.status==='partial') partialCount++;
+          });
+          if(st.arrivedAt){
+            const sched = parseSchedStart(stop.time);
+            if(sched){ const diff = Math.round((new Date(st.arrivedAt)-sched)/60000); if(diff>maxLate) maxLate=diff; }
+            if(!st.departedAt){
+              const em = String(stop.time||'').match(/-\s*(\d{2}):(\d{2})/); let ended = !isToday;
+              if(em && isToday){ const e = new Date(); e.setHours(+em[1], +em[2], 0, 0); ended = nowMs - e > 30*60000; }
+              if(ended) openSites.push(stop.site);
+            }
+          }
+        });
+        const firstStart = parseSchedStart(stops[0] && stops[0].time);
+        if(!started && isToday && firstStart && nowMs - firstStart > 30*60000) fl.push({t:'bad', x:'已過首站時間 30 分仍未上線'});
+        if(maxLate > LATE_TOLERANCE_MIN) fl.push({t:'warn', x:`最晚到站晚 ${maxLate} 分`});
+        if(openSites.length) fl.push({t:'bad', x:`到站未離站：${openSites.join('、')}`});
+        if(naNoReason) fl.push({t:'bad', x:`不適用 ${naNoReason} 項沒填原因`});
+        if(naCount) fl.push({t:'warn', x:`不適用 ${naCount} 項`});
+        if(partialCount) fl.push({t:'warn', x:`部分完成 ${partialCount} 項`});
+        if(shipMissing) fl.push({t:'bad', x:`寄貨 ${shipMissing} 項未回報`});
+        const sev = fl.reduce((n,f)=> n + (f.t==='bad'?2:1), 0);
+        rows.push({d, prog, started, flags: fl, sev});
+      }
 
       stops.forEach((stop,i)=>{
         const st = state.stops[i] || {};
@@ -1740,7 +1813,7 @@
       name, total: byTaskType[name].count, pieces: piecesByTask[name] || 0, planned: plannedByTask[name] || 0,
       pct: byTaskType[name].count ? Math.round(byTaskType[name].weighted/byTaskType[name].count) : 0
     })).sort((a,b)=> a.pct - b.pct);
-    return { online, notOnline, onLeave, anomalies, totalTasks, totalDone, taskTypeList, overallPct: totalTasks ? Math.round(totalDone/totalTasks*100) : 0 };
+    return { online, notOnline, onLeave, anomalies, rows, totalTasks, totalDone, taskTypeList, overallPct: totalTasks ? Math.round(totalDone/totalTasks*100) : 0 };
   }
 
   const ANOMALY_LABEL = { late:'遲到', notdone:'未完成', na:'不適用', note:'備註' };
@@ -1953,6 +2026,16 @@
           <div class="kpi" data-drill="leave" style="cursor:pointer;"><div class="v">${a.onLeave.length}</div><div class="l">休假</div></div>
           <div class="kpi" data-drill="anomaly" style="cursor:pointer;"><div class="v">${a.anomalies.length}</div><div class="l">異常狀況</div></div>
         </div>`;
+        const sorted = a.rows.slice().sort((x,y)=> (y.sev-x.sev) || (x.prog.pct-y.prog.pct));
+        body += `<div class="section-label" style="margin:16px 20px 8px;">每位司機進度（有提醒的排前面）</div><div class="pboard">` + (sorted.length ? sorted.map(r=>{
+          const chips = r.flags.length ? r.flags.map(f=>`<span class="pchip ${f.t==='bad'?'':'warn'}">${escapeHtml(f.x)}</span>`).join('') : `<span class="pchip ok">${r.started?'目前沒有提醒':'今天尚未開始'}</span>`;
+          return `<div class="prow ${r.flags.some(f=>f.t==='bad')?'flag':''}">
+            <div class="ph"><div><span class="pn">${escapeHtml(r.d.name)}</span> <span class="pc">${escapeHtml(r.d.region)} · ${escapeHtml(r.d.hours||'')}</span></div><div class="pp">${r.prog.pct}%</div></div>
+            <div class="barbg" style="margin-top:6px;"><div class="barfg" style="width:${r.prog.pct}%"></div></div>
+            <div class="pc" style="margin-top:4px;">完成 ${r.prog.doneTasks}/${r.prog.totalTasks} 項　·　到站 ${r.prog.arrivedCount}/${getStopsFor(r.d, weekday).length} 站</div>
+            <div class="pchips">${chips}</div>
+          </div>`;
+        }).join('') : `<div class="placeholder">今天沒有排班司機</div>`) + `</div>`;
       }else if(liveDrill==='completion'){
         body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">全台完成度 · ${a.overallPct}%</div></div>`;
         body += a.taskTypeList.length ? a.taskTypeList.map(t=>`
