@@ -89,6 +89,7 @@
   let session = null;              // {store, code, manager}
   let visits = [];                 // 當天本店的拜訪
   let signed = {};                 // visitId -> {manager,time,items:{task:{result,reason}}}
+  const supp = {};                 // visitId -> 門市補充說明（編輯中暫存）
   const choice = {};               // visitId|task -> {result, reason}
 
   function todayStr(){ const d = new Date(); const z = n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
@@ -159,6 +160,7 @@
         if(!stopMatches(stop, session.store)) return;
         const tasks = Object.keys(stop.tasks||{}).filter(k=>{ const s=(stop.tasks[k]||{}).status; return s==='done'||s==='partial'; }).map(k=>({ name:k, rec:stop.tasks[k] }));
         if(!tasks.length) return;
+        if(tasks.every(t=>/^收送貨/.test(t.name))) return;   // 本站只有「收送貨」的拜訪，不需要簽核
         visits.push({ id: parts[1]+'|'+(stop.time||'')+'|'+(stop.site||''), driver: parts[1], region: parts[0], slot: stop.time||'', arrive: stop.arrivedAt, depart: stop.departedAt, note: stop.note||'', tasks });
       });
     });
@@ -169,6 +171,7 @@
       const id = it.driver+'|'+it.slot+'|'; // site 無法還原，用 driver+slot 比對
       signed[id] = signed[id] || { manager: it.manager, time: it.time, items:{} };
       signed[id].items[it.task] = { result: it.result, reason: it.reason };
+      signed[id].supplement = it.supplement || '';
       signed[id].manager = it.manager; signed[id].time = it.time;
     });
     render(date);
@@ -179,7 +182,7 @@
   function render(date){
     const total = visits.length, done = visits.filter(v=>signedFor(v) && v.tasks.every(t=>signedFor(v).items[t.name])).length;
     $('sumRow').innerHTML = `<div><b>${total}</b><span class="muted">今日拜訪</span></div><div><b>${done}</b><span class="muted">已簽核</span></div><div><b>${total-done}</b><span class="muted">待簽核</span></div>`;
-    if(!total){ $('visits').innerHTML = `<div class="card muted">${esc(date)} 沒有物流同仁在本店完成工作的紀錄。若同仁剛離開，請稍後按「重新整理」。</div>`; return; }
+    if(!total){ $('visits').innerHTML = `<div class="card muted">${esc(date)} 沒有需要簽核的物流工作（只有「收送貨」的拜訪不需要簽核）。若同仁剛離開，請稍後按「重新整理」。</div>`; return; }
     $('visits').innerHTML = visits.map(v=>{
       const sg = signedFor(v); const allSigned = sg && v.tasks.every(t=>sg.items[t.name]);
       const items = v.tasks.map(t=>{
@@ -205,6 +208,8 @@
         <span class="chip ${allSigned?'signed':'pending'}">${allSigned?'已簽核':'待簽核'}</span></div>
         ${v.note?`<div class="note">司機備註：${esc(v.note)}</div>`:''}
         ${items}
+        <label>門市補充說明（選填：例如到店時間、貨品狀況、需要協助的事）</label>
+        <textarea class="supp" rows="2" placeholder="可不填">${esc(supp[v.id]!=null?supp[v.id]:(sg&&sg.supplement)||'')}</textarea>
         ${allSigned?`<div class="muted" style="margin-top:8px">由 ${esc(sg.manager)} 於 ${esc(sg.time)} 簽核。如需更正可重新選擇後再送出。</div>`:''}
         <div class="row" style="margin-top:8px"><button class="btn ghost" data-all style="margin-top:4px">全部確認</button><button class="btn" data-submit style="margin-top:4px">${allSigned?'重新送出簽核':'送出簽核'}</button></div>
       </div>`;
@@ -238,16 +243,17 @@
       }
       const btn = e.target; btn.disabled = true; btn.textContent = '送出中…';
       try{
-        const body = { action:'signoff', code:session.code, store:session.store, manager:session.manager, date:$('dateIn').value||todayStr(), driver:v.driver, region:v.region, slot:v.slot, arrive:hhmm(v.arrive), depart:hhmm(v.depart), note:v.note, items };
+        const body = { action:'signoff', code:session.code, store:session.store, manager:session.manager, date:$('dateIn').value||todayStr(), driver:v.driver, region:v.region, slot:v.slot, arrive:hhmm(v.arrive), depart:hhmm(v.depart), note:v.note, supplement:(card.querySelector('.supp').value||'').trim(), items };
         const r = await fetch(SIGNOFF_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(body) });
         const j = await r.json();
         if(!j.success) throw new Error(j.error||'失敗');
-        v.tasks.forEach(t=>delete choice[v.id+'|'+t.name]);
+        v.tasks.forEach(t=>delete choice[v.id+'|'+t.name]); delete supp[v.id];
         await load();
       }catch(err){ alert('送出失敗：'+err.message+'\n請檢查網路後再試一次。'); btn.disabled=false; btn.textContent='送出簽核'; }
     }
   });
   $('visits').addEventListener('input', e=>{
+    if(e.target.classList.contains('supp')){ const c=e.target.closest('[data-v]'); if(c) supp[c.dataset.v]=e.target.value; return; }
     if(e.target.matches('.reason input')){ const k = e.target.closest('.item').dataset.k; choice[k] = { result:'異議', reason:e.target.value }; }
   });
 
