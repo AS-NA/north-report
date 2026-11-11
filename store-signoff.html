@@ -25,6 +25,7 @@
   .driver{ font-weight:700; font-size:17px; }
   .chip{ display:inline-block; padding:2px 9px; border-radius:20px; font-size:12px; font-weight:700; }
   .chip.done{ background:#E3F5EC; color:var(--ok); } .chip.partial{ background:#FFF1D9; color:#B26F0A; }
+  .chip.na{ background:#EEF1F4; color:#6B7C8C; }
   .chip.signed{ background:#E3F5EC; color:var(--ok); } .chip.pending{ background:#EEF1F4; color:var(--mute); }
   .item{ border-top:1px solid var(--line); padding:10px 0; }
   .item .name{ font-weight:600; }
@@ -90,6 +91,7 @@
   let visits = [];                 // 當天本店的拜訪
   let signed = {};                 // visitId -> {manager,time,items:{task:{result,reason}}}
   const supp = {};                 // visitId -> 門市補充說明（編輯中暫存）
+  const REASON = {A:'現場沒有這項工作可執行',B:'門市已做完',C:'商品貨品未到現場',D:'上一站延誤',E:'時間不夠',F:'系統設備與網路問題',G:'及時調整業務項目',H:'其他'};
   const choice = {};               // visitId|task -> {result, reason}
 
   function todayStr(){ const d = new Date(); const z = n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
@@ -158,7 +160,7 @@
       let st; try{ st = typeof r.state==='string' ? JSON.parse(r.state) : r.state; }catch(e){ return; }
       ((st&&st.stops)||[]).forEach(stop=>{
         if(!stopMatches(stop, session.store)) return;
-        const tasks = Object.keys(stop.tasks||{}).filter(k=>{ const s=(stop.tasks[k]||{}).status; return s==='done'||s==='partial'; }).map(k=>({ name:k, rec:stop.tasks[k] }));
+        const tasks = Object.keys(stop.tasks||{}).filter(k=>{ const s=(stop.tasks[k]||{}).status; return s==='done'||s==='partial'||s==='na'; }).map(k=>({ name:k, rec:stop.tasks[k] }));
         if(!tasks.length) return;
         if(tasks.every(t=>/^收送貨/.test(t.name))) return;   // 本站只有「收送貨」的拜訪，不需要簽核
         visits.push({ id: parts[1]+'|'+(stop.time||'')+'|'+(stop.site||''), driver: parts[1], region: parts[0], slot: stop.time||'', arrive: stop.arrivedAt, depart: stop.departedAt, note: stop.note||'', tasks });
@@ -188,15 +190,16 @@
       const items = v.tasks.map(t=>{
         const r = t.rec; const key = v.id+'|'+t.name; const ch = choice[key] || (sg && sg.items[t.name] ? { result: sg.items[t.name].result, reason: sg.items[t.name].reason } : null);
         const extras = [];
+        if(r.status==='na') extras.push('司機標示「不適用」'+(r.reason?'：'+esc((REASON[r.reason]||r.reason)):'（未填原因）')+'。請確認是否屬實');
         if(r.status==='partial') extras.push('完成度 '+(r.percent||'')+'%'+(r.reason?'（原因 '+esc(r.reason)+'）':''));
         if(r.boxes && r.boxes.length) extras.push('寄貨：'+r.boxes.map(b=>esc(b.site)+' '+b.qty+'箱').join('、'));
         if(r.pieces!=null && r.pieces!=='') extras.push('實際撤出 '+r.pieces+' 件'+(r.planned!=null && r.planned!==''?'（商控通知 '+r.planned+' 件）':''));
         if(r.note) extras.push('備註：'+esc(r.note));
         return `<div class="item" data-k="${esc(key)}">
-          <div class="head"><span class="name">${esc(t.name)}</span><span class="chip ${r.status}">${r.status==='done'?'完成':'部分完成'}</span></div>
+          <div class="head"><span class="name">${esc(t.name)}</span><span class="chip ${r.status}">${r.status==='done'?'完成':(r.status==='na'?'不適用':'部分完成')}</span></div>
           ${extras.length?`<div class="extra">${extras.join('<br>')}</div>`:''}
           <div class="choice">
-            <button data-act="ok" class="${ch&&ch.result==='確認'?'on-ok':''}">✓ 確認有做</button>
+            <button data-act="ok" class="${ch&&ch.result==='確認'?'on-ok':''}">${r.status==='na'?'✓ 同意不適用':'✓ 確認有做'}</button>
             <button data-act="bad" class="${ch&&ch.result==='異議'?'on-bad':''}">✗ 有異議</button>
           </div>
           <div class="reason ${ch&&ch.result==='異議'?'show':''}"><input type="text" placeholder="請說明異議原因（必填）" value="${esc(ch&&ch.reason||'')}"></div>
@@ -239,7 +242,7 @@
         const sg = signedFor(v); let ch = choice[key] || (sg&&sg.items[t.name] ? { result: sg.items[t.name].result, reason: sg.items[t.name].reason } : null);
         if(!ch){ alert('請先選擇「'+t.name+'」：確認或有異議'); return; }
         if(ch.result==='異議'){ const rv = itemEl.querySelector('.reason input').value.trim(); if(!rv){ alert('「'+t.name+'」有異議，請填原因'); return; } ch = { result:'異議', reason:rv }; }
-        items.push({ task:t.name, result:ch.result, reason:ch.reason||'' });
+        items.push({ task:t.name, result:ch.result, reason:ch.reason||'', status: ({done:'完成',partial:'部分',na:'不適用'})[t.rec.status]||'' });
       }
       const btn = e.target; btn.disabled = true; btn.textContent = '送出中…';
       try{
