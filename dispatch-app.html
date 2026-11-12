@@ -124,7 +124,9 @@
   .taskrow.na{ opacity:0.75; }
   .extratag{ font-size:10.5px; color:var(--accent); border:1px solid var(--accent); border-radius:999px; padding:0 6px; margin-left:6px; font-weight:600; }
   .extrarmv{ font-size:11.5px; color:var(--red); cursor:pointer; margin-top:6px; display:inline-block; }
-  #extraTaskBox{ margin:0 20px 14px; }
+  #extraTaskBox{ margin:-4px 20px 12px; text-align:right; }
+  #extraTaskBox .extrapanel{ text-align:left; }
+  #extraTaskBox .extraopen{ width:auto; padding:7px 16px; border-style:solid; font-weight:600; }
   .extraopen{ width:100%; padding:11px; border-radius:10px; border:1px dashed var(--accent); background:transparent; color:var(--accent); font-size:13.5px; cursor:pointer; font-family:var(--font-body); }
   .extrapanel{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
   .extrapanel .ttl{ font-size:12.5px; color:var(--text-mute); margin-bottom:8px; }
@@ -155,6 +157,8 @@
   .tasknote{ width:100%; min-height:56px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:13px; font-family:var(--font-body); resize:vertical; }
   .fieldhint{ font-size:11px; color:var(--text-mute); margin-top:4px; }
   .naReasonSelect{ margin-top:2px; }
+  .graybtn{ padding:7px 14px; border-radius:8px; border:1px solid var(--accent); background:transparent; color:var(--accent); font-size:13px; cursor:pointer; font-family:inherit; }
+  .taskrow.grayed{ opacity:0.6; border-style:dashed; }
   .naword{font-size:12px; color:var(--text-mute); font-family:var(--font-mono);}
 
   .field{margin:16px 20px;}
@@ -354,8 +358,8 @@
     <div class="statusline" id="arriveStatus"></div>
     <div class="taskcount" id="taskCountLine"></div>
     <div id="allDoneMsg"></div>
-    <div id="taskRows"></div>
     <div id="extraTaskBox"></div>
+    <div id="taskRows"></div>
     <div class="field">
       <label>照片（選填）</label>
       <div class="photo-box" id="photoBox"><div class="hint" id="photoHint">＋ 拍照 / 選擇照片</div><img id="photoPreview" style="display:none;"></div>
@@ -465,11 +469,11 @@
         B:[T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])]
       },
       weeklyStops:{
-        1:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化一店',time:'15:00-18:00',free:['店務協助']}],
+        1:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南FOCUS店',time:'10:40-11:00',free:['收送貨']},{site:'台南南紡店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化一店',time:'15:00-18:00',free:['店務協助']}],
         2:[{site:'嘉義秀泰店',time:'09:00-13:00',free:['執行當周撤貨','執行跨區轉調']},{site:'嘉義秀泰大碼店',time:'14:00-14:30',free:['寄貨','包貨']},{site:'嘉義文化一店',time:'14:45-18:00',free:['執行當周撤貨','執行跨區轉調','處理追加進貨、歸倉']}],
-        3:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化一店',time:'15:00-18:00',free:['店務協助']}],
-        4:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義秀泰店',time:'15:00-18:00',free:['店務協助']}],
-        5:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南南紡店',time:'10:40-11:00',free:['收送貨']},{site:'台南FOCUS店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化一店',time:'15:00-18:00',free:['店務協助']}]
+        3:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南FOCUS店',time:'10:40-11:00',free:['收送貨']},{site:'台南南紡店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化一店',time:'15:00-18:00',free:['店務協助']}],
+        4:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南FOCUS店',time:'10:40-11:00',free:['收送貨']},{site:'台南南紡店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義秀泰店',time:'15:00-18:00',free:['店務協助']}],
+        5:[{site:'嘉義秀泰店',time:'09:00-09:20',free:['收送貨']},{site:'嘉義文化一店',time:'09:25-09:30',free:['收送貨']},{site:'台南FOCUS店',time:'10:40-11:00',free:['收送貨']},{site:'台南南紡店',time:'11:20-11:40',free:['收送貨']},{site:'嘉義文化一店',time:'12:40-12:45',free:['收送貨']},{site:'嘉義秀泰店',time:'14:10-15:00',free:['寄黑貓','寄新竹物流']},{site:'嘉義文化一店',time:'15:00-18:00',free:['店務協助']}]
       }
     },
     { region:'桃園', code:'北桃1', name:'陳兆晏', hours:'11:00-20:00',
@@ -565,7 +569,16 @@
     if(st && Array.isArray(st.extra) && st.extra.length){
       st.extra.forEach(n=>{ if(!base.some(t=>t.name===n)) base.push({name:n, active:true, extra:true}); else { const t=base.find(x=>x.name===n); if(!t.active){ t.active=true; t.extra=true; } } });
     }
+    // 反灰項目「做了才加分」：司機標記完成後才變成正常項目（計入分子與分母），沒做不影響完成度也不擋離站
+    base.forEach(t=>{ if(t.gray && !t.active && st && st.tasks && st.tasks[t.name] && st.tasks[t.name].status==='done'){ t.active=true; t.bonus=true; } });
     return base;
+  }
+  // 反灰規則（來源：各站不適用工作項目_考慮反灰.xlsx 第二版）：[司機, 站點, [時段], 工作項目, 星期(null=全)]；該站該項目預設反灰，有做才計分
+  const GRAY_RULES = [["吳昀彥","台中漢神店",["17:20-19:30"],"支援EC撤貨",null],["吳昀彥","台中漢神店",["17:20-19:30"],"撤貨抓貨",null],["吳昀彥","台中漢神店",["17:20-19:30"],"跨區勻貨",null],["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"補貨歸倉",null],["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"追加歸倉",null],["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"跨區勻貨",null],["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"區內勻貨",null],["朱家宏","左營新光店",["11:55-13:50"],"補貨歸倉",null],["朱家宏","左營新光店",["11:55-13:50"],"追加歸倉",[3]],["朱家宏","左營新光店",["11:55-13:50"],"勻貨歸倉",[2]],["朱家宏","高雄漢神LADY店",["15:25-16:55"],"補貨歸倉",null],["朱家宏","高雄漢神LADY店",["15:25-16:55"],"追加歸倉",[3]],["朱家宏","高雄漢神LADY店",["15:25-16:55"],"勻貨歸倉",[2]],["王郁文","一中店/一中LADY店",["15:00-17:00"],"勻補貨歸倉",null],["王郁文","一中店/一中LADY店",["15:00-17:00"],"支援EC撤貨",null],["王郁文","遠百(門市作業)",["16:20-19:30"],"區內勻貨",null],["王郁文","遠百(門市作業)",["16:20-19:30"],"跨區勻貨",null],["王郁文","遠百(門市作業)",["16:20-19:30"],"撤貨抓貨",null],["王郁文","遠百(門市作業)",["16:20-19:30"],"支援EC撤貨",null],["賴昱誠","新莊宏匯店",["10:30-19:30","09:30-18:30"],"補貨歸倉",null],["賴昱誠","新莊宏匯店",["10:30-19:30","09:30-18:30"],"追加歸倉",null],["賴昱誠","西門r.fav店",["09:30-18:30"],"勻貨歸倉",null],["賴昱誠","西門r.fav店",["09:30-18:30"],"補貨歸倉",null],["賴昱誠","西門r.fav店",["09:30-18:30"],"追加歸倉",null],["賴昱誠","西門大碼店",["10:30-19:30"],"勻貨歸倉",null],["賴昱誠","西門大碼店",["10:30-19:30"],"補貨歸倉",null],["賴昱誠","西門大碼店",["10:30-19:30"],"追加歸倉",null],["賴昱誠","西門大碼店",["10:30-19:30"],"撤貨抓貨",null],["賴昱誠","西門大碼店",["10:30-19:30"],"跨區勻貨",null],["賴昱誠","西門大碼店",["10:30-19:30"],"濾網清潔",null],["賴昱誠","西門店",["10:30-19:30","09:30-18:30"],"補貨歸倉",null],["賴昱誠","西門店",["10:30-19:30"],"濾網清潔",null],["陳兆晏","桃園台茂AS店/桃園台茂店",["12:00-16:00"],"支援EC",null],["陳兆晏","桃園大江店",["11:45-12:00"],"撤貨抓貨(只抓倉庫)",null],["陳兆晏","桃園大江店",["11:45-12:00"],"支援EC",null],["陳兆晏","桃園大江店",["11:45-12:00"],"勻貨歸倉",null],["陳兆晏","桃園大江店",["11:45-12:00"],"官網補貨歸倉",null],["陳兆晏","桃園大江店",["11:45-12:00"],"跨區勻貨",null],["陳兆晏","桃園大江店",["11:45-12:00"],"新品入倉整理",null],["陳兆晏","桃園大江店",["11:45-12:00"],"區內勻貨",null],["陳兆晏","桃園大江店",["11:45-12:00"],"追加整理歸倉",null],["陳兆晏","桃園統領店",["17:20-20:00"],"支援EC",null],["陳兆晏","桃園統領店",["17:20-20:00"],"區內勻貨",null],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"支援EC",null],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"勻貨歸倉",null],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"官網補貨歸倉",null],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"跨區勻貨",null],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"新品入倉整理",null],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"區內勻貨",null],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"追加整理歸倉",null]];
+  function grayNamesFor(driver, stop, weekday){
+    const out = (stop.gray && stop.gray[weekday]) ? stop.gray[weekday].slice() : [];
+    GRAY_RULES.forEach(r=>{ if(r[0]===driver.name && (r[1]===stop.site || r[1].split('/').includes(stop.site)) && r[2].includes(stop.time) && (!r[4] || r[4].includes(weekday))) out.push(r[3]); });
+    return out;
   }
   function getBaseStopTasks(driver, stop, weekday){
     const today = todayDateStr();
@@ -573,9 +586,14 @@
     if(override && override.tasks && override.tasks.length){
       return override.tasks.map(n=>({name:n, active:true}));
     }
-    if(stop.free) return stop.free.map(n=>({name:n, active:true}));
+    // 反灰：stop.gray = {星期數字:[工作名稱]}，該星期預設不執行（顯示灰色、不計入完成度），司機可按「改為執行」
+    const grayNames = grayNamesFor(driver, stop, weekday);
+    if(stop.free) return stop.free.map(n=> grayNames.includes(n) ? {name:n, active:false, gray:true} : {name:n, active:true});
     const table = (driver.tables[stop.table] || []).filter(t=> !(stop.exclude && stop.exclude.includes(t.name)));
-    return table.map(t=>({name:t.name, active:t.days.includes(weekday)}));
+    return table.map(t=>{
+      const g = grayNames.includes(t.name) && t.days.includes(weekday);
+      return {name:t.name, active:t.days.includes(weekday) && !g, gray:g};
+    });
   }
   function todayDateStr(){
     const d = new Date();
@@ -945,6 +963,17 @@
     }
   }
   document.addEventListener('click', async (e)=>{
+    const en = e.target.closest && e.target.closest('[data-gray-enable],[data-gray-undo]');
+    if(en && currentState){
+      const st0 = currentState.stops[currentStopIdx]; if(!st0 || st0.departedAt) return;
+      if(!st0.tasks) st0.tasks = {};
+      if(en.dataset.grayEnable!==undefined) st0.tasks[en.dataset.grayEnable] = {status:'done', percent:100, bonus:true};
+      else delete st0.tasks[en.dataset.grayUndo];
+      const wd0 = new Date().getDay();
+      renderTaskRows(getStopsFor(currentDriver, wd0)[currentStopIdx], st0, wd0, false);
+      await saveCurrentState();
+      return;
+    }
     const rm = e.target.closest && e.target.closest('[data-extra-rm]');
     if(!rm || !currentState) return;
     const st = currentState.stops[currentStopIdx]; if(!st || st.departedAt) return;
@@ -1260,17 +1289,24 @@
   function renderTaskRows(stop, st, weekday, locked){
     const tasks = getStopTasks(currentDriver, stop, weekday, st);
     const activeTasks = tasks.filter(t=>t.active);
-    const inactiveCount = tasks.length - activeTasks.length;
+    const grayCount = tasks.filter(t=>!t.active && t.gray).length;
+    const inactiveCount = tasks.length - activeTasks.length - grayCount;
     // 寄貨類工作（登記箱數）不算在完成度統計內，也沒有完成/未完成/不適用按鈕
     const trackedTasks = activeTasks.filter(t=> !shipCarrierFor(t.name));
     const doneCount = trackedTasks.filter(t=> st.tasks && st.tasks[t.name] && st.tasks[t.name].status==='done').length;
     const answeredCount = trackedTasks.filter(t=> st.tasks && st.tasks[t.name] && st.tasks[t.name].status).length;
-    $('taskCountLine').innerHTML = `工作項目 <b>${doneCount}/${trackedTasks.length}</b>　·　本日未排程 ${inactiveCount} 項`;
+    $('taskCountLine').innerHTML = `工作項目 <b>${doneCount}/${trackedTasks.length}</b>　·　本日未排程 ${inactiveCount} 項${grayCount?`　·　反灰（有做才計）${grayCount} 項`:''}`;
     $('allDoneMsg').innerHTML = (trackedTasks.length>0 && answeredCount===trackedTasks.length) ? `<div class="alldone">✓ 本站全部已填寫</div>` : '';
 
     $('taskRows').innerHTML = tasks.map(t=>{
+      if(!t.active && t.gray){
+        return `<div class="taskrow na grayed" data-gray-task="${escapeHtml(t.name)}"><div class="trtop"><div class="taskname" style="color:var(--text-mute);">${escapeHtml(t.name)}<span class="extratag" style="background:var(--grey);color:#fff;">今日反灰</span></div>${locked?'':`<button type="button" class="graybtn" data-gray-enable="${escapeHtml(t.name)}">有做 → 標記完成</button>`}</div></div>`;
+      }
       if(!t.active){
         return `<div class="taskrow na"><div class="taskname">— ${escapeHtml(t.name)}</div><div class="naword">本日未排程</div></div>`;
+      }
+      if(t.bonus){
+        return `<div class="taskrow" data-task="${escapeHtml(t.name)}"><div class="trtop"><div class="taskname">${escapeHtml(t.name)}<span class="extratag" style="background:var(--green);color:#0C1F14;">加分項 ✓ 已完成</span></div>${locked?'':`<button type="button" class="graybtn" data-gray-undo="${escapeHtml(t.name)}">取消</button>`}</div></div>`;
       }
       const rec = (st.tasks && st.tasks[t.name]) || {};
       const shipCarrier = shipCarrierFor(t.name);
@@ -1338,11 +1374,11 @@
           </div>`;
       return `<div class="taskrow" data-task="${escapeHtml(t.name)}">
         <div class="trtop">
-          <div class="taskname">${escapeHtml(t.name)}${t.extra?'<span class="extratag">臨時新增</span>':''}</div>
+          <div class="taskname">${escapeHtml(t.name)}${t.extra?`<span class="extratag">${t.gray?'已改為執行':'臨時新增'}</span>`:''}</div>
           ${taskBtnsHtml}
         </div>
         ${extraHtml}
-        ${t.extra && !locked ? `<span class="extrarmv" data-extra-rm="${escapeHtml(t.name)}">移除這項</span>` : ''}
+        ${t.extra && !locked ? `<span class="extrarmv" data-extra-rm="${escapeHtml(t.name)}">${t.gray?'恢復反灰':'移除這項'}</span>` : ''}
         ${shipHtml}
         ${piecesHtml}
       </div>`;
