@@ -346,7 +346,7 @@
       </div>
       <div class="breaklist" id="breakList"></div>
     </div>
-    <div style="margin:0 20px;"><button class="leavebtn" id="leaveBtn" type="button">🏖 今日休假</button></div>
+    <div style="margin:0 20px; display:flex; gap:10px;"><button class="leavebtn" id="leaveBtn" type="button" style="flex:1;">🏖 今日休假</button><button class="leavebtn" id="supportBtn" type="button" style="flex:1;">🤝 支援開店閉店業務</button></div>
     <div id="leaveCard"></div>
     <div class="stoplist" id="stopList"></div>
   </div>
@@ -717,14 +717,14 @@
   let regionPick = null;   // 正在選休假類別的司機名字
   function renderRegionList(){
     const list = DRIVERS.filter(d=>d.region===currentRegion);
-    const leaveN = list.filter(d=>driverLeaveToday(d)).length;
+    const leaveN = list.filter(d=>{const l=driverLeaveToday(d);return l && !isSupportLeave(l);}).length, supportN = list.filter(d=>isSupportLeave(driverLeaveToday(d))).length;
     const btnCss = 'font-size:12.5px; font-weight:700; padding:7px 12px; border-radius:10px; border:1px solid var(--accent-2); background:var(--panel); color:var(--accent-2); cursor:pointer; font-family:var(--font-body); white-space:nowrap;';
-    $('regionDriverList').innerHTML = (leaveN ? `<div class="hint" style="margin:0 0 10px; font-size:12.5px; color:var(--text-mute);">今天休假：${leaveN} 人（${LEAVE_TYPES.map(t=>t+' '+list.filter(d=>{const l=driverLeaveToday(d);return l&&l.type===t;}).length).join('、')}）</div>` : '') + list.map(d=>{
+    $('regionDriverList').innerHTML = ((leaveN||supportN) ? `<div class="hint" style="margin:0 0 10px; font-size:12.5px; color:var(--text-mute);">${leaveN?`今天休假：${leaveN} 人（${LEAVE_TYPES.map(t=>t+' '+list.filter(d=>{const l=driverLeaveToday(d);return l&&l.type===t;}).length).join('、')}）`:''}${leaveN&&supportN?'　':''}${supportN?`支援開店閉店業務：${supportN} 人`:''}</div>` : '') + list.map(d=>{
       const lv = driverLeaveToday(d), n = escapeHtml(d.name);
       let right;
-      if(lv) right = `<div style="display:flex; align-items:center; gap:8px;"><span style="font-size:12.5px; font-weight:800; color:var(--accent-2); background:rgba(255,140,60,.14); padding:5px 11px; border-radius:999px; white-space:nowrap;">🏖 今日${leaveLabel(lv)}</span><button type="button" data-leave-cancel="${n}" style="${btnCss}">取消</button></div>`;
+      if(lv) right = `<div style="display:flex; align-items:center; gap:8px;"><span style="font-size:12.5px; font-weight:800; color:var(--accent-2); background:rgba(255,140,60,.14); padding:5px 11px; border-radius:999px; white-space:nowrap;">${leaveIcon(lv)} 今日${leaveLabel(lv)}</span><button type="button" data-leave-cancel="${n}" style="${btnCss}">取消</button></div>`;
       else if(regionPick===d.name) right = `<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; max-width:62%;">${LEAVE_TYPES.map(t=>`<button type="button" data-leave-type="${t}" data-leave-name="${n}" style="${btnCss}">${t}</button>`).join('')}<button type="button" data-leave-x="1" style="${btnCss} border-color:var(--line); color:var(--text-mute);">✕</button></div>`;
-      else right = `<div style="display:flex; align-items:center; gap:10px;"><button type="button" data-leave-open="${n}" style="${btnCss}">🏖 休假</button><div class="arrow">›</div></div>`;
+      else right = `<div style="display:flex; align-items:center; gap:10px;"><button type="button" data-leave-open="${n}" style="${btnCss}">🏖 休假</button><button type="button" data-support-open="${n}" style="${btnCss}">🤝 支援</button><div class="arrow">›</div></div>`;
       return `
       <div class="drivercard" data-name="${n}" style="${lv?'opacity:.8;':''}">
         <div><div class="n">${n}</div><div class="c">${d.code} · ${hoursOf(d)}</div></div>
@@ -735,9 +735,10 @@
       c.addEventListener('click', e=>{ if(e.target.closest('button')) return; openDriver(currentRegion, c.dataset.name); });
     });
     document.querySelectorAll('#regionDriverList [data-leave-open]').forEach(b=> b.addEventListener('click', ()=>{ regionPick = b.dataset.leaveOpen; renderRegionList(); }));
+    document.querySelectorAll('#regionDriverList [data-support-open]').forEach(b=> b.addEventListener('click', ()=>{ if(confirm('要登記 '+b.dataset.supportOpen+' 今天「支援開店閉店業務」嗎？登記後今天完成度算 100%。')) setDriverLeave(b.dataset.supportOpen, SUPPORT_TYPE); }))
     document.querySelectorAll('#regionDriverList [data-leave-x]').forEach(b=> b.addEventListener('click', ()=>{ regionPick = null; renderRegionList(); }));
     document.querySelectorAll('#regionDriverList [data-leave-type]').forEach(b=> b.addEventListener('click', ()=> setDriverLeave(b.dataset.leaveName, b.dataset.leaveType)));
-    document.querySelectorAll('#regionDriverList [data-leave-cancel]').forEach(b=> b.addEventListener('click', ()=>{ if(confirm('要取消 '+b.dataset.leaveCancel+' 的休假嗎？')) setDriverLeave(b.dataset.leaveCancel, null); }));
+    document.querySelectorAll('#regionDriverList [data-leave-cancel]').forEach(b=> b.addEventListener('click', ()=>{ if(confirm('要取消 '+b.dataset.leaveCancel+' 的休假／支援嗎？')) setDriverLeave(b.dataset.leaveCancel, null); }));
   }
   // 直接在區域名單替某位司機登記／取消休假（不用進到司機頁）
   async function setDriverLeave(name, type){
@@ -1052,7 +1053,7 @@
       }
     });
     return { totalTasks, doneTasks, arrivedCount, totalStops:stops.filter((x,i)=> !x.optional || (state.stops[i] && state.stops[i].arrivedAt)).length, lateCount,
-      pct: totalTasks ? Math.round(weightedSum/totalTasks) : 0 };
+      pct: (state && state.leave && state.leave.type===SUPPORT_TYPE) ? 100 : (totalTasks ? Math.round(weightedSum/totalTasks) : 0) };
   }
   function parseSchedStart(timeStr){
     if(!timeStr) return null;
@@ -1100,20 +1101,30 @@
   function renderLeave(){
     const on = !!(currentState && currentState.leave);
     $('leaveBtn').style.display = on ? 'none' : '';
+    $('supportBtn').style.display = on ? 'none' : '';
     $('breakCard').style.display = on ? 'none' : '';
-    $('leaveCard').innerHTML = on ? `<div class="leavecard"><div class="lt">🏖 今日${leaveLabel(currentState.leave)}</div><div class="lm">${fmtHM(currentState.leave.at)} 登記${leaveLabel(currentState.leave)}，今天不需要回報工作</div><button class="breakbtn" id="leaveCancelBtn" type="button">取消休假</button></div>` : '';
+    $('leaveCard').innerHTML = on ? `<div class="leavecard"><div class="lt">${leaveIcon(currentState.leave)} 今日${leaveLabel(currentState.leave)}</div><div class="lm">${fmtHM(currentState.leave.at)} 登記${leaveLabel(currentState.leave)}，${isSupportLeave(currentState.leave) ? '今天完成度算 100%，不需要回報工作' : '今天不需要回報工作'}</div><button class="breakbtn" id="leaveCancelBtn" type="button">${isSupportLeave(currentState.leave) ? '取消支援' : '取消休假'}</button></div>` : '';
     if(on) $('leaveCancelBtn').addEventListener('click', async ()=>{
-      if(!confirm('要取消休假嗎？取消後會恢復今天的工作清單。')) return;
+      if(!confirm(isSupportLeave(currentState.leave) ? '要取消「支援開店閉店業務」嗎？取消後會恢復今天的工作清單。' : '要取消休假嗎？取消後會恢復今天的工作清單。')) return;
       currentState.leave = null; currentState.leaveCancelAt = new Date().toISOString();
       renderDriverView(); await saveCurrentState();
     });
   }
   const LEAVE_TYPES = ['特休','請假','病假','公假'];   // 要增減類別就改這一行
   const leaveLabel = lv => (lv && lv.type) ? lv.type : '休假';
+  const SUPPORT_TYPE = '支援開店閉店業務';   // 登記後當天完成度算 100%
+  const isSupportLeave = lv => !!(lv && lv.type===SUPPORT_TYPE);
+  const leaveIcon = lv => isSupportLeave(lv) ? '🤝' : '🏖';
+  $('supportBtn').addEventListener('click', async ()=>{
+    if(!currentState) return;
+    if(!confirm('要登記「支援開店閉店業務」嗎？登記後今天完成度算 100%，不需要回報工作。')) return;
+    currentState.leave = { at: new Date().toISOString(), type: SUPPORT_TYPE };
+    renderDriverView(); await saveCurrentState();
+  });
   $('leaveBtn').addEventListener('click', ()=>{
     if(!currentState) return;
     const started = currentState.stops.some(s=>s && s.arrivedAt);
-    $('leaveBtn').style.display = 'none';
+    $('leaveBtn').style.display = 'none'; $('supportBtn').style.display = 'none';
     $('leaveCard').innerHTML = `<div class="leavecard"><div class="lt">今天要登記哪一種？</div><div class="lm">${started?'今天已經有到店打卡紀錄，打卡紀錄會保留。':'登記後今天不需要回報工作。'}</div>
       <div style="display:flex; gap:10px;">${LEAVE_TYPES.map(t=>`<button class="breakbtn leavepick" data-type="${t}" type="button" style="flex:1; padding:12px 0; font-size:15px;">${t}</button>`).join('')}</div>
       <button class="leavebtn" id="leavePickCancel" type="button" style="margin-top:10px;">取消</button></div>`;
@@ -1937,7 +1948,11 @@
       const rec = allCheckins.find(r=>r.key===key);
       let state = { stops: stops.map(()=>({tasks:{}})) };
       if(rec && rec.state){ try{ const p = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; if(p&&p.stops) state=p; }catch(e){} }
-      if(state.leave){ onLeave.push({d, at: state.leave.at, type: leaveLabel(state.leave)}); return; } // 休假的人不算進上線／完成度
+      if(state.leave){
+        onLeave.push({d, at: state.leave.at, type: leaveLabel(state.leave)});
+        if(isSupportLeave(state.leave)){ const sp = computeProgress(d, weekday, state); totalTasks += sp.totalTasks; totalDone += sp.totalTasks; } // 支援開店閉店業務：當天完成度算 100%
+        return; // 休假的人不算進上線／完成度
+      }
       const prog = computeProgress(d, weekday, state);
       totalTasks += prog.totalTasks; totalDone += prog.doneTasks;
       const started = state.stops.some(s=>s && s.arrivedAt);
@@ -2050,7 +2065,10 @@
         const rec = allCheckins.find(r=>r.key===key);
         let state = { stops: stops.map(()=>({tasks:{}})) };
         if(rec && rec.state){ try{ const p = typeof rec.state==='string'?JSON.parse(rec.state):rec.state; if(p&&p.stops) state=p; }catch(e){} }
-        if(state.leave){ dayPct.push('休:'+leaveLabel(state.leave)); return; } // 休假那天不算完成度、也不算遲到
+        if(state.leave){
+          if(isSupportLeave(state.leave)){ const sp = computeProgress(d, weekday, state); totalTasks += sp.totalTasks; doneCount += sp.totalTasks; weightedSum += 100*sp.totalTasks; dayPct.push(100); return; } // 支援開店閉店業務：該天算 100%
+          dayPct.push('休:'+leaveLabel(state.leave)); return; // 休假那天不算完成度、也不算遲到
+        }
         let dTotal=0, dWeighted=0;
         stops.forEach((stop,i)=>{
           const st = state.stops[i] || {};
@@ -2254,7 +2272,7 @@
           <div class="kpi" data-drill="completion" style="cursor:pointer;"><div class="v">${a.overallPct}%</div><div class="l">全台完成度 · ${a.totalDone}/${a.totalTasks} 項</div></div>
           <div class="kpi" data-drill="online" style="cursor:pointer;"><div class="v">${a.online.length}</div><div class="l">上線司機</div></div>
           <div class="kpi" data-drill="offline" style="cursor:pointer;"><div class="v">${a.notOnline.length}</div><div class="l">未上線司機</div></div>
-          <div class="kpi" data-drill="leave" style="cursor:pointer;"><div class="v">${a.onLeave.length}</div><div class="l">休假</div></div>
+          <div class="kpi" data-drill="leave" style="cursor:pointer;"><div class="v">${a.onLeave.length}</div><div class="l">休假／支援</div></div>
           <div class="kpi" data-drill="anomaly" style="cursor:pointer;"><div class="v">${a.anomalies.length}</div><div class="l">異常狀況</div></div>
         </div>`;
         const sorted = a.rows.slice().sort((x,y)=> (y.sev-x.sev) || (x.prog.pct-y.prog.pct));
@@ -2287,9 +2305,9 @@
           <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${hoursOf(d)}</div></div><div class="c">尚未打卡</div></div>
         `).join('') : `<div class="placeholder">今天排班的司機都已上線</div>`;
       }else if(liveDrill==='leave'){
-        body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">休假（${a.onLeave.length}）</div></div>`;
+        body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">休假／支援（${a.onLeave.length}）</div></div>`;
         body += a.onLeave.length ? a.onLeave.map(({d,at,type})=>`
-          <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${hoursOf(d)}</div></div><div class="c">🏖 ${type}（${fmtHM(at)} 登記）</div></div>
+          <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${hoursOf(d)}</div></div><div class="c">${type==='支援開店閉店業務'?'🤝':'🏖'} ${type}（${fmtHM(at)} 登記）</div></div>
         `).join('') : `<div class="placeholder">今天沒有人登記休假</div>`;
       }else if(liveDrill==='anomaly'){
         body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">異常狀況（${a.anomalies.length}）</div></div>`;
