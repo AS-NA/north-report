@@ -359,6 +359,7 @@
     </div>
     <div id="storeSelectBox" style="display:none;"></div>
     <div class="infobox" id="stopInfoBox"></div>
+    <div id="rechooseBox"></div>
     <button class="bigbtn arrive" id="arriveBtn">到店打卡</button>
     <div class="statusline" id="arriveStatus"></div>
     <div class="taskcount" id="taskCountLine"></div>
@@ -514,7 +515,7 @@
         2:[{site:'南西LADY店',time:'10:30-12:00',table:'A'},{site:'中山一店',time:'12:00-14:00',table:'A'},{site:'南西AS店',time:'15:00-17:30',table:'A'},{site:'敦南LADY店',time:'17:35-19:30',table:'A'}],
         3:[{site:'中山一店',time:'09:30-12:30',table:'A'}],
         4:[],
-        5:[{site:'台北倉',time:'09:30-13:30',free:['整理下周新品']},{site:'門市（原訂門市）',time:'14:30-18:30',free:['追加整理入倉'],storeOptions:['南西AS店','中山一店','南西LADY店','南西r.fav店','敦南LADY店'],storeDropdown:true}]
+        5:[{site:'台北倉／門市',time:'09:30-18:30',choice:[{label:'台北倉（沒有發追加）',site:'台北倉',free:['整理下周新品']},{label:'門市（有發追加）',stores:['南西AS店','中山一店','南西LADY店','南西r.fav店','敦南LADY店'],free:['追加整理入倉']}]}]
       }
     },
     { region:'台北', code:'北2', name:'朱銘澤', hours:'依當日排程',
@@ -524,7 +525,7 @@
         2:[{site:'大安店',time:'10:30-12:00',table:'A'},{site:'敦南AS店',time:'15:40-17:40',table:'A'},{site:'敦南LADY店',time:'17:40-19:30',table:'A'}],
         3:[{site:'大安店',time:'09:30-12:30',table:'A'},{site:'敦南AS店',time:'13:40-15:30',table:'A'},{site:'敦南LADY店',time:'15:30-17:00',table:'A'},{site:'敦南大碼店',time:'17:00-18:30',table:'A'}],
         4:[{site:'敦南AS店',time:'09:30-13:30',table:'A'},{site:'敦南LADY店',time:'09:30-13:30',table:'A'},{site:'支援門市',time:'14:30-18:30',table:'A'}],
-        5:[{site:'台北倉',time:'09:30-13:30',free:['整理下周新品']},{site:'門市（原訂門市）',time:'14:30-18:30',free:['追加整理入倉'],storeOptions:['大安店','敦南AS店','敦南LADY店','敦南大碼店'],storeDropdown:true}]
+        5:[{site:'台北倉／門市',time:'09:30-18:30',choice:[{label:'台北倉（沒有發追加）',site:'台北倉',free:['整理下周新品']},{label:'門市（有發追加）',stores:['大安店','敦南AS店','敦南LADY店','敦南大碼店'],free:['追加整理入倉']}]}]
       }
     },
     { region:'台北', code:'北3', name:'賴昱誠', hours:'依當日排程',
@@ -537,7 +538,7 @@
         2:[{site:'西門店',time:'10:30-19:30',table:'B'},{site:'西門大碼店',time:'10:30-19:30',table:'B'}],
         3:[{site:'新莊宏匯店',time:'09:30-18:30',table:'A'}],
         4:[{site:'西門店',time:'09:30-18:30',table:'B'},{site:'西門r.fav店',time:'09:30-18:30',table:'B'}],
-        5:[{site:'台北倉',time:'09:30-13:30',free:['整理下周新品']},{site:'門市（原訂門市）',time:'14:30-18:30',free:['追加整理入倉'],storeOptions:['新莊宏匯店','西門店','西門大碼店','西門r.fav店'],storeDropdown:true}]
+        5:[{site:'台北倉／門市',time:'09:30-18:30',choice:[{label:'台北倉（沒有發追加）',site:'台北倉',free:['整理下周新品']},{label:'門市（有發追加）',stores:['新莊宏匯店','西門店','西門大碼店','西門r.fav店'],free:['追加整理入倉']}]}]
       }
     },
     { region:'台北', code:'北4', name:'NANA', hours:'依當日排程',
@@ -577,7 +578,7 @@
     DRIVERS.forEach(d=>{
       const stops = [...(d.dailyStops||[]), ...Object.values(d.weeklyStops||{}).flat()];
       stops.forEach(s=>{
-        [s.site, ...(s.storeOptions||[]), ...Object.values(s.siteByDay||{})].forEach(n=>{
+        [s.site, ...(s.storeOptions||[]), ...((s.choice||[]).flatMap(c=>c.stores||[])), ...Object.values(s.siteByDay||{})].forEach(n=>{
           String(n||'').split('/').forEach(x=>{ x=x.trim(); if(x && !/倉$|門市|商圈|支援|作業/.test(x)) set.add(x); });
         });
       });
@@ -585,7 +586,8 @@
     return [...set].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
   }
   function getStopTasks(driver, stop, weekday, st){
-    const base = getBaseStopTasks(driver, stop, weekday);
+    let base = getBaseStopTasks(driver, stop, weekday);
+    if(stop.choice && st && st.modeIdx!=null && stop.choice[st.modeIdx]) base = stop.choice[st.modeIdx].free.map(n=>({name:n, active:true}));
     if(st && Array.isArray(st.extra) && st.extra.length){
       st.extra.forEach(n=>{ if(!base.some(t=>t.name===n)) base.push({name:n, active:true, extra:true}); else { const t=base.find(x=>x.name===n); if(!t.active){ t.active=true; t.extra=true; } } });
     }
@@ -607,6 +609,7 @@
       return override.tasks.map(n=>({name:n, active:true}));
     }
     // 反灰：stop.gray = {星期數字:[工作名稱]}，該星期預設不執行（顯示灰色、不計入完成度），司機可按「改為執行」
+    if(stop.choice) return []; // 先選台北倉或門市，工作項目依選擇決定（見 getStopTasks）
     const grayNames = grayNamesFor(driver, stop, weekday);
     if(stop.free) return stop.free.map(n=> grayNames.includes(n) ? {name:n, active:false, gray:true} : {name:n, active:true});
     const table = (driver.tables[stop.table] || []).filter(t=> !(stop.exclude && stop.exclude.includes(t.name)));
@@ -891,7 +894,7 @@
       if(stops[i]){
         // for a stop with selectable store options, once a store has been chosen for today,
         // keep using that specific store's name instead of the generic group label
-        s.site = (stops[i].storeOptions && s.selectedStore) ? s.selectedStore : stops[i].site;
+        s.site = ((stops[i].storeOptions || stops[i].choice) && s.selectedStore) ? s.selectedStore : stops[i].site;
         s.time = stops[i].time;
       }
     });
@@ -1136,10 +1139,10 @@
       else{ statusHtml = locked ? '<span class="status wait">等待中</span>' : '<span class="status wait">未開始</span>'; prevDeparted=false; }
       return `<div class="stopcard ${cardClass} ${locked && !st.arrivedAt ? 'locked':''}" data-idx="${i}">
         <div class="srow">
-          <div><div class="idx">STOP ${i+1}</div><div class="site">${escapeHtml(st.site || stop.site)}${stop.storeOptions && !st.selectedStore ? ' <span style="font-size:11px; color:var(--accent); font-weight:600;">（待選店家）</span>' : ''}</div><div class="time">${stop.time}</div></div>
+          <div><div class="idx">STOP ${i+1}</div><div class="site">${escapeHtml(st.site || stop.site)}${(stop.storeOptions||stop.choice) && !st.selectedStore ? ' <span style="font-size:11px; color:var(--accent); font-weight:600;">（待選擇）</span>' : ''}</div><div class="time">${stop.time}</div></div>
           ${statusHtml}
         </div>
-        <div class="itemcount">${activeCount} 項工作項目</div>
+        <div class="itemcount">${(stop.choice && st.modeIdx==null) ? '請先選擇台北倉或門市' : activeCount+' 項工作項目'}</div>
         ${locked && !st.arrivedAt ? '<div class="locknote">前一站尚未離店</div>' : ''}
       </div>`;
     }).join('');
@@ -1152,6 +1155,36 @@
 
   // ============ STOP DETAIL ============
   let stopPhotoData = null;
+  // 先選「台北倉」或「門市」（有發追加就去門市，沒有就回倉庫），再依選擇決定這一站的工作項目
+  function renderChoiceSelection(idx, stop){
+    showView('view-stop');
+    document.getElementById('view-stop').classList.add('selecting-store');
+    $('stopSite').textContent = `${['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][idx]||(idx+1)} ${stop.site}`;
+    $('stopTime').textContent = stop.time;
+    const btnStyle = 'width:100%;text-align:left;margin-top:10px;';
+    $('storeSelectBox').innerHTML = `
+      <div class="storeselecttitle">今天這一站要做什麼？有發追加就去門市，沒有發追加就回台北倉。</div>
+      ${stop.choice.map((c,i)=>`<button class="storeoptbtn" data-mode="${i}" style="${btnStyle}">${escapeHtml(c.label)}<span class="tag">${escapeHtml(c.free.join('、'))}</span></button>`).join('')}
+      <div id="choiceStoreBox" style="display:none;margin-top:14px;"></div>`;
+    const finish = async (mi, site)=>{
+      const st = currentState.stops[idx];
+      st.modeIdx = mi; st.selectedStore = site; st.site = site;
+      document.getElementById('view-stop').classList.remove('selecting-store');
+      await saveCurrentState();
+      openStop(idx);
+    };
+    document.querySelectorAll('#storeSelectBox [data-mode]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const mi = +btn.dataset.mode, c = stop.choice[mi];
+        if(!c.stores){ finish(mi, c.site); return; }
+        const box = $('choiceStoreBox'); box.style.display = 'block';
+        box.innerHTML = `<div class="storeselecttitle" style="margin-bottom:8px;">請選擇今天要去的門市</div>
+          <select id="choiceStoreSel" style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:15px;"><option value="">請選擇門市</option>${c.stores.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')}</select>
+          <button class="storeoptbtn" id="choiceStoreOk" style="margin-top:10px;">確認</button>`;
+        $('choiceStoreOk').addEventListener('click', ()=>{ const v = $('choiceStoreSel').value; if(!v){ $('choiceStoreSel').focus(); return; } finish(mi, v); });
+      });
+    });
+  }
   function renderStoreSelection(idx, stop){
     showView('view-stop');
     document.getElementById('view-stop').classList.add('selecting-store');
@@ -1191,6 +1224,10 @@
     stopPhotoData = null;
     document.getElementById('view-stop').classList.remove('selecting-store');
 
+    if(stop.choice && st.modeIdx==null){
+      renderChoiceSelection(idx, stop);
+      return;
+    }
     if(stop.storeOptions && !st.selectedStore){
       renderStoreSelection(idx, stop);
       return;
@@ -1217,6 +1254,8 @@
     $('photoBox').style.opacity = locked ? '0.6' : '1';
     $('stopStatus').textContent=''; $('stopStatus').className='statusline';
     $('arriveStatus').textContent=''; $('arriveStatus').className='statusline';
+    $('rechooseBox').innerHTML = (stop.choice && !st.arrivedAt && !locked) ? `<div style="margin:0 20px 10px;font-size:13px;color:var(--text-mute);">目前選擇：<b>${escapeHtml(stop.choice[st.modeIdx].label)}</b>　<span id="rechooseLink" style="color:var(--accent);text-decoration:underline;cursor:pointer;">重新選擇</span></div>` : '';
+    if(stop.choice && !st.arrivedAt && !locked){ $('rechooseLink').addEventListener('click', async ()=>{ st.modeIdx = null; st.selectedStore = null; st.site = stop.site; st.tasks = {}; await saveCurrentState(); openStop(idx); }); }
     if(locked){
       $('arriveStatus').textContent = '🔒 本站已離店，紀錄已鎖定，無法再修改';
       $('arriveStatus').className = 'statusline';
