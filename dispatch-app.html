@@ -1029,6 +1029,20 @@
     await saveCurrentState();
   });
 
+  // 單一站點的完成度（規則與全日完成度相同：寄貨不算、不適用不算、沒做的反灰項目不算）；沒有可計項目回傳 null
+  function stopProgress(driver, stop, weekday, st){
+    st = st || {};
+    let total=0, weighted=0, done=0;
+    getStopTasks(driver, stop, weekday, st).filter(t=>t.active).forEach(t=>{
+      if(shipCarrierFor(t.name)) return;
+      const rec = st.tasks && st.tasks[t.name];
+      if(rec && rec.status==='na') return;
+      total++;
+      if(rec && rec.status==='done'){ done++; weighted += 100; }
+      else if(rec && rec.status==='partial'){ weighted += (typeof rec.percent==='number' ? rec.percent : 0); }
+    });
+    return total ? { total, done, pct: Math.round(weighted/total) } : null;
+  }
   function computeProgress(driver, weekday, state){
     const stops = getStopsFor(driver, weekday);
     let totalTasks=0, doneTasks=0, weightedSum=0, arrivedCount=0, lateCount=0;
@@ -1170,7 +1184,7 @@
       return `<div class="stopcard ${cardClass} ${locked && !st.arrivedAt ? 'locked':''}" data-idx="${i}">
         <div class="srow">
           <div><div class="idx">STOP ${i+1}</div><div class="site">${escapeHtml(st.site || stop.site)}${(stop.storeOptions||stop.choice) && !st.selectedStore ? ' <span style="font-size:11px; color:var(--accent); font-weight:600;">（待選擇）</span>' : ''}</div><div class="time">${stop.time}</div></div>
-          ${statusHtml}
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">${statusHtml}${(()=>{ const sp = (st.arrivedAt || st.departedAt) ? stopProgress(currentDriver, stop, weekday, st) : null; return sp ? `<span class="stoppct" style="font-size:13px; font-weight:800; color:${sp.pct>=100?'var(--green)':sp.pct>=50?'var(--accent)':'var(--text-mute)'};">${sp.pct}%<span style="font-size:11px; font-weight:600; color:var(--text-mute);"> · ${sp.done}/${sp.total}</span></span>` : ''; })()}</div>
         </div>
         <div class="itemcount">${(stop.choice && st.modeIdx==null) ? '請先選擇台北倉或門市' : (stop.optional && !st.arrivedAt) ? '選填・機動支援（有支援才打卡）' : activeCount+' 項工作項目'}</div>
         ${locked && !st.arrivedAt ? '<div class="locknote">前一站尚未離店</div>' : ''}
