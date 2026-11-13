@@ -485,7 +485,7 @@
     },
     { region:'桃園', code:'北桃1', name:'陳兆晏', hours:'11:00-20:00',
       tables:{ A:[T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('商品歸倉',[4,5]),T('追加整理歸倉',[5])], B:[T('收送貨',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('商品歸倉',[4,5]),T('追加整理歸倉',[5])], C:[T('接北區補貨',[1,2,3,4,5]),T('收送貨',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('商品歸倉',[4,5]),T('追加整理歸倉',[5])] },
-      dailyStops:[ {site:'桃園統領店/桃園統領大碼店',time:'11:00-11:30',table:'B'}, {site:'桃園大江店',time:'11:45-12:00',table:'C',exclude:['撤貨抓貨(只抓倉庫)','區內勻貨','跨區勻貨','支援EC','新品入倉整理','商品歸倉','追加整理歸倉']}, {site:'桃園台茂AS店/桃園台茂店',time:'12:00-16:00',table:'A'}, {site:'桃園統領店',time:'17:20-20:00',table:'A'} ]
+      dailyStops:[ {site:'桃園統領店/桃園統領大碼店',time:'11:00-11:30',table:'B'}, {site:'桃園大江店',time:'11:45-12:15',table:'C',exclude:['撤貨抓貨(只抓倉庫)','區內勻貨','跨區勻貨','支援EC','新品入倉整理','商品歸倉','追加整理歸倉']}, {site:'桃園台茂AS店/桃園台茂店',time:'12:15-16:00',table:'A'}, {site:'桃園統領店',time:'17:20-20:00',table:'A'} ]
     },
     { region:'桃園', code:'北桃2', name:'陳狄獻', hours:'09:30-18:30',
       tables:{ A:[T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('商品歸倉',[4,5]),T('追加整理歸倉',[5])], B:[T('接北區補貨',[1,2,3,4,5]),T('收送貨',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('商品歸倉',[4,5]),T('追加整理歸倉',[5])], D:[T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉整理',[3]),T('支援EC',[2,3]),T('商品歸倉',[4,5]),T('追加整理歸倉',[5]),T('下貨',[1,2,3,4,5])] },
@@ -560,13 +560,28 @@
   }
   const ALL_SITES = getAllSites();
   function findDriver(region, name){ return DRIVERS.find(d=>d.region===region && d.name===name); }
+  // 排程時間調整：從指定日期起，某位司機的上班時間與每一站時段整體平移（到期自動生效，不用再上傳）
+  const SCHEDULE_SHIFTS = [
+    { name:'陳兆晏', from:'2026-11-16', minutes:-30, hours:'10:30-19:30' }
+  ];
+  function activeShift(d){ const t = todayDateStr(); return SCHEDULE_SHIFTS.find(x=>x.name===d.name && t>=x.from) || null; }
+  function hoursOf(d){ const sh = activeShift(d); return sh ? sh.hours : d.hours; }
+  function shiftRange(r, m){
+    const mm = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(r||'');
+    if(!mm) return r;
+    const f = x=>{ const v = Math.max(0, x+m); return String(Math.floor(v/60)).padStart(2,'0')+':'+String(v%60).padStart(2,'0'); };
+    return f(+mm[1]*60+ +mm[2]) + '-' + f(+mm[3]*60+ +mm[4]);
+  }
   function getStopsFor(driver, weekday){
     if(driver.noSchedule) return [];
     const list = driver.weeklyStops ? (driver.weeklyStops[weekday] || []) : (driver.dailyStops || []);
+    const sh = activeShift(driver);
     // siteByDay：同一站依星期固定去不同門市（例如週一二遠百、週三四五逢甲），不用司機選
     return list.map(st=>{
       const fixed = st.siteByDay && st.siteByDay[weekday];
-      return fixed ? { ...st, site: fixed } : st;
+      let o = fixed ? { ...st, site: fixed } : st;
+      if(sh) o = { ...o, origTime: o.time, time: shiftRange(o.time, sh.minutes) };
+      return o;
     });
   }
   // 台中區：司機可以在每一站自己加臨時工作（不固定每天每站都有），常用的兩項放在快速選項
@@ -600,10 +615,10 @@
     return base;
   }
   // 反灰規則（來源：各站不適用工作項目_考慮反灰.xlsx 第二版）：[司機, 站點, [時段], 工作項目, 星期(null=全)]；該站該項目預設反灰，有做才計分
-  const GRAY_RULES = [["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"區內勻貨",[1]],["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"跨區勻貨",[2]],["朱家宏","左營新光店",["11:55-13:50"],"商品歸倉",[2]],["朱家宏","高雄漢神LADY店",["15:25-16:55"],"商品歸倉",[2]],["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"追加整理入倉",[3,4,5]],["朱家宏","左營新光店",["11:55-13:50"],"追加整理入倉",[3]],["朱家宏","高雄漢神LADY店",["15:25-16:55"],"追加整理入倉",[3]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"區內勻貨",[1]],["陳兆晏","桃園統領店",["17:20-20:00"],"區內勻貨",[1]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"跨區勻貨",[2]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"支援EC",[2,3]],["陳兆晏","桃園台茂AS店/桃園台茂店",["12:00-16:00"],"支援EC",[2,3]],["陳兆晏","桃園統領店",["17:20-20:00"],"支援EC",[2,3]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"新品入倉整理",[3]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"商品歸倉",[4,5]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"追加整理歸倉",[5]],["王郁文","遠百(門市作業)",["16:20-19:30"],"撤貨抓貨",[1]],["王郁文","遠百(門市作業)",["16:20-19:30"],"區內勻貨",[1,2]],["王郁文","遠百(門市作業)",["16:20-19:30"],"跨區勻貨",[1,2]],["王郁文","一中店/一中LADY店",["15:00-17:00"],"支援EC撤貨",[2,3]],["王郁文","遠百(門市作業)",["16:20-19:30"],"支援EC撤貨",[2]],["王郁文","一中店/一中LADY店",["15:00-17:00"],"商品歸倉",[3,4]],["吳昀彥","台中漢神店",["17:20-19:30"],"撤貨抓貨",[1,2]],["吳昀彥","台中漢神店",["17:20-19:30"],"跨區勻貨",[1,2]],["吳昀彥","台中漢神店",["17:20-19:30"],"支援EC撤貨",[2,3]],["賴昱誠","新莊宏匯店",["10:30-19:30"],"追加整理入倉",[1]],["賴昱誠","西門店",["10:30-19:30"],"濾網清潔",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"商品歸倉",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"追加整理入倉",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"撤貨抓貨",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"跨區勻貨",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"濾網清潔",[2]],["賴昱誠","新莊宏匯店",["09:30-18:30"],"追加整理入倉",[3]],["賴昱誠","西門r.fav店",["09:30-18:30"],"商品歸倉",[4]],["賴昱誠","西門r.fav店",["09:30-18:30"],"追加整理入倉",[4]]];
+  const GRAY_RULES = [["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"區內勻貨",[1]],["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"跨區勻貨",[2]],["朱家宏","左營新光店",["11:55-13:50"],"商品歸倉",[2]],["朱家宏","高雄漢神LADY店",["15:25-16:55"],"商品歸倉",[2]],["朱家宏","岡山秀泰LADY店",["09:00-11:00"],"追加整理入倉",[3,4,5]],["朱家宏","左營新光店",["11:55-13:50"],"追加整理入倉",[3]],["朱家宏","高雄漢神LADY店",["15:25-16:55"],"追加整理入倉",[3]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"區內勻貨",[1]],["陳兆晏","桃園統領店",["17:20-20:00"],"區內勻貨",[1]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"跨區勻貨",[2]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"支援EC",[2,3]],["陳兆晏","桃園台茂AS店/桃園台茂店",["12:15-16:00"],"支援EC",[2,3]],["陳兆晏","桃園統領店",["17:20-20:00"],"支援EC",[2,3]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"新品入倉整理",[3]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"商品歸倉",[4,5]],["陳兆晏","桃園統領店/桃園統領大碼店",["11:00-11:30"],"追加整理歸倉",[5]],["王郁文","遠百(門市作業)",["16:20-19:30"],"撤貨抓貨",[1]],["王郁文","遠百(門市作業)",["16:20-19:30"],"區內勻貨",[1,2]],["王郁文","遠百(門市作業)",["16:20-19:30"],"跨區勻貨",[1,2]],["王郁文","一中店/一中LADY店",["15:00-17:00"],"支援EC撤貨",[2,3]],["王郁文","遠百(門市作業)",["16:20-19:30"],"支援EC撤貨",[2]],["王郁文","一中店/一中LADY店",["15:00-17:00"],"商品歸倉",[3,4]],["吳昀彥","台中漢神店",["17:20-19:30"],"撤貨抓貨",[1,2]],["吳昀彥","台中漢神店",["17:20-19:30"],"跨區勻貨",[1,2]],["吳昀彥","台中漢神店",["17:20-19:30"],"支援EC撤貨",[2,3]],["賴昱誠","新莊宏匯店",["10:30-19:30"],"追加整理入倉",[1]],["賴昱誠","西門店",["10:30-19:30"],"濾網清潔",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"商品歸倉",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"追加整理入倉",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"撤貨抓貨",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"跨區勻貨",[2]],["賴昱誠","西門大碼店",["10:30-19:30"],"濾網清潔",[2]],["賴昱誠","新莊宏匯店",["09:30-18:30"],"追加整理入倉",[3]],["賴昱誠","西門r.fav店",["09:30-18:30"],"商品歸倉",[4]],["賴昱誠","西門r.fav店",["09:30-18:30"],"追加整理入倉",[4]]];
   function grayNamesFor(driver, stop, weekday){
     const out = (stop.gray && stop.gray[weekday]) ? stop.gray[weekday].slice() : [];
-    GRAY_RULES.forEach(r=>{ if(r[0]===driver.name && (r[1]===stop.site || r[1].split('/').includes(stop.site)) && r[2].includes(stop.time) && (!r[4] || r[4].includes(weekday))) out.push(r[3]); });
+    GRAY_RULES.forEach(r=>{ if(r[0]===driver.name && (r[1]===stop.site || r[1].split('/').includes(stop.site)) && r[2].includes(stop.origTime||stop.time) && (!r[4] || r[4].includes(weekday))) out.push(r[3]); });
     return out;
   }
   function getBaseStopTasks(driver, stop, weekday){
@@ -674,7 +689,7 @@
         $('quickcardWrap').innerHTML = `<div class="section-label">上次使用</div>
           <div class="quickcard" id="quickcardBtn">
             <div class="n">${escapeHtml(d.name)}</div>
-            <div class="m">${d.region}區 · ${d.code} · ${escapeHtml(d.name)} · ${d.hours}</div>
+            <div class="m">${d.region}區 · ${d.code} · ${escapeHtml(d.name)} · ${hoursOf(d)}</div>
             <div class="go">點此直接開始今日行程 →</div>
           </div>`;
         $('quickcardBtn').addEventListener('click', ()=>openDriver(d.region, d.name));
@@ -712,7 +727,7 @@
       else right = `<div style="display:flex; align-items:center; gap:10px;"><button type="button" data-leave-open="${n}" style="${btnCss}">🏖 休假</button><div class="arrow">›</div></div>`;
       return `
       <div class="drivercard" data-name="${n}" style="${lv?'opacity:.8;':''}">
-        <div><div class="n">${n}</div><div class="c">${d.code} · ${d.hours}</div></div>
+        <div><div class="n">${n}</div><div class="c">${d.code} · ${hoursOf(d)}</div></div>
         ${right}
       </div>`;
     }).join('');
@@ -2246,7 +2261,7 @@
         body += `<div class="section-label" style="margin:16px 20px 8px;">每位司機進度（有提醒的排前面）</div><div class="pboard">` + (sorted.length ? sorted.map(r=>{
           const chips = r.flags.length ? r.flags.map(f=>`<span class="pchip ${f.t==='bad'?'':'warn'}">${escapeHtml(f.x)}</span>`).join('') : `<span class="pchip ok">${r.started?'目前沒有提醒':'今天尚未開始'}</span>`;
           return `<div class="prow ${r.flags.some(f=>f.t==='bad')?'flag':''}">
-            <div class="ph"><div><span class="pn">${escapeHtml(r.d.name)}</span> <span class="pc">${escapeHtml(r.d.region)} · ${escapeHtml(r.d.hours||'')}</span></div><div class="pp">${r.prog.pct}%</div></div>
+            <div class="ph"><div><span class="pn">${escapeHtml(r.d.name)}</span> <span class="pc">${escapeHtml(r.d.region)} · ${escapeHtml(hoursOf(r.d)||'')}</span></div><div class="pp">${r.prog.pct}%</div></div>
             <div class="barbg" style="margin-top:6px;"><div class="barfg" style="width:${r.prog.pct}%"></div></div>
             <div class="pc" style="margin-top:4px;">完成 ${r.prog.doneTasks}/${r.prog.totalTasks} 項　·　到站 ${r.prog.arrivedCount}/${getStopsFor(r.d, weekday).length} 站</div>
             <div class="pchips">${chips}</div>
@@ -2269,12 +2284,12 @@
       }else if(liveDrill==='offline'){
         body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">未上線司機（${a.notOnline.length}）</div></div>`;
         body += a.notOnline.length ? a.notOnline.map(({d})=>`
-          <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${d.hours}</div></div><div class="c">尚未打卡</div></div>
+          <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${hoursOf(d)}</div></div><div class="c">尚未打卡</div></div>
         `).join('') : `<div class="placeholder">今天排班的司機都已上線</div>`;
       }else if(liveDrill==='leave'){
         body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">休假（${a.onLeave.length}）</div></div>`;
         body += a.onLeave.length ? a.onLeave.map(({d,at,type})=>`
-          <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${d.hours}</div></div><div class="c">🏖 ${type}（${fmtHM(at)} 登記）</div></div>
+          <div class="miniline"><div><div class="n">${escapeHtml(d.name)}</div><div class="c">${d.region} · ${d.code} · ${hoursOf(d)}</div></div><div class="c">🏖 ${type}（${fmtHM(at)} 登記）</div></div>
         `).join('') : `<div class="placeholder">今天沒有人登記休假</div>`;
       }else if(liveDrill==='anomaly'){
         body += `<div class="drillbar"><button class="back2" id="drillBackBtn">←</button><div class="title">異常狀況（${a.anomalies.length}）</div></div>`;
