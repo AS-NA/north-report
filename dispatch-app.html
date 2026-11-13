@@ -159,6 +159,11 @@
   .naReasonSelect{ margin-top:2px; }
   .graybtn{ padding:7px 14px; border-radius:8px; border:1px solid var(--accent); background:transparent; color:var(--accent); font-size:13px; cursor:pointer; font-family:inherit; }
   .taskrow.grayed{ opacity:0.6; border-style:dashed; }
+  .regblock{ margin-top:10px; }
+  .regform select,.regform input[type=text]{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:13.5px; margin-bottom:6px; }
+  .regnums{ display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; font-size:12px; color:var(--text-mute); }
+  .regnums label{ display:flex; flex-direction:column; gap:3px; }
+  .regnums input{ width:80px; padding:9px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:14px; text-align:center; }
   .naword{font-size:12px; color:var(--text-mute); font-family:var(--font-mono);}
 
   .field{margin:16px 20px;}
@@ -509,7 +514,7 @@
         2:[{site:'南西LADY店',time:'10:30-12:00',table:'A'},{site:'中山一店',time:'12:00-14:00',table:'A'},{site:'南西AS店',time:'15:00-17:30',table:'A'},{site:'敦南LADY店',time:'17:35-19:30',table:'A'}],
         3:[{site:'中山一店',time:'09:30-12:30',table:'A'}],
         4:[],
-        5:[{site:'台北倉',time:'09:30-18:30',table:'A'}]
+        5:[{site:'台北倉',time:'09:30-13:30',free:['整理下周新品']},{site:'門市（原訂門市）',time:'14:30-18:30',free:['追加整理入倉'],storeOptions:['南西AS店','中山一店','南西LADY店','南西r.fav店','敦南LADY店'],storeDropdown:true}]
       }
     },
     { region:'台北', code:'北2', name:'朱銘澤', hours:'依當日排程',
@@ -519,7 +524,7 @@
         2:[{site:'大安店',time:'10:30-12:00',table:'A'},{site:'敦南AS店',time:'15:40-17:40',table:'A'},{site:'敦南LADY店',time:'17:40-19:30',table:'A'}],
         3:[{site:'大安店',time:'09:30-12:30',table:'A'},{site:'敦南AS店',time:'13:40-15:30',table:'A'},{site:'敦南LADY店',time:'15:30-17:00',table:'A'},{site:'敦南大碼店',time:'17:00-18:30',table:'A'}],
         4:[{site:'敦南AS店',time:'09:30-13:30',table:'A'},{site:'敦南LADY店',time:'09:30-13:30',table:'A'},{site:'支援門市',time:'14:30-18:30',table:'A'}],
-        5:[{site:'台北倉',time:'09:30-18:30',table:'A'}]
+        5:[{site:'台北倉',time:'09:30-13:30',free:['整理下周新品']},{site:'門市（原訂門市）',time:'14:30-18:30',free:['追加整理入倉'],storeOptions:['大安店','敦南AS店','敦南LADY店','敦南大碼店'],storeDropdown:true}]
       }
     },
     { region:'台北', code:'北3', name:'賴昱誠', hours:'依當日排程',
@@ -532,7 +537,7 @@
         2:[{site:'西門店',time:'10:30-19:30',table:'B'},{site:'西門大碼店',time:'10:30-19:30',table:'B'}],
         3:[{site:'新莊宏匯店',time:'09:30-18:30',table:'A'}],
         4:[{site:'西門店',time:'09:30-18:30',table:'B'},{site:'西門r.fav店',time:'09:30-18:30',table:'B'}],
-        5:[{site:'台北倉',time:'09:30-18:30',table:'A'}]
+        5:[{site:'台北倉',time:'09:30-13:30',free:['整理下周新品']},{site:'門市（原訂門市）',time:'14:30-18:30',free:['追加整理入倉'],storeOptions:['新莊宏匯店','西門店','西門大碼店','西門r.fav店'],storeDropdown:true}]
       }
     },
     { region:'台北', code:'北4', name:'NANA', hours:'依當日排程',
@@ -564,6 +569,21 @@
   // 台中區：司機可以在每一站自己加臨時工作（不固定每天每站都有），常用的兩項放在快速選項
   const EXTRA_QUICK = ['抓no show','洗濾網'];
   const extraAllowed = d => !!(d && d.region==='台中');
+  // 登記型工作：除了完成/未完成/不適用，還要登記「店家／箱數／件數」（可多筆）
+  const REGISTRY_TASKS = ['整理下周新品'];
+  const isRegistryTask = n => REGISTRY_TASKS.includes(n);
+  function allStoreNames(){
+    const set = new Set();
+    DRIVERS.forEach(d=>{
+      const stops = [...(d.dailyStops||[]), ...Object.values(d.weeklyStops||{}).flat()];
+      stops.forEach(s=>{
+        [s.site, ...(s.storeOptions||[]), ...Object.values(s.siteByDay||{})].forEach(n=>{
+          String(n||'').split('/').forEach(x=>{ x=x.trim(); if(x && !/倉$|門市|商圈|支援|作業/.test(x)) set.add(x); });
+        });
+      });
+    });
+    return [...set].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+  }
   function getStopTasks(driver, stop, weekday, st){
     const base = getBaseStopTasks(driver, stop, weekday);
     if(st && Array.isArray(st.extra) && st.extra.length){
@@ -1135,17 +1155,21 @@
   function renderStoreSelection(idx, stop){
     showView('view-stop');
     document.getElementById('view-stop').classList.add('selecting-store');
-    $('stopSite').textContent = `① ${stop.site}`;
+    $('stopSite').textContent = `${['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][idx]||(idx+1)} ${stop.site}`;
     $('stopTime').textContent = stop.time;
     $('storeSelectBox').innerHTML = `
       <div class="storeselecttitle">這一站是「${escapeHtml(stop.site)}」，請先選擇今天實際要去哪一家門市，選定後這一站就會依這家店來記錄工作項目跟打卡。</div>
-      ${stop.storeOptions.map((name,i)=>`<button class="storeoptbtn" data-choice="${escapeHtml(name)}">${escapeHtml(name)}${i===0?'<span class="tag">主要支援</span>':''}</button>`).join('')}
+      ${stop.storeDropdown
+        ? `<select id="storeDropSel" style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:15px;"><option value="">請選擇門市</option>${stop.storeOptions.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')}</select><button class="storeoptbtn" id="storeDropOk" style="margin-top:10px;" data-choice="">確認</button>`
+        : stop.storeOptions.map((name,i)=>`<button class="storeoptbtn" data-choice="${escapeHtml(name)}">${escapeHtml(name)}${i===0?'<span class="tag">主要支援</span>':''}</button>`).join('')}
     `;
     document.querySelectorAll('#storeSelectBox .storeoptbtn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         const st = currentState.stops[idx];
-        st.selectedStore = btn.dataset.choice;
-        st.site = btn.dataset.choice;
+        const chosen = btn.id==='storeDropOk' ? ($('storeDropSel').value) : btn.dataset.choice;
+        if(!chosen){ $('storeDropSel').focus(); return; }
+        st.selectedStore = chosen;
+        st.site = chosen;
         document.getElementById('view-stop').classList.remove('selecting-store');
         await saveCurrentState();
         openStop(idx);
@@ -1172,7 +1196,7 @@
       return;
     }
 
-    $('stopSite').textContent = `① ${stop.site}`;
+    $('stopSite').textContent = `${['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][idx]||(idx+1)} ${st.selectedStore||stop.site}`;
     $('stopTime').textContent = stop.time;
     const todayOverride = allOverrides.find(o=> o.site===stop.site && o.date===todayDateStr());
     let overrideBanner = document.getElementById('overrideBanner');
@@ -1367,6 +1391,20 @@
           ${diffLine}
         </div>`;
       }
+      let regHtml = '';
+      if(isRegistryTask(t.name)){
+        const items = rec.items || [];
+        const tb = items.reduce((a,x)=>a+(x.boxes||0),0), tp = items.reduce((a,x)=>a+(x.pieces||0),0);
+        regHtml = `<div class="regblock" data-reg-task="${escapeHtml(t.name)}">
+          <div class="reglist">${items.length ? items.map((x,xi)=>`<div class="shipitem"><span>${escapeHtml(x.site)}　${x.boxes}箱　${x.pieces}件</span>${locked?'':`<span class="rmv" data-reg-rm="${xi}">移除</span>`}</div>`).join('') + `<div class="fieldhint">合計 ${tb} 箱 / ${tp} 件</div>` : `<div class="fieldhint">尚未登記（請填店家／箱數／件數，至少一筆才能離店）</div>`}</div>
+          ${locked ? '' : `<div class="regform">
+            <select class="regsite"><option value="">店家</option>${allStoreNames().map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')}<option value="__other__">其他（手動輸入）</option></select>
+            <input type="text" class="regother" placeholder="輸入店家名稱" style="display:none;">
+            <div class="regnums"><label>箱數 <input type="number" class="regboxes" inputmode="numeric" min="0" step="1" placeholder="0"></label><label>件數 <input type="number" class="regpieces" inputmode="numeric" min="0" step="1" placeholder="0"></label><button type="button" class="graybtn regadd">＋ 加入</button></div>
+            <div class="regerr" style="color:var(--red);font-size:12px;min-height:14px;"></div>
+          </div>`}
+        </div>`;
+      }
       const taskBtnsHtml = shipCarrier ? '' : `<div class="taskbtns">
             <button class="tbtn done ${status==='done'?'active':''}" data-val="done" ${dis}>完成</button>
             <button class="tbtn notdone ${status==='partial'?'active':''}" data-val="partial" ${dis}>未完成</button>
@@ -1380,6 +1418,7 @@
         ${extraHtml}
         ${t.extra && !locked ? `<span class="extrarmv" data-extra-rm="${escapeHtml(t.name)}">${t.gray?'恢復反灰':'移除這項'}</span>` : ''}
         ${shipHtml}
+        ${regHtml}
         ${piecesHtml}
       </div>`;
     }).join('');
@@ -1426,6 +1465,7 @@
         // 不然點狀態按鈕會把剛剛登記的箱數整個蓋掉、看起來像資料消失了。
         const carryBoxes = {};
         if(prev.boxes) carryBoxes.boxes = prev.boxes;
+        if(prev.items) carryBoxes.items = prev.items;
         if(typeof prev.pieces==='number') carryBoxes.pieces = prev.pieces;
         if(typeof prev.planned==='number') carryBoxes.planned = prev.planned;
         if(prev.status === val){
@@ -1437,6 +1477,32 @@
         }else if(val==='na'){
           st.tasks[taskName] = { status:'na', reason: prev.reason||'', ...carryBoxes };
         }
+        renderTaskRows(stop, st, weekday, locked);
+        await saveCurrentState();
+      });
+    });
+    document.querySelectorAll('#taskRows .regblock').forEach(box=>{
+      const taskName = box.dataset.regTask;
+      const sel = box.querySelector('.regsite'), other = box.querySelector('.regother');
+      if(sel) sel.addEventListener('change', ()=>{ other.style.display = sel.value==='__other__' ? 'block' : 'none'; });
+      box.querySelectorAll('[data-reg-rm]').forEach(el=> el.addEventListener('click', async ()=>{
+        const r = st.tasks[taskName]; if(!r || !r.items) return;
+        r.items.splice(+el.dataset.regRm,1);
+        renderTaskRows(stop, st, weekday, locked);
+        await saveCurrentState();
+      }));
+      const add = box.querySelector('.regadd');
+      if(add) add.addEventListener('click', async ()=>{
+        const site = sel.value==='__other__' ? other.value.trim() : sel.value;
+        const boxes = parseInt(box.querySelector('.regboxes').value,10), pieces = parseInt(box.querySelector('.regpieces').value,10);
+        const err = box.querySelector('.regerr');
+        if(!site){ err.textContent='請選擇或輸入店家'; return; }
+        if(!(boxes>=0) || !(pieces>=0)){ err.textContent='請填箱數和件數（沒有就填 0）'; return; }
+        if(boxes===0 && pieces===0){ err.textContent='箱數和件數不能都是 0'; return; }
+        if(!st.tasks) st.tasks = {};
+        if(!st.tasks[taskName]) st.tasks[taskName] = {};
+        if(!st.tasks[taskName].items) st.tasks[taskName].items = [];
+        st.tasks[taskName].items.push({site, boxes, pieces});
         renderTaskRows(stop, st, weekday, locked);
         await saveCurrentState();
       });
@@ -1624,6 +1690,16 @@
     const naNoReason = tasks.filter(t=>{ const r = st.tasks && st.tasks[t.name]; return r && r.status==='na' && !r.reason; });
     if(naNoReason.length>0){
       setStopStatus(`⚠ 選「不適用」要選原因，請補上：${naNoReason.map(t=>t.name).join('、')}`, true);
+      renderTaskRows(stop, st, weekday, false);
+      return;
+    }
+    const regPending = getStopTasks(currentDriver, stop, weekday, st).filter(t=>{
+      if(!t.active || !isRegistryTask(t.name)) return false;
+      const r = (st.tasks && st.tasks[t.name]) || {};
+      return r.status!=='na' && !(r.items && r.items.length);
+    });
+    if(regPending.length>0){
+      setStopStatus(`⚠ 請先登記店家／箱數／件數：${regPending.map(t=>t.name).join('、')}（沒有可標「不適用」）`, true);
       renderTaskRows(stop, st, weekday, false);
       return;
     }
