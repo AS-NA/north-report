@@ -519,13 +519,14 @@
       }
     },
     { region:'台北', code:'北2', name:'朱銘澤', hours:'依當日排程',
-      tables:{ A:[T('商品歸倉',[1,2,3,4,5]),T('追加整理入倉',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3,5]),T('濾網清潔',[2,3])] },
+      tables:{ A:[T('商品歸倉',[1,2,3,4,5]),T('追加整理入倉',[1,2,3,4,5]),T('撤貨抓貨(只抓倉庫)',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3,5]),T('濾網清潔',[2,3])],
+        S:[T('商品歸倉',[1,2,3,4,5]),T('追加整理入倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3,4]),T('新品整理',[3,4,5]),T('濾網清潔',[2,3])] },
       weeklyStops:{
-        1:[{site:'大安店',time:'10:30-12:00',table:'A'},{site:'敦南AS店',time:'15:40-17:40',table:'A'},{site:'敦南LADY店',time:'17:40-19:30',table:'A'}],
-        2:[{site:'大安店',time:'10:30-12:00',table:'A'},{site:'敦南AS店',time:'15:40-17:40',table:'A'},{site:'敦南LADY店',time:'17:40-19:30',table:'A'}],
-        3:[{site:'大安店',time:'09:30-12:30',table:'A'},{site:'敦南AS店',time:'13:40-15:30',table:'A'},{site:'敦南LADY店',time:'15:30-17:00',table:'A'},{site:'敦南大碼店',time:'17:00-18:30',table:'A'}],
-        4:[{site:'敦南AS店',time:'09:30-13:30',table:'A'},{site:'敦南LADY店',time:'09:30-13:30',table:'A'},{site:'支援門市',time:'14:30-18:30',table:'A'}],
-        5:[{site:'台北倉／門市',time:'09:30-18:30',choice:[{label:'台北倉（沒有發追加）',site:'台北倉',free:['整理下周新品']},{label:'門市（有發追加）',stores:['大安店','敦南AS店','敦南LADY店','敦南大碼店'],free:['追加整理入倉']}]}]
+        1:[{site:'大安店',time:'10:30-12:00',table:'A'},{site:'敦南AS店',time:'15:40-17:40',table:'A'},{site:'敦南LADY店',time:'17:40-19:30',table:'A'},{site:'支援南西區',time:'機動支援',table:'S',optional:true,storeOptions:['南西AS店','南西LADY店','南西r.fav店','中山一店']}],
+        2:[{site:'大安店',time:'10:30-12:00',table:'A'},{site:'敦南AS店',time:'15:40-17:40',table:'A'},{site:'敦南LADY店',time:'17:40-19:30',table:'A'},{site:'支援南西區',time:'機動支援',table:'S',optional:true,storeOptions:['南西AS店','南西LADY店','南西r.fav店','中山一店']}],
+        3:[{site:'大安店',time:'09:30-12:30',table:'A'},{site:'敦南AS店',time:'13:40-15:30',table:'A'},{site:'敦南LADY店',time:'15:30-17:00',table:'A'},{site:'敦南大碼店',time:'17:00-18:30',table:'A'},{site:'支援南西區',time:'機動支援',table:'S',optional:true,storeOptions:['南西AS店','南西LADY店','南西r.fav店','中山一店']}],
+        4:[{site:'敦南AS店',time:'09:30-13:30',table:'A'},{site:'敦南LADY店',time:'09:30-13:30',table:'A'},{site:'支援門市',time:'14:30-18:30',table:'A'},{site:'支援南西區',time:'機動支援',table:'S',optional:true,storeOptions:['南西AS店','南西LADY店','南西r.fav店','中山一店']}],
+        5:[{site:'台北倉／門市',time:'09:30-18:30',choice:[{label:'台北倉（沒有發追加）',site:'台北倉',free:['整理下周新品']},{label:'門市（有發追加）',stores:['大安店','敦南AS店','敦南LADY店','敦南大碼店'],free:['追加整理入倉']}]},{site:'支援南西區',time:'機動支援',table:'S',optional:true,storeOptions:['南西AS店','南西LADY店','南西r.fav店','中山一店']}]
       }
     },
     { region:'台北', code:'北3', name:'賴昱誠', hours:'依當日排程',
@@ -588,6 +589,8 @@
   function getStopTasks(driver, stop, weekday, st){
     let base = getBaseStopTasks(driver, stop, weekday);
     if(stop.choice && st && st.modeIdx!=null && stop.choice[st.modeIdx]) base = stop.choice[st.modeIdx].free.map(n=>({name:n, active:true}));
+    // 機動支援站（optional）：沒有到店打卡就不算應做項目，不影響完成度
+    if(stop.optional && !(st && st.arrivedAt)) return base.map(t=>({...t, active:false, notYet:true}));
     if(st && Array.isArray(st.extra) && st.extra.length){
       st.extra.forEach(n=>{ if(!base.some(t=>t.name===n)) base.push({name:n, active:true, extra:true}); else { const t=base.find(x=>x.name===n); if(!t.active){ t.active=true; t.extra=true; } } });
     }
@@ -1032,7 +1035,7 @@
         }
       }
     });
-    return { totalTasks, doneTasks, arrivedCount, totalStops:stops.length, lateCount,
+    return { totalTasks, doneTasks, arrivedCount, totalStops:stops.filter((x,i)=> !x.optional || (state.stops[i] && state.stops[i].arrivedAt)).length, lateCount,
       pct: totalTasks ? Math.round(weightedSum/totalTasks) : 0 };
   }
   function parseSchedStart(timeStr){
@@ -1131,7 +1134,7 @@
       const activeTasks = tasks.filter(t=>t.active && !shipCarrierFor(t.name));
       const activeCount = activeTasks.length;
       const fullyDone = activeCount>0 && activeTasks.every(t=> st.tasks && st.tasks[t.name] && (st.tasks[t.name].status==='done' || st.tasks[t.name].status==='na'));
-      const locked = !prevDeparted;
+      const locked = stop.optional ? false : !prevDeparted;
       let statusHtml, cardClass='';
       if(st.departedAt && fullyDone){ statusHtml = '<span class="status done">已完成</span>'; cardClass='done'; prevDeparted=true; }
       else if(st.departedAt){ statusHtml = '<span class="status partial">已離店（項目未全滿）</span>'; cardClass='partial'; prevDeparted=true; }
@@ -1142,7 +1145,7 @@
           <div><div class="idx">STOP ${i+1}</div><div class="site">${escapeHtml(st.site || stop.site)}${(stop.storeOptions||stop.choice) && !st.selectedStore ? ' <span style="font-size:11px; color:var(--accent); font-weight:600;">（待選擇）</span>' : ''}</div><div class="time">${stop.time}</div></div>
           ${statusHtml}
         </div>
-        <div class="itemcount">${(stop.choice && st.modeIdx==null) ? '請先選擇台北倉或門市' : activeCount+' 項工作項目'}</div>
+        <div class="itemcount">${(stop.choice && st.modeIdx==null) ? '請先選擇台北倉或門市' : (stop.optional && !st.arrivedAt) ? '選填・機動支援（有支援才打卡）' : activeCount+' 項工作項目'}</div>
         ${locked && !st.arrivedAt ? '<div class="locknote">前一站尚未離店</div>' : ''}
       </div>`;
     }).join('');
@@ -1350,7 +1353,7 @@
   }
 
   function renderTaskRows(stop, st, weekday, locked){
-    const tasks = getStopTasks(currentDriver, stop, weekday, st);
+    const tasks = getStopTasks(currentDriver, stop, weekday, st).filter(t=>!t.notYet);
     const activeTasks = tasks.filter(t=>t.active);
     const grayCount = tasks.filter(t=>!t.active && t.gray).length;
     const inactiveCount = tasks.length - activeTasks.length - grayCount;
@@ -1358,6 +1361,7 @@
     const trackedTasks = activeTasks.filter(t=> !shipCarrierFor(t.name));
     const doneCount = trackedTasks.filter(t=> st.tasks && st.tasks[t.name] && st.tasks[t.name].status==='done').length;
     const answeredCount = trackedTasks.filter(t=> st.tasks && st.tasks[t.name] && st.tasks[t.name].status).length;
+    if(stop.optional && !st.arrivedAt){ $('taskCountLine').innerHTML = '這一站是選填的機動支援，到店打卡後才會出現工作項目，沒有支援就不用打卡（不影響完成度）'; $('taskRows').innerHTML=''; $('allDoneMsg').innerHTML=''; return; }
     $('taskCountLine').innerHTML = `工作項目 <b>${doneCount}/${trackedTasks.length}</b>　·　本日未排程 ${inactiveCount} 項${grayCount?`　·　反灰（有做才計）${grayCount} 項`:''}`;
     $('allDoneMsg').innerHTML = (trackedTasks.length>0 && answeredCount===trackedTasks.length) ? `<div class="alldone">✓ 本站全部已填寫</div>` : '';
 
@@ -1701,6 +1705,7 @@
         const weekday = new Date().getDay();
         const stops = getStopsFor(currentDriver, weekday);
         renderStopInfoBox(stops[currentStopIdx], st);
+        if(stops[currentStopIdx].optional) renderTaskRows(stops[currentStopIdx], st, weekday, false);
         $('arriveBtn').style.display='none'; $('departBtn').style.display='block';
         $('arriveBtn').disabled=false; $('arriveBtn').textContent='到店打卡';
         const ok = await saveCurrentState();
