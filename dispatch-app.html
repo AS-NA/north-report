@@ -524,13 +524,13 @@
       dailyStops:[ {site:'一中店',time:'10:40-11:00',table:'B'}, {site:'台中漢神店',time:'11:20-11:40',table:'B'}, {site:'逢甲店',time:'12:00-12:10',table:'B'}, {site:'一中LADY店',time:'12:30-13:00',table:'E'}, {site:'一中大碼店/一中r.fav店',time:'15:00-17:00',table:'A',exclude:['支援EC撤貨'],storeOptions:['一中r.fav店','一中CHIC.A店']}, {site:'台中漢神店',time:'17:20-19:30',table:'G'} ]
     },
     { region:'台北', code:'北1', name:'林柏均', hours:'依當日排程',
-      tables:{ A:[T('商品歸倉',[1,2,3,4,5]),T('追加整理入倉',[1,2,3,4,5]),T('撤貨抓貨',[1,2,3]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3,4]),T('新品整理',[3,4,5]),T('濾網清潔',[2,3])] },
+      tables:{},
       weeklyStops:{
-        1:[{site:'南西AS店',time:'10:30-12:30',table:'A'},{site:'中山一店',time:'12:30-13:30',table:'A'},{site:'南西AS店',time:'14:30-17:30',table:'A'},{site:'南西LADY店',time:'17:40-18:40',table:'A'},{site:'南西r.fav店',time:'18:40-19:30',table:'A'}],
-        2:[{site:'南西LADY店',time:'10:30-12:00',table:'A'},{site:'中山一店',time:'12:00-14:00',table:'A'},{site:'南西AS店',time:'15:00-17:30',table:'A'},{site:'敦南LADY店',time:'17:35-19:30',table:'A'}],
-        3:[{site:'中山一店',time:'09:30-12:30',table:'A'}],
-        4:[],
-        5:[{site:'台北倉／門市',time:'09:30-18:30',choice:[{label:'台北倉（沒有發追加）',site:'台北倉',free:['整理下周新品']},{label:'門市（有發追加）',stores:['南西AS店','中山一店','南西LADY店','南西r.fav店','敦南LADY店'],free:['追加整理入倉']}]}]
+        1:[{site:'南西AS店/南西LADY店',time:'10:30-13:00',free:['追加整理入倉','撤貨抓貨']},{site:'南西AS店/南西LADY店',time:'13:00-15:30',free:['區內勻貨']},{site:'中山一店',time:'16:50-19:30',free:['區內勻貨']}],
+        2:[{site:'南西AS店/南西LADY店',time:'10:30-13:00',free:['追加整理入倉','撤貨抓貨']},{site:'南西AS店/南西LADY店',time:'13:00-15:30',free:['跨區勻貨','撤貨抓貨']},{site:'中山一店',time:'16:50-19:30',free:['跨區勻貨','撤貨抓貨']}],
+        3:[{site:'中山一店',time:'09:30-12:30',free:['撤貨抓貨','新品整理','新品入倉']},{site:'南西r.fav店',time:'12:40-14:00',free:['新品整理']},{site:'南西r.fav店',time:'15:00-17:30',free:['新品整理','新品入倉','整倉併袋']},{site:'南西AS店/南西LADY店',time:'17:30-18:30',free:['支援EC抓貨']}],
+        4:[{site:'南西AS店/南西LADY店',time:'09:30-13:30',free:['新品整理','新品入倉','整倉併袋']},{site:'南西AS店/南西LADY店',time:'14:40-17:20',free:['新品庫存移至外倉','外倉整倉']},{site:'中山一店',time:'17:30-18:30',free:['撤貨抓貨','支援EC抓貨','濾網清潔']}],
+        5:[{site:'台北倉／門市',time:'09:30-18:30',choice:[{label:'台北倉（沒有發追加）',site:'台北倉',free:['整理下周新品','整理新展店商品']},{label:'門市（有發追加）',stores:['南西AS店','中山一店','南西LADY店','南西r.fav店','敦南LADY店'],free:['追加整理入倉']}]}]
       }
     },
     { region:'台北', code:'北2', name:'朱銘澤', hours:'依當日排程',
@@ -602,7 +602,7 @@
   const EXTRA_QUICK = ['抓no show','洗濾網'];
   const extraAllowed = d => !!(d && d.region==='台中');
   // 登記型工作：除了完成/未完成/不適用，還要登記「店家／箱數／件數」（可多筆）
-  const REGISTRY_TASKS = ['整理下周新品'];
+  const REGISTRY_TASKS = ['整理下周新品','整理新展店商品'];
   const isRegistryTask = n => REGISTRY_TASKS.includes(n);
   function allStoreNames(){
     const set = new Set();
@@ -1949,8 +1949,9 @@
           const c = stop.choice[st.modeIdx];
           if(c.free.some(isRegistryTask)){
             const r = (st.tasks && st.tasks['整理下周新品']) || {};
-            items = r.items || [];
-            na = r.status==='na';
+            const r2 = (st.tasks && st.tasks['整理新展店商品']) || {};
+            items = (r.items || []).concat((r2.items || []).map(x=>Object.assign({}, x, {site:(x.site||'')+'（新展店）'})));
+            na = r.status==='na' && (!c.free.includes('整理新展店商品') || r2.status==='na');
             status = na ? '台北倉・本週無此項（不適用）' : (items.length ? '台北倉' : '台北倉・尚未登記');
           }else{
             status = '去門市（'+(st.selectedStore||'')+'）追加整理入倉';
