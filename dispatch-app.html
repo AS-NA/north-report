@@ -1045,8 +1045,8 @@
 
   // 單一站點的完成度（規則與全日完成度相同：寄貨不算、不適用不算、沒做的反灰項目不算）；沒有可計項目回傳 null
   // 不算進完成百分比的工作（仍需回報，但不計入 %）
-  const NO_PCT = { '林柏均': ['收送貨'] };
-  const noPct = (driver, name) => !!(driver && NO_PCT[driver.name] && NO_PCT[driver.name].includes(name));
+  const NO_PCT_TASKS = ['收送貨'];
+  const noPct = (driver, name) => NO_PCT_TASKS.includes(name);
   function stopProgress(driver, stop, weekday, st){
     st = st || {};
     let total=0, weighted=0, done=0;
