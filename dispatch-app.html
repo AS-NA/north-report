@@ -154,6 +154,11 @@
   .pctpreset.active{ background:var(--accent); border-color:var(--accent); color:#04212E; font-weight:700; }
   .pctcustomwrap{ display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-mute); font-family:var(--font-mono); flex:0 0 auto; }
   .pctcustom{ width:52px; padding:8px 6px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:12.5px; text-align:center; }
+  .delrow{ display:flex; gap:10px; }
+  .delcol{ flex:1; }
+  .delin{ width:100%; padding:11px 10px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:16px; font-family:var(--font-mono); text-align:center; }
+  .delin:disabled{ opacity:.55; }
+  .delnone{ display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13.5px; color:var(--text); }
   .tasknote{ width:100%; min-height:56px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font-size:13px; font-family:var(--font-body); resize:vertical; }
   .fieldhint{ font-size:11px; color:var(--text-mute); margin-top:4px; }
   .naReasonSelect{ margin-top:2px; }
@@ -366,6 +371,15 @@
     <div id="allDoneMsg"></div>
     <div id="extraTaskBox"></div>
     <div id="taskRows"></div>
+    <div class="field" id="deliveryBox">
+      <label>本站送貨量（離店前必填）</label>
+      <div class="delrow">
+        <div class="delcol"><div class="fieldhint" style="margin:0 0 4px;">貨箱（箱）</div><input type="number" inputmode="numeric" min="0" step="1" id="delBoxes" class="delin" placeholder="0"></div>
+        <div class="delcol"><div class="fieldhint" style="margin:0 0 4px;">袋（袋）</div><input type="number" inputmode="numeric" min="0" step="1" id="delBags" class="delin" placeholder="0"></div>
+      </div>
+      <label class="delnone"><input type="checkbox" id="delNone"> 本站沒有送貨</label>
+      <div class="fieldhint">送了幾箱／幾袋就填幾；只有箱或只有袋，另一格填 0。</div>
+    </div>
     <div class="field">
       <label>照片（選填）</label>
       <div class="photo-box" id="photoBox"><div class="hint" id="photoHint">＋ 拍照 / 選擇照片</div><img id="photoPreview" style="display:none;"></div>
@@ -1291,6 +1305,7 @@
     if(todayOverride) overrideBanner.textContent = '⚠ 門市已更新今日工作項目，以下清單是門市臨時提交的內容，非原本排定項目';
     $('stopNote').value = st.note || '';
     $('stopNote').disabled = locked;
+    renderDelivery(st, locked);
     $('photoPreview').style.display='none'; $('photoPreview').src='';
     $('photoHint').style.display='block';
     if(st.photo){ $('photoPreview').src = st.photo; $('photoPreview').style.display='block'; $('photoHint').style.display='none'; }
@@ -1316,6 +1331,37 @@
     if(st.departedAt){ $('arriveBtn').style.display='none'; $('departBtn').style.display='none'; }
 
     showView('view-stop');
+  }
+
+  function renderDelivery(st, locked){
+    const d = st.delivery || {};
+    const none = !!d.none;
+    $('delNone').checked = none;
+    $('delBoxes').value = (!none && typeof d.boxes==='number') ? d.boxes : '';
+    $('delBags').value = (!none && typeof d.bags==='number') ? d.bags : '';
+    const apply = ()=>{
+      const n = $('delNone').checked;
+      $('delBoxes').disabled = locked || n; $('delBags').disabled = locked || n;
+      $('delNone').disabled = locked;
+      if(n){ $('delBoxes').value=''; $('delBags').value=''; }
+    };
+    $('delNone').onchange = ()=>{ apply(); readDelivery(st); };
+    $('delBoxes').oninput = $('delBags').oninput = ()=> readDelivery(st);
+    apply();
+  }
+  function readDelivery(st){
+    const n = $('delNone').checked;
+    const num = v=> v===''||v==null ? null : Math.max(0, Math.floor(Number(v)));
+    const b = num($('delBoxes').value), g = num($('delBags').value);
+    st.delivery = n ? {none:true, boxes:0, bags:0} : {none:false, boxes:b, bags:g};
+    return st.delivery;
+  }
+  function deliveryText(st){
+    const d = st && st.delivery;
+    if(!d) return '';
+    if(d.none) return '無送貨';
+    const a=[]; if(d.boxes) a.push(d.boxes+'箱'); if(d.bags) a.push(d.bags+'袋');
+    return a.length ? a.join('') : '0';
   }
 
   function renderStopInfoBox(stop, st){
@@ -1788,6 +1834,13 @@
       renderTaskRows(stop, st, weekday, false);
       return;
     }
+    const dv = readDelivery(st);
+    if(!dv.none && (dv.boxes==null && dv.bags==null)){
+      setStopStatus('⚠ 請填本站送貨量（貨箱／袋），沒有送貨請勾「本站沒有送貨」', true);
+      $('delBoxes').focus();
+      return;
+    }
+    if(!dv.none){ if(dv.boxes==null) dv.boxes=0; if(dv.bags==null) dv.bags=0; }
     const shipPending = getStopTasks(currentDriver, stop, weekday, st).filter(t=>{
       if(!t.active || !shipCarrierFor(t.name)) return false;
       const r = (st.tasks && st.tasks[t.name]) || {};
@@ -2003,8 +2056,9 @@
         if(partialCount) fl.push({t:'warn', x:`部分完成 ${partialCount} 項`});
         if(shipMissing) fl.push({t:'bad', x:`寄貨 ${shipMissing} 項未回報`});
         const sev = fl.reduce((n,f)=> n + (f.t==='bad'?2:1), 0);
-        const stopPcts = stops.map((stop,i)=>{ const st = state.stops[i] || {}; return { site: (st.site||stop.site||'').split('/')[0], sp: stopProgress(d, stop, weekday, st), arrived: !!st.arrivedAt }; });
-        rows.push({d, prog, started, flags: fl, sev, stopPcts});
+        const stopPcts = stops.map((stop,i)=>{ const st = state.stops[i] || {}; return { site: (st.site||stop.site||'').split('/')[0], sp: stopProgress(d, stop, weekday, st), arrived: !!st.arrivedAt, del: deliveryText(st) }; });
+        const delTot = (state.stops||[]).reduce((o,x)=>{ const dl=x&&x.delivery; if(dl&&!dl.none){ o.b+=dl.boxes||0; o.g+=dl.bags||0; } return o; },{b:0,g:0});
+        rows.push({d, prog, started, flags: fl, sev, stopPcts, delTot});
       }
 
       stops.forEach((stop,i)=>{
@@ -2296,8 +2350,8 @@
           return `<div class="prow ${r.flags.some(f=>f.t==='bad')?'flag':''}">
             <div class="ph"><div><span class="pn">${escapeHtml(r.d.name)}</span> <span class="pc">${escapeHtml(r.d.region)} · ${escapeHtml(hoursOf(r.d)||'')}</span></div><div class="pp">${r.prog.pct}%</div></div>
             <div class="barbg" style="margin-top:6px;"><div class="barfg" style="width:${r.prog.pct}%"></div></div>
-            <div class="pc" style="margin-top:4px;">完成 ${r.prog.doneTasks}/${r.prog.totalTasks} 項　·　到站 ${r.prog.arrivedCount}/${getStopsFor(r.d, weekday).length} 站</div>
-            <div class="pc" style="margin-top:6px; line-height:1.9;">${r.stopPcts.map((x,i)=>`<span style="display:inline-block; margin-right:10px; white-space:nowrap;">${i+1}. ${escapeHtml(x.site)} <b style="color:${!x.sp?'var(--text-mute)':x.sp.pct>=100?'var(--green)':'inherit'};">${x.sp ? x.sp.pct+'%' : (x.arrived?'—':'—')}</b></span>`).join('')}</div>
+            <div class="pc" style="margin-top:4px;">完成 ${r.prog.doneTasks}/${r.prog.totalTasks} 項　·　到站 ${r.prog.arrivedCount}/${getStopsFor(r.d, weekday).length} 站${(r.delTot&&(r.delTot.b||r.delTot.g))?`　·　送貨 ${r.delTot.b} 箱 ${r.delTot.g} 袋`:''}</div>
+            <div class="pc" style="margin-top:6px; line-height:1.9;">${r.stopPcts.map((x,i)=>`<span style="display:inline-block; margin-right:10px; white-space:nowrap;">${i+1}. ${escapeHtml(x.site)} <b style="color:${!x.sp?'var(--text-mute)':x.sp.pct>=100?'var(--green)':'inherit'};">${x.sp ? x.sp.pct+'%' : (x.arrived?'—':'—')}</b>${x.del?` <span style="color:var(--text-mute);">送${escapeHtml(x.del)}</span>`:''}</span>`).join('')}</div>
             <div class="pchips">${chips}</div>
           </div>`;
         }).join('') : `<div class="placeholder">今天沒有排班司機</div>`) + `</div>`;
