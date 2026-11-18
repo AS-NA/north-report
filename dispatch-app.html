@@ -526,11 +526,11 @@
     { region:'台北', code:'北1', name:'林柏均', hours:'依當日排程',
       tables:{},
       weeklyStops:{
-        1:[{site:'南西AS店/南西LADY店',time:'10:30-13:00',free:['追加整理入倉','撤貨抓貨']},{site:'南西AS店/南西LADY店',time:'13:00-15:30',free:['區內勻貨']},{site:'中山一店',time:'16:50-19:30',free:['區內勻貨']}],
-        2:[{site:'南西AS店/南西LADY店',time:'10:30-13:00',free:['追加整理入倉','撤貨抓貨']},{site:'南西AS店/南西LADY店',time:'13:00-15:30',free:['跨區勻貨','撤貨抓貨']},{site:'中山一店',time:'16:50-19:30',free:['跨區勻貨','撤貨抓貨']}],
-        3:[{site:'中山一店',time:'09:30-12:30',free:['撤貨抓貨','新品整理','新品入倉']},{site:'南西r.fav店',time:'12:40-14:00',free:['新品整理']},{site:'南西r.fav店',time:'15:00-17:30',free:['新品整理','新品入倉','整倉併袋']},{site:'南西AS店/南西LADY店',time:'17:30-18:30',free:['支援EC抓貨']}],
-        4:[{site:'南西AS店/南西LADY店',time:'09:30-13:30',free:['新品整理','新品入倉','整倉併袋']},{site:'南西AS店/南西LADY店',time:'14:40-17:20',free:['新品庫存移至外倉','外倉整倉']},{site:'中山一店',time:'17:30-18:30',free:['撤貨抓貨','支援EC抓貨','濾網清潔']}],
-        5:[{site:'台北倉／門市',time:'09:30-18:30',choice:[{label:'台北倉（沒有發追加）',site:'台北倉',free:['整理下周新品','整理新展店商品']},{label:'門市（有發追加）',stores:['南西AS店','中山一店','南西LADY店','南西r.fav店','敦南LADY店'],free:['追加整理入倉']}]}]
+        1:[{site:'南西AS店/南西LADY店',time:'10:30-13:00',free:['收送貨','追加整理入倉','撤貨抓貨']},{site:'南西AS店/南西LADY店',time:'13:00-15:30',free:['收送貨','區內勻貨']},{site:'中山一店',time:'16:50-19:30',free:['收送貨','區內勻貨']}],
+        2:[{site:'南西AS店/南西LADY店',time:'10:30-13:00',free:['收送貨','追加整理入倉','撤貨抓貨']},{site:'南西AS店/南西LADY店',time:'13:00-15:30',free:['收送貨','跨區勻貨','撤貨抓貨']},{site:'中山一店',time:'16:50-19:30',free:['收送貨','跨區勻貨','撤貨抓貨']}],
+        3:[{site:'中山一店',time:'09:30-12:30',free:['收送貨','撤貨抓貨','新品整理','新品入倉']},{site:'南西r.fav店',time:'12:40-14:00',free:['收送貨','新品整理']},{site:'南西r.fav店',time:'15:00-17:30',free:['收送貨','新品整理','新品入倉','整倉併袋']},{site:'南西AS店/南西LADY店',time:'17:30-18:30',free:['收送貨','支援EC抓貨']}],
+        4:[{site:'南西AS店/南西LADY店',time:'09:30-13:30',free:['收送貨','新品整理','新品入倉','整倉併袋']},{site:'南西AS店/南西LADY店',time:'14:40-17:20',free:['收送貨','新品庫存移至外倉','外倉整倉']},{site:'中山一店',time:'17:30-18:30',free:['收送貨','撤貨抓貨','支援EC抓貨','濾網清潔']}],
+        5:[{site:'台北倉／門市',time:'09:30-18:30',choice:[{label:'台北倉（沒有發追加）',site:'台北倉',free:['收送貨','整理下周新品','整理新展店商品']},{label:'門市（有發追加）',stores:['南西AS店','中山一店','南西LADY店','南西r.fav店','敦南LADY店'],free:['收送貨','追加整理入倉']}]}]
       }
     },
     { region:'台北', code:'北2', name:'朱銘澤', hours:'依當日排程',
@@ -1044,11 +1044,14 @@
   });
 
   // 單一站點的完成度（規則與全日完成度相同：寄貨不算、不適用不算、沒做的反灰項目不算）；沒有可計項目回傳 null
+  // 不算進完成百分比的工作（仍需回報，但不計入 %）
+  const NO_PCT = { '林柏均': ['收送貨'] };
+  const noPct = (driver, name) => !!(driver && NO_PCT[driver.name] && NO_PCT[driver.name].includes(name));
   function stopProgress(driver, stop, weekday, st){
     st = st || {};
     let total=0, weighted=0, done=0;
     getStopTasks(driver, stop, weekday, st).filter(t=>t.active).forEach(t=>{
-      if(shipCarrierFor(t.name)) return;
+      if(shipCarrierFor(t.name) || noPct(driver, t.name)) return;
       const rec = st.tasks && st.tasks[t.name];
       if(rec && rec.status==='na') return;
       total++;
@@ -1064,7 +1067,7 @@
       const st = state.stops[i] || {};
       const tasks = getStopTasks(driver, stop, weekday, st).filter(t=>t.active);
       tasks.forEach(t=>{
-        if(shipCarrierFor(t.name)) return; // 寄貨類工作（登記箱數）不算在完成度內
+        if(shipCarrierFor(t.name) || noPct(driver, t.name)) return; // 寄貨類／指定不計%的工作不算在完成度內
         const rec = st.tasks && st.tasks[t.name];
         if(rec && rec.status==='na') return; // not-applicable items don't count toward completion
         totalTasks++;
@@ -2073,7 +2076,7 @@
         }
         const tasks = getStopTasks(d, stop, weekday, st).filter(t=>t.active);
         tasks.forEach(t=>{
-          if(shipCarrierFor(t.name)) return; // 寄貨類工作（登記箱數）不算在完成度統計內
+          if(shipCarrierFor(t.name) || noPct(d, t.name)) return; // 寄貨類／指定不計%的工作不算在完成度統計內
           const rec2 = st.tasks && st.tasks[t.name];
           if(rec2 && typeof rec2.pieces==='number'){
             if(!piecesByTask[t.name]) piecesByTask[t.name] = 0;
