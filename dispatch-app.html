@@ -353,6 +353,7 @@
     </div>
     <div style="margin:0 20px; display:flex; gap:10px;"><button class="leavebtn" id="leaveBtn" type="button" style="flex:1;">🏖 今日休假</button><button class="leavebtn" id="supportBtn" type="button" style="flex:1;">🤝 支援開店閉店業務</button></div>
     <div id="leaveCard"></div>
+    <div id="routeBox"></div>
     <div class="stoplist" id="stopList"></div>
   </div>
 
@@ -478,7 +479,16 @@
         B:[T('收送貨',[1,2,3,4,5])],
         D:[T('商品歸倉',[1,2,3,4,5]),T('追加整理入倉',[1,2,3,4,5]),T('整倉併袋',[1,2,3,4,5]),T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5])]
       },
-      dailyStops:[ {site:'高雄夢時代店',time:'07:00-08:00',table:'B'}, {site:'岡山秀泰LADY店',time:'09:00-09:30',table:'B'}, {site:'三多遠百店',time:'10:30-11:00',table:'B'}, {site:'夢時代商圈',time:'12:30-15:00',table:'D',storeOptions:['高雄夢時代大碼店','高雄夢時代r.fav店','高雄夢時代CHIC.A店']} ]
+      dailyStops:[ {site:'高雄夢時代店',time:'07:00-08:00',table:'B'}, {site:'岡山秀泰LADY店',time:'09:00-09:30',table:'B'}, {site:'三多遠百店',time:'10:30-11:00',table:'B'}, {site:'夢時代商圈',time:'12:30-15:00',table:'D',storeOptions:['高雄夢時代大碼店','高雄夢時代r.fav店','高雄夢時代CHIC.A店']} ],
+      // 司機按「跑全線」後改走這 6 站（週一到週五相同）
+      fullLine:{ dailyStops:[
+        {site:'夢時代商圈(4間)',time:'07:00-08:00',table:'B'},
+        {site:'岡山秀泰LADY店',time:'09:00-09:30',table:'B'},
+        {site:'左營新光店',time:'10:10-10:40',table:'B'},
+        {site:'高雄漢神LADY/CA店',time:'11:10-11:40',table:'B'},
+        {site:'三多遠百店',time:'12:10-12:40',table:'B'},
+        {site:'夢時代商圈(含休息)',time:'13:00-16:00',table:'D',storeOptions:['高雄夢時代大碼店','高雄夢時代r.fav店','高雄夢時代CHIC.A店']}
+      ] }
     },
     { region:'台南', code:'南台1', name:'陳琮斌', hours:'12:00-21:00',
       tables:{ A:[T('商品歸倉',[2,3,4,5]),T('追加整理入倉',[4,5]),T('撤貨抓貨',[1,2]),T('區內勻貨',[1]),T('跨區勻貨',[2]),T('新品入倉',[3]),T('新品整理',[3])] },
@@ -567,7 +577,7 @@
   function getAllSites(){
     const set = new Set();
     DRIVERS.forEach(d=>{
-      const collections = d.weeklyStops ? Object.values(d.weeklyStops) : (d.dailyStops ? [d.dailyStops] : []);
+      const collections = (d.weeklyStops ? Object.values(d.weeklyStops) : (d.dailyStops ? [d.dailyStops] : [])).concat(d.fullLine ? [d.fullLine.dailyStops] : []);
       collections.forEach(list=> (list||[]).forEach(s=>{ if(s.site) set.add(s.site); }));
     });
     return [...set].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
@@ -576,7 +586,8 @@
   function findDriver(region, name){ return DRIVERS.find(d=>d.region===region && d.name===name); }
   // 排程時間調整：從指定日期起，某位司機的上班時間與每一站時段整體平移（到期自動生效，不用再上傳）
   const SCHEDULE_SHIFTS = [
-    { name:'陳兆晏', from:'2026-11-16', minutes:0, hours:'10:30-19:30' }
+    { name:'陳兆晏', from:'2026-11-16', minutes:0, hours:'10:30-19:30' },
+    { name:'李尚鴻', from:'2026-12-01', minutes:60, hours:'08:00-17:00' } // 12/1 起上班時間 08:00-17:00，一般路線與全線的所有站點時間都順延 1 小時
   ];
   function activeShift(d){ const t = todayDateStr(); return SCHEDULE_SHIFTS.find(x=>x.name===d.name && t>=x.from) || null; }
   function hoursOf(d){ const sh = activeShift(d); return sh ? sh.hours : d.hours; }
@@ -586,9 +597,20 @@
     const f = x=>{ const v = Math.max(0, x+m); return String(Math.floor(v/60)).padStart(2,'0')+':'+String(v%60).padStart(2,'0'); };
     return f(+mm[1]*60+ +mm[2]) + '-' + f(+mm[3]*60+ +mm[4]);
   }
-  function getStopsFor(driver, weekday){
+  // 路線模式：司機在當天按「跑全線」後，state.route='full'。ctx 可以是當天的 state 物件，或 'YYYY-MM-DD'（管理端用，會去查該日紀錄）
+  function routeIsFull(driver, ctx){
+    try{
+      let st = ctx;
+      if(typeof ctx==='string'){
+        const rec = (allCheckins||[]).find(r=>r.key===driverKey(driver)+'|'+ctx);
+        st = rec && rec.state ? (typeof rec.state==='string' ? JSON.parse(rec.state) : rec.state) : null;
+      }
+      return !!(st && st.route==='full');
+    }catch(e){ return false; }
+  }
+  function getStopsFor(driver, weekday, ctx){
     if(driver.noSchedule) return [];
-    const list = driver.weeklyStops ? (driver.weeklyStops[weekday] || []) : (driver.dailyStops || []);
+    const list = (driver.fullLine && routeIsFull(driver, ctx)) ? driver.fullLine.dailyStops : (driver.weeklyStops ? (driver.weeklyStops[weekday] || []) : (driver.dailyStops || []));
     const sh = activeShift(driver);
     // siteByDay：同一站依星期固定去不同門市（例如週一二遠百、週三四五逢甲），不用司機選
     return list.map(st=>{
@@ -614,7 +636,7 @@
   function allStoreNames(){
     const set = new Set();
     DRIVERS.forEach(d=>{
-      const stops = [...(d.dailyStops||[]), ...Object.values(d.weeklyStops||{}).flat()];
+      const stops = [...(d.dailyStops||[]), ...(d.fullLine?d.fullLine.dailyStops:[]), ...Object.values(d.weeklyStops||{}).flat()];
       stops.forEach(s=>{
         [s.site, ...(s.storeOptions||[]), ...((s.choice||[]).flatMap(c=>c.stores||[])), ...Object.values(s.siteByDay||{})].forEach(n=>{
           String(n||'').split('/').forEach(x=>{ x=x.trim(); if(x && !/倉$|門市|商圈|支援|作業/.test(x)) set.add(x); });
@@ -881,7 +903,6 @@
   function loadCurrentState(){
     const key = driverKey(currentDriver)+'|'+todayDateStr();
     const weekday = new Date().getDay();
-    const stops = getStopsFor(currentDriver, weekday);
 
     // Read both sources — a local, possibly-not-yet-synced copy on this device,
     // and whatever the cloud currently has (which may be newer, e.g. saved from
@@ -903,6 +924,9 @@
       if(parsed && parsed.stops){ cloudState = parsed; }
     }
 
+    // 路線模式（一般／跑全線）：任何一邊有按過「跑全線」就用全線
+    const routeFull = !!((localState && localState.route==='full') || (cloudState && cloudState.route==='full'));
+    const stops = getStopsFor(currentDriver, weekday, routeFull ? {route:'full'} : null);
     let base;
     if(localState && cloudState){
       // Merge stop-by-stop: for each stop, keep whichever side (local vs cloud)
@@ -929,6 +953,7 @@
     if(!base){
       base = { stops: stops.map(()=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}})), breaks: [] };
     }
+    if(routeFull) base.route = 'full';
     if(!base.breaks) base.breaks = []; // 舊資料（還沒有休息打卡功能前存的）補上空陣列
     // keep the site/time labels synced to the current schedule so the backend log stays readable
     base.stops.forEach((s,i)=>{
@@ -1035,7 +1060,7 @@
       if(en.dataset.grayEnable!==undefined) st0.tasks[en.dataset.grayEnable] = {status:'done', percent:100, bonus:true};
       else delete st0.tasks[en.dataset.grayUndo];
       const wd0 = new Date().getDay();
-      renderTaskRows(getStopsFor(currentDriver, wd0)[currentStopIdx], st0, wd0, false);
+      renderTaskRows(getStopsFor(currentDriver, wd0, currentState)[currentStopIdx], st0, wd0, false);
       await saveCurrentState();
       return;
     }
@@ -1046,7 +1071,7 @@
     st.extra = (st.extra||[]).filter(n=>n!==name);
     if(st.tasks) delete st.tasks[name];
     const weekday = new Date().getDay();
-    const stop = getStopsFor(currentDriver, weekday)[currentStopIdx];
+    const stop = getStopsFor(currentDriver, weekday, currentState)[currentStopIdx];
     renderTaskRows(stop, st, weekday, false);
     await saveCurrentState();
   });
@@ -1069,7 +1094,7 @@
     return total ? { total, done, pct: Math.round(weighted/total) } : null;
   }
   function computeProgress(driver, weekday, state){
-    const stops = getStopsFor(driver, weekday);
+    const stops = getStopsFor(driver, weekday, state);
     let totalTasks=0, doneTasks=0, weightedSum=0, arrivedCount=0, lateCount=0;
     stops.forEach((stop,i)=>{
       const st = state.stops[i] || {};
@@ -1174,9 +1199,31 @@
     $('leavePickCancel').addEventListener('click', ()=> renderLeave());
   });
 
+  // 有「全線」路線的司機（李尚鴻）：當天還沒打卡前，可以按鈕切換「一般路線／跑全線」
+  function renderRouteBox(){
+    const box = $('routeBox'); if(!box) return;
+    if(!currentDriver || !currentDriver.fullLine || currentState.leave){ box.innerHTML=''; return; }
+    const isFull = currentState.route==='full';
+    const nNormal = (currentDriver.dailyStops||[]).length, nFull = currentDriver.fullLine.dailyStops.length;
+    const started = (currentState.stops||[]).some(x=> x && (x.arrivedAt || x.departedAt));
+    box.innerHTML = `<div style="margin:0 20px 12px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">今日路線：${isFull?`跑全線（${nFull} 站）`:`一般路線（${nNormal} 站）`}</div>
+      <div style="font-size:12px;color:var(--text-mute);margin-bottom:8px;line-height:1.5;">${started?'已經開始打卡，今天不能再切換路線。':(isFull?'要改回一般路線，請在打卡前按下方按鈕。':'今天要跑全線？按下去，站點會整份換成全線。要在第一站打卡前按。')}</div>
+      <button type="button" class="refreshsmall" id="routeToggleBtn" ${started?'disabled':''} style="font-weight:700;">${isFull?'改回一般路線':'跑全線'}</button></div>`;
+    $('routeToggleBtn').addEventListener('click', async ()=>{
+      if(started) return;
+      if(!confirm(isFull ? '改回一般路線（'+nNormal+' 站）？' : '切換成跑全線（'+nFull+' 站）？')) return;
+      if(isFull) delete currentState.route; else currentState.route = 'full';
+      const wd = new Date().getDay();
+      const ns = getStopsFor(currentDriver, wd, currentState);
+      currentState.stops = ns.map(x=>({arrivedAt:null, departedAt:null, gps:null, photo:null, note:'', tasks:{}, site:x.site, time:x.time}));
+      await saveCurrentState();
+      renderDriverView();
+    });
+  }
   function renderDriverView(){
     const weekday = new Date().getDay();
-    const stops = getStopsFor(currentDriver, weekday);
+    const stops = getStopsFor(currentDriver, weekday, currentState);
     const prog = computeProgress(currentDriver, weekday, currentState);
     $('drvPct').textContent = prog.pct+'%';
     $('drvStats').innerHTML = `已完成 ${prog.doneTasks} / 應做 ${prog.totalTasks}<br>到站 ${prog.arrivedCount}/${prog.totalStops}`;
@@ -1186,6 +1233,7 @@
     $('mDone').textContent = `${prog.doneTasks}/${prog.totalTasks}`;
     renderBreakCard();
     renderLeave();
+    renderRouteBox();
     if(currentState.leave){ $('stopList').innerHTML = ''; return; }
 
     if(currentDriver.noSchedule || stops.length===0){
@@ -1282,7 +1330,7 @@
     currentStopIdx = idx;
     extraPanelOpen = false;
     const weekday = new Date().getDay();
-    const stops = getStopsFor(currentDriver, weekday);
+    const stops = getStopsFor(currentDriver, weekday, currentState);
     const stop = stops[idx];
     if(!currentState.stops[idx]){
       // defensive: schedule may have gained more stops than what's cached locally
@@ -1800,7 +1848,7 @@
     closeShipModal();
     if(currentStopIdx !== null && currentDriver){
       const weekday = new Date().getDay();
-      const stops = getStopsFor(currentDriver, weekday);
+      const stops = getStopsFor(currentDriver, weekday, currentState);
       const st = currentState.stops[currentStopIdx];
       if(stops[currentStopIdx] && st) renderTaskRows(stops[currentStopIdx], st, weekday, !!st.departedAt);
     }
@@ -1838,7 +1886,7 @@
         st.arrivedAt = new Date().toISOString();
         st.gps = gpsStr;
         const weekday = new Date().getDay();
-        const stops = getStopsFor(currentDriver, weekday);
+        const stops = getStopsFor(currentDriver, weekday, currentState);
         renderStopInfoBox(stops[currentStopIdx], st);
         if(stops[currentStopIdx].optional) renderTaskRows(stops[currentStopIdx], st, weekday, false);
         $('arriveBtn').style.display='none'; $('departBtn').style.display='block';
@@ -1857,7 +1905,7 @@
   $('departBtn').addEventListener('click', ()=>{
     const st = currentState.stops[currentStopIdx];
     const weekday = new Date().getDay();
-    const stops = getStopsFor(currentDriver, weekday);
+    const stops = getStopsFor(currentDriver, weekday, currentState);
     const stop = stops[currentStopIdx];
     const tasks = getStopTasks(currentDriver, stop, weekday, st).filter(t=>t.active && !shipCarrierFor(t.name));
     const unmarked = tasks.filter(t=> !(st.tasks && st.tasks[t.name] && st.tasks[t.name].status));
@@ -1989,7 +2037,7 @@
     const weekday = weekdayOfDateStr(dateStr);
     const people = [], byStore = {};
     DRIVERS.forEach(d=>{
-      const stops = getStopsFor(d, weekday);
+      const stops = getStopsFor(d, weekday, dateStr);
       if(d.noSchedule || !stops.length) return;
       const rec = allCheckins.find(r=>r.key===driverKey(d)+'|'+dateStr);
       let state = null;
@@ -2022,7 +2070,7 @@
     const board = { '佶傳':{}, '新竹物流':{}, '黑貓宅急便':{} };
     DRIVERS.forEach(d=>{
       if(driverFilter && driverKey(d)!==driverFilter) return;
-      const stops = getStopsFor(d, weekday);
+      const stops = getStopsFor(d, weekday, dateStr);
       if(d.noSchedule || stops.length===0) return;
       const key = driverKey(d)+'|'+dateStr;
       const rec = allCheckins.find(r=>r.key===key);
@@ -2064,7 +2112,7 @@
     const piecesByTask = {}; const plannedByTask = {};
     const reasonMap = {}; NA_REASONS.forEach(r=> reasonMap[r.code]=r.label);
     DRIVERS.forEach(d=>{
-      const stops = getStopsFor(d, weekday);
+      const stops = getStopsFor(d, weekday, dateStr);
       if(d.noSchedule || stops.length===0) return; // skip drivers with no schedule data
       const key = driverKey(d)+'|'+dateStr;
       const rec = allCheckins.find(r=>r.key===key);
@@ -2184,7 +2232,7 @@
       const dayPct = [];
       weekDates.forEach((dateStr, idx)=>{
         const weekday = idx+1; // Monday..Friday
-        const stops = getStopsFor(d, weekday);
+        const stops = getStopsFor(d, weekday, dateStr);
         const key = driverKey(d)+'|'+dateStr;
         const rec = allCheckins.find(r=>r.key===key);
         let state = { stops: stops.map(()=>({tasks:{}})) };
@@ -2227,7 +2275,7 @@
       if(d.noSchedule) return;
       weekDates.forEach((dateStr, idx)=>{
         const weekday = idx+1;
-        const stops = getStopsFor(d, weekday);
+        const stops = getStopsFor(d, weekday, dateStr);
         if(stops.length===0) return;
         const key = driverKey(d)+'|'+dateStr;
         const rec = allCheckins.find(r=>r.key===key);
@@ -2275,7 +2323,7 @@
       const wd = weekdayOfDateStr(date);
       DRIVERS.forEach(d=>{
         if(d.noSchedule || d.name==='NANA') return;
-        const sched = getStopsFor(d, wd);
+        const sched = getStopsFor(d, wd, date);
         if(!sched.length) return;
         const rec = allCheckins.find(r=>r.key===driverKey(d)+'|'+date);
         if(!rec || !rec.state){ missing.push([date, WKN[wd], d.region, d.name]); return; }
@@ -2602,7 +2650,7 @@
           return `<div class="prow ${r.flags.some(f=>f.t==='bad')?'flag':''}">
             <div class="ph"><div><span class="pn">${escapeHtml(r.d.name)}</span> <span class="pc">${escapeHtml(r.d.region)} · ${escapeHtml(hoursOf(r.d)||'')}</span></div><div class="pp">${r.prog.pct}%</div></div>
             <div class="barbg" style="margin-top:6px;"><div class="barfg" style="width:${r.prog.pct}%"></div></div>
-            <div class="pc" style="margin-top:4px;">完成 ${r.prog.doneTasks}/${r.prog.totalTasks} 項　·　到站 ${r.prog.arrivedCount}/${getStopsFor(r.d, weekday).length} 站${(r.delTot&&(r.delTot.b||r.delTot.g))?`　·　送貨 ${r.delTot.b} 箱 ${r.delTot.g} 袋`:''}</div>
+            <div class="pc" style="margin-top:4px;">完成 ${r.prog.doneTasks}/${r.prog.totalTasks} 項　·　到站 ${r.prog.arrivedCount}/${getStopsFor(r.d, weekday, adminDate).length} 站${(r.delTot&&(r.delTot.b||r.delTot.g))?`　·　送貨 ${r.delTot.b} 箱 ${r.delTot.g} 袋`:''}</div>
             <div class="pc" style="margin-top:6px; line-height:1.9;">${r.stopPcts.map((x,i)=>`<span style="display:inline-block; margin-right:10px; white-space:nowrap;">${i+1}. ${escapeHtml(x.site)} <b style="color:${!x.sp?'var(--text-mute)':x.sp.pct>=100?'var(--green)':'inherit'};">${x.sp ? x.sp.pct+'%' : (x.arrived?'—':'—')}</b>${x.del?` <span style="color:var(--text-mute);">送${escapeHtml(x.del)}</span>`:''}</span>`).join('')}</div>
             <div class="pchips">${chips}</div>
           </div>`;
