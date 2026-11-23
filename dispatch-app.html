@@ -599,8 +599,8 @@
     });
   }
   // 台中區：司機可以在每一站自己加臨時工作（不固定每天每站都有），常用的兩項放在快速選項
-  const EXTRA_QUICK = ['抓no show','濾網清潔'];
-  const extraAllowed = d => !!(d && d.region==='台中');
+  const EXTRA_QUICK = ['門市臨時指派','商品歸倉','追加整理入倉','撤貨抓貨','區內勻貨','跨區勻貨','新品入倉','新品整理','整倉併袋','濾網清潔','支援EC','抓no show'];
+  const extraAllowed = d => !!(d && !d.noSchedule && d.name!=='NANA'); // 所有物流同仁、每一站都可以自己加臨時工作
   // 登記型工作：除了完成/未完成/不適用，還要登記「店家／箱數／件數」（可多筆）
   const REGISTRY_TASKS = ['整理下周新品','整理新展店商品'];
   const isRegistryTask = n => REGISTRY_TASKS.includes(n);
@@ -1006,8 +1006,8 @@
       box.innerHTML = '<button type="button" class="extraopen" id="extraOpenBtn">＋ 新增工作</button>';
       $('extraOpenBtn').addEventListener('click', ()=>{ extraPanelOpen = true; renderExtraBox(stop, st, weekday, locked); });
     }else{
-      box.innerHTML = `<div class="extrapanel"><div class="ttl">${helpPick ? '店務協助做了什麼？選工作項目（選了就會出現該項目的登記欄位）' : '這一站要加什麼工作？（只加在今天這一站）'}</div>
-        <div class="extrachips">${(helpPick ? HELP_PICK_TASKS : EXTRA_QUICK).map(n=>`<button type="button" class="extrachip" data-extra-add="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('')}</div>
+      box.innerHTML = `<div class="extrapanel"><div class="ttl">${helpPick ? '店務協助做了什麼？選工作項目（選了就會出現該項目的登記欄位）' : '這一站要加什麼工作？（只加在今天這一站，例如門市臨時指派）'}</div>
+        <div class="extrachips">${(helpPick ? HELP_PICK_TASKS : EXTRA_QUICK).filter(n=>!getStopTasks(currentDriver, stop, weekday, st).some(t=>t.name===n && t.active)).map(n=>`<button type="button" class="extrachip" data-extra-add="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('')}</div>
         <div class="extrarow"><input type="text" id="extraCustom" maxlength="20" placeholder="其他工作（自行輸入）"><button type="button" id="extraCustomBtn">加入</button></div>
         <div class="extramsg" id="extraMsg"></div>
         <div style="margin-top:6px;"><span class="extrarmv" style="color:var(--text-mute);" id="extraCloseBtn">收起</span></div></div>`;
@@ -1410,7 +1410,8 @@
     {code:'E', label:'時間不夠', category:'排程因素'},
     {code:'F', label:'系統設備與網路問題', category:'系統因素'},
     {code:'G', label:'及時調整業務項目', category:'調度因素'},
-    {code:'H', label:'其他', category:'其他'}
+    {code:'H', label:'其他', category:'其他'},
+    {code:'I', label:'門市臨時指派（需填指派人）', category:'門市因素'}
   ];
   const NA_REASON_MAP = {}; NA_REASONS.forEach(r=> NA_REASON_MAP[r.code]=r);
 
@@ -1501,6 +1502,10 @@
           </select>
           ${rec.reason?'':'<div class="needhint">選「不適用」必須選原因，否則無法離店打卡</div>'}
         </div>`;
+      }
+      const needAssigner = !shipCarrier && status && ((status!=='done' && rec.reason==='I') || t.name==='門市臨時指派');
+      if(needAssigner){
+        extraHtml += `<div class="taskextra" style="margin-top:6px;"><input type="text" class="${rec.assigner?'':'needsel'}" maxlength="20" placeholder="指派人（必填，例如：店長王小明）" data-assigner-task="${escapeHtml(t.name)}" value="${escapeHtml(rec.assigner||'')}" ${dis} style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:14px;box-sizing:border-box;">${rec.assigner?'':'<div class="needhint">門市臨時指派必須填指派人，否則無法離店打卡</div>'}</div>`;
       }
       let shipHtml = '';
       if(shipCarrier){
@@ -1713,7 +1718,16 @@
         const taskName = sel.dataset.reasonTask;
         if(st.tasks[taskName]) st.tasks[taskName].reason = e.target.value;
         await saveCurrentState();
+        renderTaskRows(stop, st, weekday, locked);
       });
+    });
+    document.querySelectorAll('#taskRows input[data-assigner-task]').forEach(inp=>{
+      inp.addEventListener('input', async ()=>{
+        const taskName = inp.dataset.assignerTask;
+        if(st.tasks[taskName]) st.tasks[taskName].assigner = inp.value.trim();
+        await saveCurrentState();
+      });
+      inp.addEventListener('blur', ()=>{ renderTaskRows(stop, st, weekday, locked); });
     });
   }
 
@@ -1855,6 +1869,12 @@
     const naNoReason = tasks.filter(t=>{ const r = st.tasks && st.tasks[t.name]; return r && r.status==='na' && !r.reason; });
     if(naNoReason.length>0){
       setStopStatus(`⚠ 選「不適用」要選原因，請補上：${naNoReason.map(t=>t.name).join('、')}`, true);
+      renderTaskRows(stop, st, weekday, false);
+      return;
+    }
+    const noAssigner = tasks.filter(t=>{ const r = st.tasks && st.tasks[t.name]; return r && ((r.status!=='done' && r.reason==='I') || t.name==='門市臨時指派') && !(r.assigner && r.assigner.trim()); });
+    if(noAssigner.length>0){
+      setStopStatus(`⚠ 門市臨時指派要填指派人，請補上：${noAssigner.map(t=>t.name).join('、')}`, true);
       renderTaskRows(stop, st, weekday, false);
       return;
     }
@@ -2116,7 +2136,7 @@
           }
           if(rec2 && rec2.status==='na'){
             const reasonLabel = reasonMap[rec2.reason] || '尚未選擇原因';
-            anomalies.push({type:'na', driver:d, stop, detail:`${t.name}　${reasonLabel}`, stopIdx:i, taskName:t.name, dateStr});
+            anomalies.push({type:'na', driver:d, stop, detail:`${t.name}　${reasonLabel}${rec2.assigner?'（指派人：'+rec2.assigner+'）':''}`, stopIdx:i, taskName:t.name, dateStr});
             return; // excluded from task-type completion stats
           }
           if(!byTaskType[t.name]) byTaskType[t.name] = {weighted:0, count:0};
@@ -2284,7 +2304,8 @@
             if(EXPORT_SHIP.includes(n)) return;
             const p = r.status==='partial' && typeof r.percent==='number' ? r.percent : null;
             const rs = r.status==='na' ? (r.reason && NA_REASON_MAP[r.reason] ? NA_REASON_MAP[r.reason].label : '未填原因') : '';
-            tasks.push([date, WKN[wd], d.region, d.name, i+1, site, n, r.status==='done'?'完成':(r.status==='partial'?'部分':'不適用'), p, rs]);
+            const asg = r.assigner || '';
+            tasks.push([date, WKN[wd], d.region, d.name, i+1, site, n, r.status==='done'?'完成':(r.status==='partial'?'部分':'不適用'), p, rs, asg]);
             if(n!=='收送貨'){ if(r.status==='done') row.done++; else if(r.status==='partial'){ row.partial++; row.pctSum += p||0; } else row.na++; }
           });
           stops.push(row);
@@ -2350,13 +2371,13 @@
     D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote]));
     sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12]]);
     // 不適用明細
-    const r6 = [['日期','司機','站序','站點','工作項目','原因']];
-    D.tasks.filter(t=>t[7]==='不適用').forEach(t=>r6.push([t[0],t[3],t[4],t[5],t[6],t[9]]));
-    sheets.push(['不適用明細', r6, [11,10,6,20,16,24]]);
+    const r6 = [['日期','司機','站序','站點','工作項目','原因','指派人']];
+    D.tasks.filter(t=>t[7]==='不適用').forEach(t=>r6.push([t[0],t[3],t[4],t[5],t[6],t[9],t[10]]));
+    sheets.push(['不適用明細', r6, [11,10,6,20,16,24,12]]);
     // 工作項目明細
-    const r7 = [['日期','星期','區域','司機','站序','站點','工作項目','狀態','部分完成度%','不適用原因']];
+    const r7 = [['日期','星期','區域','司機','站序','站點','工作項目','狀態','部分完成度%','不適用原因','指派人']];
     D.tasks.forEach(t=>r7.push(t));
-    sheets.push(['工作項目明細', r7, [11,7,7,9,6,20,16,8,10,22]]);
+    sheets.push(['工作項目明細', r7, [11,7,7,9,6,20,16,8,10,22,12]]);
     // 未回報
     const r8 = [['日期','星期','區域','司機']]; D.missing.forEach(m=>r8.push(m));
     if(D.missing.length) sheets.push(['未回報', r8, [11,7,7,10]]);
