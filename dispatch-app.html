@@ -2243,8 +2243,204 @@
 
   let liveDrill = null; // null | 'completion' | 'online' | 'offline' | 'anomaly'
 
+  // ============ 匯出：單日／整週物流工作分析 Excel ============
+  let exportMode = 'day';
+  const EXPORT_NAME_MAP = {'撤貨抓貨(只抓倉庫)':'撤貨抓貨','支援EC撤貨':'支援EC','追加整理歸倉':'追加整理入倉','新品區整理':'新品整理','新品入倉整理':'新品整理','勻貨歸倉':'商品歸倉','官網補貨歸倉':'商品歸倉','補貨歸倉':'商品歸倉','勻補貨歸倉':'商品歸倉','收送貨確認':'收送貨','倉庫整理':'整倉併袋','整倉並袋':'整倉併袋','追加歸倉':'追加整理入倉','追加歸庫':'追加整理入倉','洗濾網':'濾網清潔','商品歸庫':'商品歸倉'};
+  const EXPORT_SHIP = ['寄黑貓','黑貓宅急便','寄新竹物流','新竹物流','佶傳'];
+  const WKN = ['週日','週一','週二','週三','週四','週五','週六'];
+  function exportDates(){ return exportMode==='week' ? buildWeekDates(adminDate) : [adminDate]; }
+  function collectExport(dates){
+    const days=[], stops=[], tasks=[], missing=[];
+    dates.forEach(date=>{
+      const wd = weekdayOfDateStr(date);
+      DRIVERS.forEach(d=>{
+        if(d.noSchedule || d.name==='NANA') return;
+        const sched = getStopsFor(d, wd);
+        if(!sched.length) return;
+        const rec = allCheckins.find(r=>r.key===driverKey(d)+'|'+date);
+        if(!rec || !rec.state){ missing.push([date, WKN[wd], d.region, d.name]); return; }
+        let st; try{ st = typeof rec.state==='string' ? JSON.parse(rec.state) : rec.state; }catch(e){ return; }
+        if(!st) return;
+        if(st.leave){ days.push([date, WKN[wd], d.region, d.name, leaveLabel(st.leave), 0]); return; }
+        const arr = st.stops || [];
+        days.push([date, WKN[wd], d.region, d.name, '出勤', arr.length]);
+        arr.forEach((s,i)=>{
+          if(!s) return;
+          const sc = sched[i] || {};
+          const site = s.selectedStore || s.site || sc.site || '';
+          const timeStr = s.time || sc.time || '';
+          const a = s.arrivedAt ? new Date(s.arrivedAt) : null, dp = s.departedAt ? new Date(s.departedAt) : null;
+          const m = timeStr.match(/(\d{1,2}):(\d{2})/);
+          let late = null; if(a && m){ const ss = new Date(a); ss.setHours(+m[1], +m[2], 0, 0); late = Math.round((a-ss)/60000); }
+          const dwell = (a && dp) ? Math.round((dp-a)/60000) : null;
+          const dl = s.delivery || null;
+          const boxes = dl && !dl.none && dl.boxes!=null && dl.boxes!=='' ? Number(dl.boxes) : null;
+          const bags = dl && !dl.none && dl.bags!=null && dl.bags!=='' ? Number(dl.bags) : null;
+          const row = {date, wk:WKN[wd], region:d.region, driver:d.name, idx:i+1, site, time:timeStr, arrive:a?fmtHM(s.arrivedAt):'', depart:dp?fmtHM(s.departedAt):'', late, dwell,
+            boxes, bags, delNote: dl ? (dl.none?'無送貨':'') : ((a&&dp)?'未填送貨量':''), done:0, partial:0, na:0, pctSum:0};
+          Object.keys(s.tasks||{}).forEach(tn=>{
+            const r = s.tasks[tn]; if(!r || !['done','partial','na'].includes(r.status)) return;
+            const n = EXPORT_NAME_MAP[tn] || tn;
+            if(EXPORT_SHIP.includes(n)) return;
+            const p = r.status==='partial' && typeof r.percent==='number' ? r.percent : null;
+            const rs = r.status==='na' ? (r.reason && NA_REASON_MAP[r.reason] ? NA_REASON_MAP[r.reason].label : '未填原因') : '';
+            tasks.push([date, WKN[wd], d.region, d.name, i+1, site, n, r.status==='done'?'完成':(r.status==='partial'?'部分':'不適用'), p, rs]);
+            if(n!=='收送貨'){ if(r.status==='done') row.done++; else if(r.status==='partial'){ row.partial++; row.pctSum += p||0; } else row.na++; }
+          });
+          stops.push(row);
+        });
+      });
+    });
+    return {days, stops, tasks, missing};
+  }
+  const pctOf = (done, partial) => (done+partial) ? Math.round(done/(done+partial)*100) : '';
+  function buildExportSheets(dates){
+    const D = collectExport(dates);
+    const drivers = DRIVERS.filter(x=>!x.noSchedule && x.name!=='NANA');
+    const sheets = [];
+    // 1 每位司機
+    const h1 = ['司機','區域','有回報天數','休假天數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','加權完成度%（部分依實際填寫%）','晚到站數(>'+LATE_TOLERANCE_MIN+'分)','到站未離店','送貨箱數','送貨袋數'];
+    const r1 = [h1]; let T=[0,0,0,0,0,0,0,0,0,0,0];
+    drivers.forEach(d=>{
+      const dy = D.days.filter(x=>x[3]===d.name), sp = D.stops.filter(x=>x.driver===d.name);
+      if(!dy.length) return;
+      const sum = f=>sp.reduce((a,x)=>a+f(x),0);
+      const done=sum(x=>x.done), par=sum(x=>x.partial), na=sum(x=>x.na), ps=sum(x=>x.pctSum);
+      const arrived=sp.filter(x=>x.arrive).length, lateN=sp.filter(x=>x.late!=null && x.late>LATE_TOLERANCE_MIN).length, open=sp.filter(x=>x.arrive && !x.depart).length;
+      const bx=sum(x=>x.boxes||0), bg=sum(x=>x.bags||0);
+      r1.push([d.name,d.region,dy.filter(x=>x[4]==='出勤').length,dy.filter(x=>x[4]!=='出勤').length,sp.length,arrived,done,par,na,pctOf(done,par),(done+par)?Math.round((done*100+ps)/(done+par)):'',lateN,open,bx,bg]);
+      [4,5,6,7,8,10,11,12,13].forEach((c,j)=>{});
+      T[0]+=dy.filter(x=>x[4]==='出勤').length;T[1]+=dy.filter(x=>x[4]!=='出勤').length;T[2]+=sp.length;T[3]+=arrived;T[4]+=done;T[5]+=par;T[6]+=na;T[7]+=ps;T[8]+=lateN;T[9]+=open;T[10]+=bx;T[11]=(T[11]||0)+bg;
+    });
+    r1.push(['合計','',T[0],T[1],T[2],T[3],T[4],T[5],T[6],pctOf(T[4],T[5]),(T[4]+T[5])?Math.round((T[4]*100+T[7])/(T[4]+T[5])):'',T[8],T[9],T[10],T[11]]);
+    r1.push([]); r1.push(['說明：完成比例=完成÷(完成＋部分)，不含不適用；收送貨、寄貨類不計入。沒有回報紀錄的司機不列入（見「未回報」分頁）。']);
+    sheets.push(['每位司機'+(dates.length>1?'（週合計）':''), r1, [10,7,10,9,7,8,7,7,8,16,18,14,10,9,9]]);
+    // 2 週：司機×日
+    if(dates.length>1){
+      const r2 = [['司機',...dates.map(x=>WKN[weekdayOfDateStr(x)]+' '+x.slice(5)),'週合計']];
+      drivers.forEach(d=>{
+        if(!D.days.some(x=>x[3]===d.name)) return;
+        const row=[d.name]; let td=0,tp=0;
+        dates.forEach(dt=>{ const sp=D.stops.filter(x=>x.driver===d.name && x.date===dt); const a=sp.reduce((s,x)=>s+x.done,0), b=sp.reduce((s,x)=>s+x.partial,0); td+=a; tp+=b; row.push(pctOf(a,b)); });
+        row.push(pctOf(td,tp)); r2.push(row);
+      });
+      const all=['全體']; let ad=0,ap=0;
+      dates.forEach(dt=>{ const sp=D.stops.filter(x=>x.date===dt); const a=sp.reduce((s,x)=>s+x.done,0), b=sp.reduce((s,x)=>s+x.partial,0); ad+=a; ap+=b; all.push(pctOf(a,b)); });
+      all.push(pctOf(ad,ap)); r2.push(all); r2.push([]); r2.push(['空白＝當天沒有該司機的回報紀錄或沒有可計算的項目。']);
+      sheets.push(['每日完成比例%（司機×日）', r2, [10,12,12,12,12,12,10]]);
+      const r3 = [['日期','星期','有回報司機數','休假人數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','晚到站數','送貨箱數','送貨袋數']];
+      dates.forEach(dt=>{
+        const sp=D.stops.filter(x=>x.date===dt), dy=D.days.filter(x=>x[0]===dt);
+        const s=f=>sp.reduce((a,x)=>a+f(x),0);
+        r3.push([dt,WKN[weekdayOfDateStr(dt)],dy.filter(x=>x[4]==='出勤').length,dy.filter(x=>x[4]!=='出勤').length,sp.length,sp.filter(x=>x.arrive).length,s(x=>x.done),s(x=>x.partial),s(x=>x.na),pctOf(s(x=>x.done),s(x=>x.partial)),sp.filter(x=>x.late!=null&&x.late>LATE_TOLERANCE_MIN).length,s(x=>x.boxes||0),s(x=>x.bags||0)]);
+      });
+      sheets.push(['每日總覽', r3, [11,7,12,9,7,8,7,7,8,16,10,9,9]]);
+    }
+    // 工作項目統計
+    const byT = {};
+    D.tasks.forEach(t=>{ const o = byT[t[6]] || (byT[t[6]]={d:0,p:0,n:0,rs:{}}); if(t[7]==='完成') o.d++; else if(t[7]==='部分') o.p++; else { o.n++; o.rs[t[9]]=(o.rs[t[9]]||0)+1; } });
+    const r4 = [['工作項目','完成','部分','不適用','含不適用合計','完成比例%（不含不適用）','不適用比例%','主要不適用原因','備註']];
+    Object.keys(byT).sort((a,b)=>(byT[b].d+byT[b].p+byT[b].n)-(byT[a].d+byT[a].p+byT[a].n)).forEach(k=>{
+      const o=byT[k], tot=o.d+o.p+o.n;
+      r4.push([k,o.d,o.p,o.n,tot,pctOf(o.d,o.p),tot?Math.round(o.n/tot*100):'',Object.keys(o.rs).sort((a,b)=>o.rs[b]-o.rs[a]).map(x=>x+' '+o.rs[x]).join('、'),k==='收送貨'?'不計入完成比例':'']);
+    });
+    sheets.push(['工作項目統計', r4, [18,7,7,8,12,16,12,40,16]]);
+    // 站點明細
+    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註']];
+    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote]));
+    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12]]);
+    // 不適用明細
+    const r6 = [['日期','司機','站序','站點','工作項目','原因']];
+    D.tasks.filter(t=>t[7]==='不適用').forEach(t=>r6.push([t[0],t[3],t[4],t[5],t[6],t[9]]));
+    sheets.push(['不適用明細', r6, [11,10,6,20,16,24]]);
+    // 工作項目明細
+    const r7 = [['日期','星期','區域','司機','站序','站點','工作項目','狀態','部分完成度%','不適用原因']];
+    D.tasks.forEach(t=>r7.push(t));
+    sheets.push(['工作項目明細', r7, [11,7,7,9,6,20,16,8,10,22]]);
+    // 未回報
+    const r8 = [['日期','星期','區域','司機']]; D.missing.forEach(m=>r8.push(m));
+    if(D.missing.length) sheets.push(['未回報', r8, [11,7,7,10]]);
+    return {sheets, D};
+  }
+  function loadXLSXLib(){
+    return new Promise((resolve,reject)=>{
+      if(window.XLSX) return resolve(window.XLSX);
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = ()=> window.XLSX ? resolve(window.XLSX) : reject(new Error('XLSX missing'));
+      s.onerror = ()=> reject(new Error('load fail'));
+      document.head.appendChild(s);
+    });
+  }
+  function downloadBlob(blob, name){
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }
+  async function doExport(){
+    const dates = exportDates();
+    const {sheets} = buildExportSheets(dates);
+    const base = dates.length>1 ? `物流工作分析_${dates[0]}至${dates[dates.length-1].slice(5)}` : `物流工作分析_${dates[0]}`;
+    const msg = $('exportMsg'); msg.textContent = '產生中…';
+    try{
+      const X = await loadXLSXLib();
+      const wb = X.utils.book_new();
+      sheets.forEach(([name, rows, widths])=>{
+        const ws = X.utils.aoa_to_sheet(rows);
+        ws['!cols'] = widths.map(w=>({wch:w}));
+        X.utils.book_append_sheet(wb, ws, name.slice(0,31));
+      });
+      const out = X.write(wb, {bookType:'xlsx', type:'array'});
+      downloadBlob(new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), base+'.xlsx');
+      msg.textContent = '已下載 '+base+'.xlsx';
+    }catch(e){
+      // 離線或載不到 Excel 元件時，改下載 CSV（工作項目明細＋每位司機）
+      const csv = rows => '﻿'+rows.map(r=>r.map(c=>{ const s=c==null?'':String(c); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(',')).join('\n');
+      sheets.slice(0,1).concat(sheets.filter(s=>s[0]==='工作項目明細')).forEach(([name,rows])=> downloadBlob(new Blob([csv(rows)],{type:'text/csv;charset=utf-8'}), base+'_'+name+'.csv'));
+      msg.textContent = 'Excel 元件載入失敗，已改下載 CSV（每位司機、工作項目明細）。';
+    }
+  }
+  let exportUnlocked = false;
+  function renderExport(){
+    if(!exportUnlocked){
+      $('adminBody').innerHTML = `<div style="max-width:320px;margin:30px auto;text-align:center;">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px;">匯出報表需要管理密碼</div>
+        <input type="password" id="exportPw" placeholder="請輸入管理密碼" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:14px;box-sizing:border-box;">
+        <div id="exportPwErr" style="color:var(--red);font-size:12px;min-height:18px;margin:6px 0;"></div>
+        <button class="bigbtn depart" id="exportPwBtn" style="width:100%;margin:0;padding:12px;">解鎖</button></div>`;
+      const go = ()=>{ if($('exportPw').value === ADMIN_FIX_PASSWORD){ exportUnlocked = true; renderExport(); } else { $('exportPwErr').textContent = '密碼錯誤，請重新輸入'; $('exportPw').value=''; } };
+      $('exportPwBtn').addEventListener('click', go);
+      $('exportPw').addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
+      return;
+    }
+    const dates = exportDates();
+    const {sheets, D} = buildExportSheets(dates);
+    const rows = sheets[0][1];
+    const body = rows.slice(1, -3).map(r=>`<tr><td>${escapeHtml(r[0])}</td><td>${r[2]}</td><td>${r[4]}</td><td>${r[6]}</td><td>${r[7]}</td><td>${r[8]}</td><td><b>${r[9]===''?'—':r[9]+'%'}</b></td><td>${r[11]}</td></tr>`).join('');
+    const tot = rows[rows.length-3];
+    $('adminBody').innerHTML = `
+      <div class="datepicker" style="flex-wrap:wrap;gap:8px;">
+        <button class="refreshsmall" id="expModeDay" style="${exportMode==='day'?'background:var(--accent,#2a9fd8);color:#fff;':''}">單日</button>
+        <button class="refreshsmall" id="expModeWeek" style="${exportMode==='week'?'background:var(--accent,#2a9fd8);color:#fff;':''}">整週（週一～週五）</button>
+        <input type="date" id="adminDateInput" value="${adminDate}">
+        <button class="refreshsmall" id="adminRefreshBtn">重新載入</button>
+      </div>
+      <div class="weekhead">${dates.length>1 ? dates[0]+' ～ '+dates[dates.length-1] : dates[0]}　·　${D.days.length} 筆出勤／休假紀錄　·　${D.missing.length} 筆未回報</div>
+      <div class="weektablewrap"><table class="weektable">
+        <thead><tr><th>司機</th><th>出勤天</th><th>站數</th><th>完成</th><th>部分</th><th>不適用</th><th>完成比例</th><th>晚到</th></tr></thead>
+        <tbody>${body}<tr><td><b>合計</b></td><td>${tot[2]}</td><td>${tot[4]}</td><td>${tot[6]}</td><td>${tot[7]}</td><td>${tot[8]}</td><td><b>${tot[9]===''?'—':tot[9]+'%'}</b></td><td>${tot[11]}</td></tr></tbody>
+      </table></div>
+      <div style="margin:14px 0;"><button class="bigbtn depart" id="exportBtn" style="width:auto;margin:0;padding:12px 22px;">下載 Excel（${dates.length>1?'整週':'單日'}分析報表）</button> <span id="exportMsg" style="margin-left:10px;color:var(--text-mute);"></span></div>
+      <div style="font-size:13px;color:var(--text-mute);line-height:1.6;">Excel 內含：每位司機${dates.length>1?'（週合計）、司機×日完成比例、每日總覽':''}、工作項目統計、站點明細、不適用明細、工作項目明細${D.missing.length?'、未回報':''}。完成比例＝完成÷(完成＋部分)，不含不適用；收送貨、寄貨類不計入。</div>`;
+    $('expModeDay').addEventListener('click', ()=>{ exportMode='day'; renderAdmin(); });
+    $('expModeWeek').addEventListener('click', ()=>{ exportMode='week'; renderAdmin(); });
+    $('adminDateInput').addEventListener('change', e=>{ adminDate = e.target.value || adminDate; renderAdmin(); });
+    $('adminRefreshBtn').addEventListener('click', async ()=>{ await refreshCheckins(); renderAdmin(); });
+    $('exportBtn').addEventListener('click', doExport);
+  }
+
   function renderAdmin(){
-    if(adminTab==='export' || adminTab==='people'){
+    if(adminTab==='export'){ renderExport(); return; }
+    if(adminTab==='people'){
       const labels = {export:'匯出', people:'排程與人員'};
       $('adminBody').innerHTML = `<div class="placeholder">「${labels[adminTab]}」功能開發中，下一輪會加進來。</div>`;
       return;
