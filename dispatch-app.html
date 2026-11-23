@@ -600,7 +600,7 @@
   }
   // 台中區：司機可以在每一站自己加臨時工作（不固定每天每站都有），常用的兩項放在快速選項
   const EXTRA_QUICK = ['門市臨時指派','商品歸倉','追加整理入倉','撤貨抓貨','區內勻貨','跨區勻貨','新品入倉','新品整理','整倉併袋','濾網清潔','支援EC','抓no show'];
-  const extraAllowed = d => !!(d && !d.noSchedule && d.name!=='NANA'); // 所有物流同仁、每一站都可以自己加臨時工作
+  const extraAllowed = d => !!(d && !d.noSchedule); // 所有物流同仁、每一站都可以自己加臨時工作
   // 登記型工作：除了完成/未完成/不適用，還要登記「店家／箱數／件數」（可多筆）
   const REGISTRY_TASKS = ['整理下周新品','整理新展店商品'];
   const isRegistryTask = n => REGISTRY_TASKS.includes(n);
