@@ -483,12 +483,12 @@
       dailyStops:[ {site:'高雄夢時代店',time:'07:00-08:00',table:'B'}, {site:'岡山秀泰LADY店',time:'09:00-09:30',table:'B'}, {site:'三多遠百店',time:'10:30-11:00',table:'B'}, {site:'夢時代商圈',time:'12:30-15:00',table:'D',storeOptions:['高雄夢時代大碼店','高雄夢時代r.fav店','高雄夢時代CHIC.A店']} ],
       // 司機按「跑全線」後改走這 6 站（週一到週五相同）
       fullLine:{ dailyStops:[
-        {site:'夢時代商圈(4間)',time:'07:00-08:00',table:'B'},
-        {site:'岡山秀泰LADY店',time:'09:00-09:30',table:'B'},
-        {site:'左營新光店',time:'10:10-10:40',table:'B'},
-        {site:'高雄漢神LADY/CA店',time:'11:10-11:40',table:'B'},
-        {site:'三多遠百店',time:'12:10-12:40',table:'B'},
-        {site:'夢時代商圈(含休息)',time:'13:00-16:00',table:'D',storeOptions:['高雄夢時代大碼店','高雄夢時代r.fav店','高雄夢時代CHIC.A店']}
+        {site:'夢時代商圈(4間)',time:'07:00-08:00',table:'B',pctAll:true},
+        {site:'岡山秀泰LADY店',time:'09:00-09:30',table:'B',pctAll:true},
+        {site:'左營新光店',time:'10:10-10:40',table:'B',pctAll:true},
+        {site:'高雄漢神LADY/CA店',time:'11:10-11:40',table:'B',pctAll:true},
+        {site:'三多遠百店',time:'12:10-12:40',table:'B',pctAll:true},
+        {site:'夢時代商圈(含休息)',time:'13:00-16:00',table:'D',pctAll:true,storeOptions:['高雄夢時代大碼店','高雄夢時代r.fav店','高雄夢時代CHIC.A店']}
       ] }
     },
     { region:'台南', code:'南台1', name:'陳琮斌', hours:'12:00-21:00',
@@ -1080,12 +1080,12 @@
   // 單一站點的完成度（規則與全日完成度相同：寄貨不算、不適用不算、沒做的反灰項目不算）；沒有可計項目回傳 null
   // 不算進完成百分比的工作（仍需回報，但不計入 %）
   const NO_PCT_TASKS = ['收送貨'];
-  const noPct = (driver, name) => NO_PCT_TASKS.includes(name);
+  const noPct = (driver, name, stop) => NO_PCT_TASKS.includes(name) && !(stop && stop.pctAll); // 全線路線的站點(pctAll)收送貨也計入完成度
   function stopProgress(driver, stop, weekday, st){
     st = st || {};
     let total=0, weighted=0, done=0;
     getStopTasks(driver, stop, weekday, st).filter(t=>t.active).forEach(t=>{
-      if(shipCarrierFor(t.name) || noPct(driver, t.name)) return;
+      if(shipCarrierFor(t.name) || noPct(driver, t.name, stop)) return;
       const rec = st.tasks && st.tasks[t.name];
       if(rec && rec.status==='na') return;
       total++;
@@ -1101,7 +1101,7 @@
       const st = state.stops[i] || {};
       const tasks = getStopTasks(driver, stop, weekday, st).filter(t=>t.active);
       tasks.forEach(t=>{
-        if(shipCarrierFor(t.name) || noPct(driver, t.name)) return; // 寄貨類／指定不計%的工作不算在完成度內
+        if(shipCarrierFor(t.name) || noPct(driver, t.name, stop)) return; // 寄貨類／指定不計%的工作不算在完成度內
         const rec = st.tasks && st.tasks[t.name];
         if(rec && rec.status==='na') return; // not-applicable items don't count toward completion
         totalTasks++;
@@ -2176,7 +2176,7 @@
         }
         const tasks = getStopTasks(d, stop, weekday, st).filter(t=>t.active);
         tasks.forEach(t=>{
-          if(shipCarrierFor(t.name) || noPct(d, t.name)) return; // 寄貨類／指定不計%的工作不算在完成度統計內
+          if(shipCarrierFor(t.name) || noPct(d, t.name, stop)) return; // 寄貨類／指定不計%的工作不算在完成度統計內
           const rec2 = st.tasks && st.tasks[t.name];
           if(rec2 && typeof rec2.pieces==='number'){
             if(!piecesByTask[t.name]) piecesByTask[t.name] = 0;
@@ -2355,7 +2355,7 @@
             const rs = r.status==='na' ? (r.reason && NA_REASON_MAP[r.reason] ? NA_REASON_MAP[r.reason].label : '未填原因') : '';
             const asg = r.assigner || '';
             tasks.push([date, WKN[wd], d.region, d.name, i+1, site, n, r.status==='done'?'完成':(r.status==='partial'?'部分':'不適用'), p, rs, asg]);
-            if(n!=='收送貨'){ if(r.status==='done') row.done++; else if(r.status==='partial'){ row.partial++; row.pctSum += p||0; } else row.na++; }
+            if(n!=='收送貨' || (st.route==='full' && d.fullLine)){ if(r.status==='done') row.done++; else if(r.status==='partial'){ row.partial++; row.pctSum += p||0; } else row.na++; }
           });
           stops.push(row);
         });
