@@ -12,7 +12,21 @@
 html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
 body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;gap:10px}
-header h1{font-size:17px;margin:0;flex:1}
+header{background:#111827;border-bottom:0;color:#fff}
+.brand{flex:1;min-width:0}
+.brand .wm{font-size:19px;font-weight:300;letter-spacing:.32em;line-height:1.1;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif}
+.brand .sub{font-size:10.5px;letter-spacing:.14em;color:#9aa4b8;margin-top:3px;white-space:nowrap}
+header .who{color:#aeb7c9;background:rgba(255,255,255,.07);border-radius:10px;padding:5px 10px;text-align:left}
+header .who b{color:#fff}
+.role{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 4px}
+.role button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 4px;font:inherit;font-size:13px;color:var(--mute);cursor:pointer;line-height:1.3}
+.role button b{display:block;font-size:22px;margin-bottom:2px;font-weight:400}
+.role button.on{border-color:#111827;background:#111827;color:#fff}
+.me-top{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.me-top .wm{font-weight:300;letter-spacing:.3em;font-size:15px}
+.me-top .ln{flex:1;height:1px;background:linear-gradient(90deg,#111827,transparent)}
+.storebox{background:#f4f6fa;border-radius:12px;padding:10px 12px;margin-top:8px;font-size:13px;color:var(--mute);line-height:1.6}
+.storebox b{color:var(--ink);font-size:14px}
 .who{font-size:12.5px;color:var(--mute);text-align:right;cursor:pointer;line-height:1.3;max-width:55%}
 .who b{color:var(--ink)}
 .sync{width:9px;height:9px;border-radius:50%;background:#aaa;display:inline-block;margin-right:4px}
@@ -98,7 +112,7 @@ table.mx2{border-collapse:collapse;font-size:12px;width:max-content;min-width:10
 </head>
 <body>
 <header>
-  <h1>瑕疵品追蹤</h1>
+  <div class="brand"><div class="wm">AIR&thinsp;SPACE</div><div class="sub">瑕疵品追蹤系統 · DEFECT TRACKING</div></div>
   <div class="who" id="who"></div>
 </header>
 <main>
@@ -223,7 +237,7 @@ async function pull(){
 function setSync(s){ syncState=s; renderWho(); }
 function renderWho(){
   const lbl={ok:'已同步',busy:'同步中…',err:'離線(稍後自動重傳)',demo:'示範模式'}[syncState]||'';
-  $('who').innerHTML = `<span class="sync ${syncState==='demo'?'':syncState}"></span>${lbl}<br><b>${esc(me.name||'未設定姓名')}</b> · ${esc((storeBy(me.store)||{}).name||'未選門市')} ✎`;
+  $('who').innerHTML = `<span class="sync ${syncState==='demo'?'':syncState}"></span>${lbl}<br><b>${esc(me.name||'未設定姓名')}</b> · ${esc((storeBy(me.store)||{}).name||({fix:'修復人員',adm:'生管/管理員'}[me.role])||'未選門市')} ✎`;
 }
 $('who').onclick = openMe;
 
@@ -247,18 +261,40 @@ function askPin(v){
 // ================= Modal =================
 function openSheet(html){ $('sheet').innerHTML=html; $('modal').classList.add('on'); }
 function closeSheet(){ $('modal').classList.remove('on'); $('sheet').innerHTML=''; $('sheet').onclick=null; $('sheet').oninput=null; $('sheet').onchange=null; }
-$('modal').onclick = e=>{ if(e.target===$('modal')) closeSheet(); };
+$('modal').onclick = e=>{ if(e.target===$('modal') && me.name) closeSheet(); };
 document.addEventListener('click',e=>{ const a=e.target.closest('[data-act="close"]'); if(a) closeSheet(); });
 
 function openMe(){
-  const opts = REGIONS.map(rg=>`<optgroup label="${rg}">${STORES.filter(s=>s.region===rg).map(s=>storeOpt(s,s.code===me.store)).join('')}</optgroup>`).join('');
-  openSheet(`<h2>我是誰</h2><p class="hint">只需設定一次，之後登記/處理都會自動帶入。修復人員、管理員門市可不選。</p>
-  <label class="f">姓名</label><input type="text" id="me-name" value="${esc(me.name)}" autocomplete="off">
-  <label class="f">所屬門市</label><select id="me-store"><option value="">（非門市人員）</option>${opts}</select>
-  <div class="row" style="margin-top:14px"><button class="btn gray grow" data-act="close">取消</button><button class="btn grow" id="me-ok">儲存</button></div>`);
-  $('me-ok').onclick=()=>{ const n=$('me-name').value.trim(); if(!n){ toast('請輸入姓名'); return; } me={name:n,store:$('me-store').value}; lsSet('df_me',me); if(me.store) form.store=me.store; closeSheet(); renderAll(); };
+  const first=!me.name;
+  let role=me.role||'store', store=me.store||'';
+  const opts = REGIONS.map(rg=>`<optgroup label="${rg}">${STORES.filter(s=>s.region===rg).map(s=>storeOpt(s,false)).join('')}</optgroup>`).join('');
+  openSheet(`<div class="me-top"><span class="wm">AIR&thinsp;SPACE</span><span class="ln"></span></div>
+  <h2>使用者設定</h2><p class="hint">首次使用請設定一次，之後登記與處理都會自動帶入姓名與門市。</p>
+  <label class="f">身分</label>
+  <div class="role">${[['store','🏬','門市同仁'],['fix','✂','修復人員'],['adm','📊','生管 / 管理員']].map(([k,i,n])=>`<button data-role="${k}"><b>${i}</b>${n}</button>`).join('')}</div>
+  <label class="f">姓名</label><input type="text" id="me-name" value="${esc(me.name)}" autocomplete="off" placeholder="請輸入真實姓名（紀錄會留存）">
+  <div id="me-st"><label class="f">所屬門市</label><select id="me-store"><option value="">請選擇門市</option>${opts}</select><div class="storebox" id="me-info"></div></div>
+  <div class="row" style="margin-top:16px">${first?'':'<button class="btn gray grow" data-act="close">取消</button>'}<button class="btn grow" id="me-ok" style="background:#111827">確認並開始使用</button></div>`);
+  const sync=()=>{
+    document.querySelectorAll('.role button').forEach(x=>x.classList.toggle('on',x.dataset.role===role));
+    $('me-st').style.display = role==='store'?'':'none';
+    const s=storeBy(store);
+    $('me-info').innerHTML = s?`<b>${esc(s.name)}</b>（${s.code}）<br>${s.region}・${pingTxt(s)}・販售支線 ${esc(s.line||'未填')}<br>${esc(s.addr||'')}`:'選擇後會顯示門市坪數、販售支線與地址';
+    $('me-info').style.display = 'block';
+  };
+  $('me-store').value=store; sync();
+  $('sheet').querySelector('.role').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; role=b.dataset.role; sync(); };
+  $('me-store').onchange=e=>{ store=e.target.value; sync(); };
+  $('me-ok').onclick=()=>{
+    const n=$('me-name').value.trim();
+    if(!n){ toast('請輸入姓名'); $('me-name').focus(); return; }
+    if(role==='store' && !store){ toast('門市同仁請選擇所屬門市'); return; }
+    me={name:n,role,store:role==='store'?store:''}; lsSet('df_me',me);
+    if(me.store) form.store=me.store;
+    closeSheet(); renderReg(); renderAll();
+    if(first){ const v={store:'reg',fix:'fix',adm:'adm'}[role]; if(v!=='reg') go(v); }
+  };
 }
-
 // ================= 登記瑕疵 =================
 let form = { store: me.store, major:null, sub:null, sku:'', color:'', qty:1, note:'', photos:[] };
 function renderReg(){
