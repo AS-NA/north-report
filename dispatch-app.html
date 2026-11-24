@@ -361,7 +361,7 @@
   <div class="view" id="view-stop">
     <div class="topbar small">
       <button class="backbtn" data-back="driver">←</button>
-      <div class="who"><div class="n" id="stopSite"></div><div class="m" id="stopTime"></div></div>
+      <div class="who"><div class="n" id="stopSite"></div><div class="m" id="stopTime"></div><div class="m" id="stopNav" style="margin-top:4px;"></div></div>
     </div>
     <div id="storeSelectBox" style="display:none;"></div>
     <div class="infobox" id="stopInfoBox"></div>
@@ -1080,13 +1080,18 @@
   // 單一站點的完成度（規則與全日完成度相同：寄貨不算、不適用不算、沒做的反灰項目不算）；沒有可計項目回傳 null
   // 不算進完成百分比的工作（仍需回報，但不計入 %）
   const NO_PCT_TASKS = ['收送貨'];
-  // 店家資料（店代號、販售支線、備註、坪數）：來源＝店家櫃位資料表；坪數待補。名稱含別名（例如 遠百、逢甲(門市作業)）
-  const STORE_INFO = {"中山一店": ["AS40", "AS+OL", "辣妹正裝+韓系LADY", null], "南西AS店": ["AS57", "AS", "辣妹正裝", null], "南西LADY店": ["AS24", "OL", "韓系LADY", null], "南西r.fav店": ["AS62", "IP", "聯名授權", null], "大安店": ["AS10", "AS+OL", "辣妹正裝+韓系LADY", null], "敦南AS店": ["AS04", "AS", "辣妹正裝", null], "敦南LADY店": ["AS05", "OL", "韓系LADY", null], "敦南大碼店": ["AS49", "PLUS", "大尺碼", null], "新莊宏匯店": ["AS73", "AS+OL", "辣妹正裝+韓系LADY", null], "西門r.fav店": ["AS70", "IP", "聯名授權", null], "西門大碼店": ["AS12", "PLUS", "大尺碼", null], "西門店": ["AS61", "AS+OL", "辣妹正裝+韓系LADY", null], "新竹巨城LADY店": ["AS35", "OL", "韓系LADY", null], "桃園台茂AS店": ["AS96", "AS", "辣妹正裝", null], "桃園台茂店": ["AS95", "OL+CA", "韓系LADY+歐美簡約質感", null], "桃園大江大碼店": ["AT04", "PLUS", "大尺碼", null], "桃園大江店": ["AS89", "AS+OL+CA", "辣妹正裝+韓系LADY+歐美簡約質感", null], "桃園統領大碼店": ["AS86", "PLUS", "大尺碼", null], "桃園統領店": ["AS72", "AS+OL", "辣妹正裝+韓系LADY", null], "一中CHIC.A店": ["AT15", "CA", "歐美簡約質感", null], "一中LADY店": ["AS25", "OL", "韓系LADY", null], "一中r.fav店": ["AT11", "IP", "聯名授權", null], "一中大碼店": ["AS29", "PLUS", "大尺碼", null], "一中店": ["AS17", "AS+CA", "辣妹正裝+歐美簡約質感", null], "台中漢神店": ["AT07", "AS+OL", "辣妹正裝+韓系LADY", null], "台中遠百店": ["AS66", "AS+OL", "辣妹正裝+韓系LADY", null], "文心秀泰LADY店": ["AS69", "OL", "韓系LADY", null], "文心秀泰大碼店": ["AS44", "PLUS", "大尺碼", null], "逢甲(門市作業)": ["AS15", "AS+OL", "辣妹正裝+韓系LADY", null], "逢甲店": ["AS15", "AS+OL", "辣妹正裝+韓系LADY", null], "遠百": ["AS66", "AS+OL", "辣妹正裝+韓系LADY", null], "遠百(門市作業)": ["AS66", "AS+OL", "辣妹正裝+韓系LADY", null], "台南南紡店": ["AT05", "AS+CA", "辣妹正裝+歐美簡約質感", null], "嘉義文化一店": ["AS93", "AS+OL", "辣妹正裝+韓系LADY", null], "嘉義秀泰大碼店": ["AS97", "PLUS", "大尺碼", null], "嘉義秀泰店": ["AS84", "AS+OL", "辣妹正裝+韓系LADY", null], "南紡CA": ["AT05", "AS+CA", "辣妹正裝+歐美簡約質感", null], "台南FOCUS大碼店": ["AS85", "PLUS", "大尺碼", null], "台南FOCUS店": ["AS34", "AS+OL", "辣妹正裝+韓系LADY", null], "台南南紡LADY店": ["AS38", "OL", "韓系LADY", null], "CA店": ["AS82", "CA", "歐美簡約質感", null], "三多遠百店": ["AS83", "AS+OL", "辣妹正裝+韓系LADY", null], "岡山秀泰LADY店": ["AS46", "OL", "韓系LADY", null], "左營新光店": ["AS59", "AS+OL", "辣妹正裝+韓系LADY", null], "高雄夢時代CHIC.A店": ["AS82", "CA", "歐美簡約質感", null], "高雄夢時代r.fav店": ["AT10", "IP", "聯名授權", null], "高雄夢時代大碼店": ["AS64", "PLUS", "大尺碼", null], "高雄夢時代店": ["AS45", "AS+OL", "辣妹正裝+韓系LADY", null], "高雄漢神LADY": ["AS81", "OL", "韓系LADY", null], "高雄漢神LADY店": ["AS81", "OL", "韓系LADY", null]};
+  // 店家資料（店代號、販售支線、備註、坪數）：來源＝店家櫃位資料表；坪數、地址已補。名稱含別名（例如 遠百、逢甲(門市作業)）
+  const STORE_INFO = {"中山一店": ["AS40", "AS+OL", "辣妹正裝+韓系LADY", 43, "台北市大同區南京西路63號"], "南西AS店": ["AS57", "AS", "辣妹正裝", 20, "台北市中山區南京西路23巷1之4號"], "南西LADY店": ["AS24", "OL", "韓系LADY", 20, "台北市中山區南京西路23巷5號"], "南西r.fav店": ["AS62", "IP", "聯名授權", 53, "台北市中山區中山北路二段20巷15號"], "大安店": ["AS10", "AS+OL", "辣妹正裝+韓系LADY", 30, "台北市大安區大安路一段63號"], "敦南AS店": ["AS04", "AS", "辣妹正裝", 38, "台北市大安區敦化南路一段187巷50號"], "敦南LADY店": ["AS05", "OL", "韓系LADY", 38, "台北市大安區敦化南路一段187巷52號"], "敦南大碼店": ["AS49", "PLUS", "大尺碼", 30, "台北市大安區敦化南路一段187巷34號"], "新莊宏匯店": ["AS73", "AS+OL", "辣妹正裝+韓系LADY", 64, "新北市新莊區新北大道四段3號3樓"], "西門r.fav店": ["AS70", "IP", "聯名授權", 45, "台北市萬華區西寧南路147號"], "西門大碼店": ["AS12", "PLUS", "大尺碼", 12, "台北市萬華區西寧南路129號第5室"], "西門店": ["AS61", "AS+OL", "辣妹正裝+韓系LADY", 44, "台北市萬華區西寧南路54號"], "新竹巨城LADY店": ["AS35", "OL", "韓系LADY", 21, "新竹市東區中央路229號3樓"], "桃園台茂AS店": ["AS96", "AS", "辣妹正裝", 34, "桃園市蘆竹區南崁路一段112號B2"], "桃園台茂店": ["AS95", "OL+CA", "韓系LADY+歐美簡約質感", 43, "桃園市蘆竹區南崁路一段112號B2"], "桃園大江大碼店": ["AT04", "PLUS", "大尺碼", 25, "桃園市中壢區中園路二段501號2樓"], "桃園大江店": ["AS89", "AS+OL+CA", "辣妹正裝+韓系LADY+歐美簡約質感", 60, "桃園市中壢區中園路二段501號1樓"], "桃園統領大碼店": ["AS86", "PLUS", "大尺碼", 23, "桃園市桃園區中正路61號3樓"], "桃園統領店": ["AS72", "AS+OL", "辣妹正裝+韓系LADY", 70, "桃園市桃園區中正路61號2樓"], "一中CHIC.A店": ["AT15", "CA", "歐美簡約質感", 40, "台中市北區育才街41號"], "一中LADY店": ["AS25", "OL", "韓系LADY", 20, "台中市北區一中街169號"], "一中r.fav店": ["AT11", "IP", "聯名授權", 60, "台中市北區一中街99號"], "一中大碼店": ["AS29", "PLUS", "大尺碼", 42, "台中市北區育才街35-1號"], "一中店": ["AS17", "AS+CA", "辣妹正裝+歐美簡約質感", 42, "台中市北區育才街33-1號"], "台中漢神店": ["AT07", "AS+OL", "辣妹正裝+韓系LADY", 44, "台中市北屯區崇德路三段4樓"], "台中遠百店": ["AS66", "AS+OL", "辣妹正裝+韓系LADY", 28, "台中市西屯區臺灣大道三段251號10樓(南棟電梯出口)"], "文心秀泰LADY店": ["AS69", "OL", "韓系LADY", 30, "台中市南屯區文心南路289號2樓(秀泰內)"], "文心秀泰大碼店": ["AS44", "PLUS", "大尺碼", 26, "台中市南屯區文心南路289號2樓(秀泰內)"], "逢甲(門市作業)": ["AS15", "AS+OL", "辣妹正裝+韓系LADY", 30, "台中市西屯區文華路75號"], "逢甲店": ["AS15", "AS+OL", "辣妹正裝+韓系LADY", 30, "台中市西屯區文華路75號"], "遠百": ["AS66", "AS+OL", "辣妹正裝+韓系LADY", 28, "台中市西屯區臺灣大道三段251號10樓(南棟電梯出口)"], "遠百(門市作業)": ["AS66", "AS+OL", "辣妹正裝+韓系LADY", 28, "台中市西屯區臺灣大道三段251號10樓(南棟電梯出口)"], "台南南紡店": ["AT05", "AS+CA", "辣妹正裝+歐美簡約質感", 30, "台南市東區中華東路一段366號A1館2樓"], "嘉義文化一店": ["AS93", "AS+OL", "辣妹正裝+韓系LADY", 49, "嘉義市西區文化路97號"], "嘉義秀泰大碼店": ["AS97", "PLUS", "大尺碼", 36, "嘉義市西區文化路299號1樓"], "嘉義秀泰店": ["AS84", "AS+OL", "辣妹正裝+韓系LADY", 47, "嘉義市西區文化路299號2樓"], "南紡CA": ["AT05", "AS+CA", "辣妹正裝+歐美簡約質感", 30, "台南市東區中華東路一段366號A1館2樓"], "台南FOCUS大碼店": ["AS85", "PLUS", "大尺碼", 51, "台南市中西區中山路166號4樓"], "台南FOCUS店": ["AS34", "AS+OL", "辣妹正裝+韓系LADY", 58, "台南市中西區中山路166號4樓"], "台南南紡LADY店": ["AS38", "OL", "韓系LADY", 8, "台南市東區中華東路一段358號A2館2樓"], "CA店": ["AS82", "CA", "歐美簡約質感", 30, "高雄市前鎮區中華五路789號3樓"], "三多遠百店": ["AS83", "AS+OL", "辣妹正裝+韓系LADY", 43, "高雄市苓雅區三多四路21號3樓"], "岡山秀泰LADY店": ["AS46", "OL", "韓系LADY", 29, "高雄市岡山區大遼里捷安路1巷2號1樓(秀泰內)"], "左營新光店": ["AS59", "AS+OL", "辣妹正裝+韓系LADY", 53, "高雄市左營區高鐵路123號3樓(本館春水堂對面)"], "高雄夢時代CHIC.A店": ["AS82", "CA", "歐美簡約質感", 30, "高雄市前鎮區中華五路789號3樓"], "高雄夢時代r.fav店": ["AT10", "IP", "聯名授權", 25, "高雄市前鎮區中華五路789號7樓"], "高雄夢時代大碼店": ["AS64", "PLUS", "大尺碼", 22, "高雄市前鎮區中華五路789號7樓"], "高雄夢時代店": ["AS45", "AS+OL", "辣妹正裝+韓系LADY", 57, "高雄市前鎮區中華五路789號3樓"], "高雄漢神LADY": ["AS81", "OL", "韓系LADY", 15, "高雄市左營區博愛二路777號5樓"], "高雄漢神LADY店": ["AS81", "OL", "韓系LADY", 15, "高雄市左營區博愛二路777號5樓"]};
   function storeInfoFor(site){
     if(!site) return [];
     const out = [];
-    String(site).split('/').forEach(x=>{ x = x.trim(); const v = STORE_INFO[x]; if(v && !out.some(o=>o.name===x)) out.push({name:x, code:v[0], line:v[1], note:v[2], ping:v[3]}); });
+    String(site).split('/').forEach(x=>{ x = x.trim(); const v = STORE_INFO[x]; if(v && !out.some(o=>o.name===x)) out.push({name:x, code:v[0], line:v[1], note:v[2], ping:v[3], addr:v[4]}); });
     return out;
+  }
+  function renderStopNav(site){
+    const el = $('stopNav'); if(!el) return;
+    const list = storeInfoFor(site).filter(o=>o.addr);
+    el.innerHTML = list.map(o=>`<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(o.addr)}" target="_blank" rel="noopener" style="margin-right:12px;color:var(--accent,#2a9fd8);text-decoration:underline;">📍 導航${list.length>1?'：'+escapeHtml(o.name):''}</a><span style="font-size:11px;color:var(--text-mute);margin-right:10px;">${escapeHtml(o.addr)}</span>`).join('<br>');
   }
   function storeInfoText(site){
     return storeInfoFor(site).map(o=>[o.code, o.line, o.ping?o.ping+'坪':''].filter(Boolean).join('・')).join('／');
@@ -1290,6 +1295,7 @@
     document.getElementById('view-stop').classList.add('selecting-store');
     $('stopSite').textContent = `${['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][idx]||(idx+1)} ${stop.site}`;
     $('stopTime').textContent = stop.time + (storeInfoText(stop.site) ? '　' + storeInfoText(stop.site) : '');
+    renderStopNav(stop.site);
     const btnStyle = 'width:100%;text-align:left;margin-top:10px;';
     $('storeSelectBox').innerHTML = `
       <div class="storeselecttitle">今天這一站要做什麼？有發追加就去門市，沒有發追加就回台北倉。</div>
@@ -1319,6 +1325,7 @@
     document.getElementById('view-stop').classList.add('selecting-store');
     $('stopSite').textContent = `${['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][idx]||(idx+1)} ${stop.site}`;
     $('stopTime').textContent = stop.time + (storeInfoText(stop.site) ? '　' + storeInfoText(stop.site) : '');
+    renderStopNav(stop.site);
     $('storeSelectBox').innerHTML = `
       <div class="storeselecttitle">這一站是「${escapeHtml(stop.site)}」，請先選擇今天實際要去哪一家門市，選定後這一站就會依這家店來記錄工作項目跟打卡。</div>
       ${stop.storeDropdown
@@ -1364,6 +1371,7 @@
 
     $('stopSite').textContent = `${['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][idx]||(idx+1)} ${st.selectedStore||stop.site}`;
     $('stopTime').textContent = stop.time + (storeInfoText((st.selectedStore||stop.site)) ? '　' + storeInfoText((st.selectedStore||stop.site)) : '');
+    renderStopNav((st.selectedStore||stop.site));
     const todayOverride = allOverrides.find(o=> o.site===stop.site && o.date===todayDateStr());
     let overrideBanner = document.getElementById('overrideBanner');
     if(!overrideBanner){
@@ -2440,9 +2448,9 @@
     });
     sheets.push(['工作項目統計', r4, [18,7,7,8,12,16,12,40,16]]);
     // 站點明細
-    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數','店代號','販售支線','坪數']];
-    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote,x.pcs,x.qb,x.qg,x.qp,x.sh['黑貓'],x.sh['新竹'],x.sh['佶傳'],storeInfoFor(x.site).map(o=>o.code).join('／'),storeInfoFor(x.site).map(o=>o.line).join('／'),storeInfoFor(x.site).map(o=>o.ping||'').filter(Boolean).join('／')]));
-    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12,14,10,10,10,10,10,10,10,14,8]]);
+    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數','店代號','販售支線','坪數','地址']];
+    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote,x.pcs,x.qb,x.qg,x.qp,x.sh['黑貓'],x.sh['新竹'],x.sh['佶傳'],storeInfoFor(x.site).map(o=>o.code).join('／'),storeInfoFor(x.site).map(o=>o.line).join('／'),storeInfoFor(x.site).map(o=>o.ping||'').filter(Boolean).join('／'),storeInfoFor(x.site).map(o=>o.addr).filter(Boolean).join('／')]));
+    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12,14,10,10,10,10,10,10,10,14,8,40]]);
     // 不適用明細
     const r6 = [['日期','司機','站序','站點','工作項目','原因','指派人']];
     D.tasks.filter(t=>t[7]==='不適用').forEach(t=>r6.push([t[0],t[3],t[4],t[5],t[6],t[9],t[10]]));
