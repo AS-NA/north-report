@@ -176,28 +176,19 @@ const storeOpt = (s,sel) => `<option value="${s.code}" ${sel?'selected':''}>${es
 const newId = () => 'D'+nowStr().slice(2,10).replace(/-/g,'')+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
 function toast(t){ const e=$('toast'); e.textContent=t; e.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(()=>e.classList.remove('on'),2200); }
 
-// ================= 商品資料（來自試算表「商品資料」分頁） =================
+// ================= 商品資料（放在試算表「商品資料」分頁，輸入/掃描時才即時查詢，不整份下載） =================
 // 欄位順序：條碼, 款號, 商品名稱, 顏色, 尺寸, 販售支線, 品類, 吊牌價
-const PROD = { rows: lsGet('df_prod',{rows:[],at:''}).rows, at: lsGet('df_prod',{rows:[],at:''}).at, byCode:new Map(), bySku:new Map() };
-function indexProd(){
-  PROD.byCode.clear(); PROD.bySku.clear();
-  PROD.rows.forEach(r=>{
-    const c=String(r[0]||'').trim().toUpperCase(), k=String(r[1]||'').trim().toUpperCase();
-    if(c) PROD.byCode.set(c,r);
-    if(k){ if(!PROD.bySku.has(k)) PROD.bySku.set(k,[]); PROD.bySku.get(k).push(r); }
-  });
+const PQ = new Map();      // 查詢快取
+const PROD = { count:null };
+async function lookupRemote(q){
+  if(PQ.has(q)) return PQ.get(q);
+  const res=await fetch(CONFIG.API_URL+'?action=lookup&q='+encodeURIComponent(q)); const j=await res.json();
+  if(!j.ok) throw new Error(j.error||'lookup failed');
+  PQ.set(q,j); return j;
 }
-indexProd();
-async function pullProducts(force){
-  if(!CONFIG.API_URL) return false;
-  try{
-    const res=await fetch(CONFIG.API_URL+'?action=products'); const j=await res.json();
-    if(!j.ok) throw new Error(j.error);
-    PROD.rows=j.rows||[]; PROD.at=j.updatedAt||nowStr(); indexProd();
-    lsSet('df_prod',{rows:PROD.rows,at:PROD.at});
-    if(force) toast(`商品資料已更新：${PROD.rows.length} 筆`);
-    return true;
-  }catch(e){ console.warn(e); if(force) toast('商品資料更新失敗，稍後再試'); return false; }
+async function pullProdInfo(force){
+  if(!CONFIG.API_URL) return;
+  try{ const j=await (await fetch(CONFIG.API_URL+'?action=prodinfo')).json(); if(j.ok){ PROD.count=j.count; if(force){ PQ.clear(); toast('商品資料共 '+j.count.toLocaleString()+' 筆'); } } }catch(e){ if(force) toast('讀取失敗，稍後再試'); }
 }
 const pInfo = r => ({ barcode:String(r[0]||''), sku:String(r[1]||''), pname:String(r[2]||''), color:String(r[3]||''), size:String(r[4]||''), pline:String(r[5]||''), pcat:String(r[6]||''), price:r[7] });
 const cs = p => [p.color,p.size].filter(Boolean).join(' / ');
@@ -370,24 +361,33 @@ function renderReg(){
   $('f-qty').oninput=e=>form.qty=Math.max(1,parseInt(e.target.value)||1);
   $('f-submit').onclick=submitReg;
 }
+let pSeq=0, pTimer=null, curVars=[];
 function showProd(){
   const box=$('f-pm'); if(!box) return;
   const q=($('f-sku').value||'').trim().toUpperCase();
-  if(form.p){ const p=form.p; box.innerHTML=`<div class="pcard"><b>${esc(p.pname||p.sku)}</b>${p.pline?` <span class="pill">${esc(p.pline)}</span>`:''}<br>款號 ${esc(p.sku)}${cs(p)?'・'+esc(cs(p)):''}${p.pcat?'・'+esc(p.pcat):''}${p.barcode?'<br><span class="hint">條碼 '+esc(p.barcode)+'</span>':''}</div>`; return; }
-  if(!q||!PROD.rows.length){ box.innerHTML = q&&CONFIG.API_URL&&!PROD.rows.length?'<div class="hint">尚未載入商品資料，可直接手動輸入款號</div>':''; return; }
-  const exactCode=PROD.byCode.get(q);
-  if(exactCode){ return setProd(pInfo(exactCode)); }
-  const variants=PROD.bySku.get(q);
-  if(variants){
-    box.innerHTML=`<div class="hint" style="margin-bottom:4px">${esc(pInfo(variants[0]).pname)}・請選顏色／尺寸（或略過）</div><div class="sg">${variants.slice(0,40).map((r,i)=>`<div data-act="pickvar" data-i="${i}">${esc(cs(pInfo(r))||'（無顏色尺寸）')}<small>${esc(pInfo(r).barcode||'')}</small></div>`).join('')}</div>`; return;
+  if(form.p){ const p=form.p; box.innerHTML=`<div class="pcard"><b>${esc(p.pname||p.sku)}</b>${p.pline?` <span class="pill">${esc(p.pline)}</span>`:''}<br>款號 ${esc(p.sku)}${cs(p)?'・'+esc(cs(p)):''}${p.pcat?'・'+esc(p.pcat):''}${p.price!==''&&p.price!=null?'・吊牌價 $'+esc(p.price):''}${p.barcode?'<br><span class="hint">條碼 '+esc(p.barcode)+'</span>':''}</div>`; return; }
+  clearTimeout(pTimer);
+  if(!q||q.length<3||!CONFIG.API_URL){ box.innerHTML=''; return; }
+  box.innerHTML='<div class="hint">輸入中…（按 Enter 或停一下會自動查詢）</div>';
+  pTimer=setTimeout(()=>runLookup(false),500);
+}
+async function runLookup(immediate){
+  const inp=$('f-sku'); if(!inp||form.p||!CONFIG.API_URL) return;
+  const q=inp.value.trim().toUpperCase(); if(q.length<3) return;
+  const my=++pSeq, box=$('f-pm'); box.innerHTML='<div class="hint">查詢商品資料中…</div>';
+  let j; try{ j=await lookupRemote(q); }catch(e){ if(my===pSeq) box.innerHTML='<div class="hint">查詢失敗（網路或後端），可直接手動輸入款號送出</div>'; return; }
+  if(my!==pSeq || form.p) return;
+  if(j.mode==='barcode'){ return setProd(pInfo(j.rows[0])); }
+  if(j.mode==='sku'){
+    curVars=j.rows;
+    if(j.rows.length===1) return setProd(pInfo(j.rows[0]));
+    box.innerHTML=`<div class="hint" style="margin-bottom:4px">${esc(pInfo(j.rows[0]).pname)}・請選顏色／尺寸（或略過）</div><div class="sg">${j.rows.slice(0,60).map((r,i)=>`<div data-act="pickvar" data-i="${i}">${esc(cs(pInfo(r))||'（無顏色尺寸）')}<small>${esc(pInfo(r).barcode||'')}</small></div>`).join('')}</div>${j.rows.length>60?'<div class="hint">僅列出前 60 筆，可再輸入條碼</div>':''}`; return;
   }
-  if(q.length>=3){
-    const seen=[]; for(const [k,rows] of PROD.bySku){ if(k.includes(q)){ seen.push(k); if(seen.length>=6) break; } }
-    box.innerHTML = seen.length?`<div class="sg">${seen.map(k=>`<div data-act="picksku" data-k="${esc(k)}">${esc(k)}<small>${esc(pInfo(PROD.bySku.get(k)[0]).pname)}</small></div>`).join('')}</div>`:'<div class="hint">查無此款號，可直接手動輸入送出</div>';
-  } else box.innerHTML='';
+  if(j.mode==='suggest'&&j.skus.length){ box.innerHTML=`<div class="sg">${j.skus.map(s=>`<div data-act="picksku" data-k="${esc(s[0])}">${esc(s[0])}<small>${esc(s[1])}</small></div>`).join('')}</div>`; return; }
+  box.innerHTML='<div class="hint">查無此款號/條碼，可直接手動輸入送出</div>';
 }
 function setProd(p){ form.p=p; form.sku=p.sku; form.color=cs(p); const s=$('f-sku'); if(s) s.value=p.sku; const c=$('f-color'); if(c) c.value=form.color; showProd(); }
-function pickByInput(){ const q=$('f-sku').value.trim().toUpperCase(); const c=PROD.byCode.get(q); if(c) return setProd(pInfo(c)); const v=PROD.bySku.get(q); if(v&&v.length===1) return setProd(pInfo(v[0])); showProd(); }
+function pickByInput(){ clearTimeout(pTimer); runLookup(true); }
 // 掃碼
 let camStream=null, camStop=false;
 async function openScan(){
@@ -407,16 +407,17 @@ function loadScanLib(){ if(window.Html5Qrcode) return Promise.resolve(); return 
 function stopScan(){ camStop=true; if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; } closeSheet(); }
 function onScanned(code){
   code=String(code||'').trim(); const s=$('f-sku'); if(s) s.value=code; form.sku=code; form.p=null;
-  const hit=PROD.byCode.get(code.toUpperCase()); if(hit){ setProd(pInfo(hit)); toast('已帶入商品資料'); } else { pickByInput(); toast(PROD.bySku.has(code.toUpperCase())?'請選顏色／尺寸':'查無商品，已填入掃描內容'); }
+  if(!CONFIG.API_URL){ toast('已填入掃描內容'); return; }
+  runLookup(true);
 }
 const lastRec = () => all().find(r=>r.regBy===me.name && r.sku);
-function submitReg(){
+async function submitReg(){
   form.sku=$('f-sku').value.trim().toUpperCase(); form.color=$('f-color').value.trim(); form.note=$('f-note').value.trim(); form.qty=Math.max(1,parseInt($('f-qty').value)||1);
   if(!me.name){ toast('請先設定姓名'); return openMe(); }
   if(!form.store){ toast('請選擇登記門市'); return chooseStore(); }
   if(!form.sub){ toast('請選擇瑕疵類型'); return; }
   if(!form.sku){ toast('請輸入款號'); $('f-sku').focus(); return; }
-  if(!form.p){ const v=PROD.byCode.get(form.sku)||(PROD.bySku.get(form.sku)||[])[0]; if(v) form.p=pInfo(v); }
+  if(!form.p && CONFIG.API_URL){ try{ const j=await Promise.race([lookupRemote(form.sku),new Promise((_,no)=>setTimeout(no,2500))]); if(j.mode==='barcode'||(j.mode==='sku'&&j.rows.length===1)) form.p=pInfo(j.rows[0]); else if(j.mode==='sku'&&j.rows.length>1){ const r0=pInfo(j.rows[0]); form.p={barcode:'',sku:r0.sku,pname:r0.pname,color:'',size:'',pline:r0.pline,pcat:r0.pcat,price:r0.price}; } }catch(e){} }
   const dup = live().find(r=>r.store===form.store && r.sku===form.sku && r.sub===form.sub && r.color===form.color && Date.now()-toD(r.regAt).getTime()<30*60000);
   if(dup && !confirm(`30 分鐘內已登記過相同款號與瑕疵（${dup.id}），確定要再登記一筆嗎？`)) return;
   const st=storeBy(form.store), cat=CATS.find(c=>c[1]===form.sub);
@@ -615,7 +616,7 @@ function renderAdm(){
   } else {
     body=`<div class="card"><h3>匯出報表</h3><p class="hint">Excel 內含：明細、日期×小類別、各店彙總、未結案滯留清單。</p><button class="btn block" data-act="export">下載 Excel</button></div>
     <div class="card"><h3>門市資料（${STORES.length} 間）</h3><div class="mx" style="max-height:340px"><table class="mx2"><thead><tr><th class="l">店名</th><th>店代號</th><th>坪數</th><th>支線</th><th>地址</th><th>近${admDays}天件數</th><th>件/坪</th></tr></thead><tbody>${STORES.map(s=>{const n=live().filter(r=>r.store===s.code&&inRange(r)).reduce((x,r)=>x+r.qty,0);return `<tr><td class="l">${esc(s.name)}</td><td>${s.code}</td><td>${s.ping??''}</td><td>${esc(s.line||'')}</td><td style="text-align:left">${esc(s.addr||'')}</td><td>${n||''}</td><td>${n&&s.ping?(n/s.ping).toFixed(2):''}</td></tr>`}).join('')}</tbody></table></div></div>
-    <div class="card"><h3>商品資料（每週更新）</h3><p class="hint">目前 ${PROD.rows.length} 筆${PROD.at?'・最後讀取 '+esc(String(PROD.at).slice(0,16)):''}。更新方式：開啟 Google 試算表的「商品資料」分頁，貼上最新資料即可；app 每次開啟都會自動讀取。</p>${CONFIG.API_URL?'<button class="btn sec block" data-act="upprod">立即重新讀取商品資料</button>':'<p class="hint">示範模式未連線，無商品資料。</p>'}</div>
+    <div class="card"><h3>商品資料（每週更新）</h3><p class="hint">目前共 ${PROD.count==null?'—':PROD.count.toLocaleString()} 筆。更新方式：開啟 Google 試算表的「商品資料」分頁，貼上最新資料即可；登記時是即時查詢，不用重新整理。</p>${CONFIG.API_URL?'<button class="btn sec block" data-act="upprod">重新檢查商品筆數並清除查詢快取</button>':'<p class="hint">示範模式未連線，無商品資料。</p>'}</div>
     <div class="card"><h3>資料</h3><p class="hint">模式：${CONFIG.API_URL?'已連線 Google 試算表':'示範模式（資料只在這台裝置）'}　紀錄數：${all().length}</p>
     ${CONFIG.API_URL?'':`<button class="btn sec block" data-act="demo" style="margin-bottom:8px">載入示範資料（約 45 筆）</button><button class="btn red block" data-act="clearall">清除本機所有資料</button>`}</div>`;
   }
@@ -680,9 +681,9 @@ document.addEventListener('click',e=>{
     case 'chgstore': chooseStore(); break;
     case 'scan': keepForm(); openScan(); break;
     case 'stopscan': stopScan(); break;
-    case 'picksku': { const k=b.dataset.k; $('f-sku').value=k; form.sku=k; form.p=null; showProd(); break; }
-    case 'pickvar': { const q=$('f-sku').value.trim().toUpperCase(); setProd(pInfo(PROD.bySku.get(q)[+b.dataset.i])); break; }
-    case 'upprod': pullProducts(true).then(()=>renderAll()); break;
+    case 'picksku': { const k=b.dataset.k; $('f-sku').value=k; form.sku=k; form.p=null; runLookup(true); break; }
+    case 'pickvar': setProd(pInfo(curVars[+b.dataset.i])); break;
+    case 'upprod': pullProdInfo(true).then(()=>renderAll()); break;
     case 'copylast': { const r=lastRec(); form.sku=r.sku; form.color=r.color||''; $('f-sku').value=form.sku; $('f-color').value=form.color; form.p=r.pname?{barcode:r.barcode||'',sku:r.sku,pname:r.pname,color:r.color||'',size:'',pline:r.pline||'',pcat:r.pcat||'',price:r.price0||''}:null; showProd(); break; }
     case 'addphoto': keepForm(); $('file').click(); break;
     case 'delphoto': keepForm(); form.photos.splice(+b.dataset.i,1); renderReg(); break;
@@ -720,7 +721,7 @@ function renderAll(){
 // 初始化
 if(!me.name) setTimeout(openMe,300);
 renderReg(); renderAll();
-if(CONFIG.API_URL){ pullProducts(); pull().then(flush); setInterval(()=>{ pull(); flush(); }, CONFIG.POLL_SEC*1000); }
+if(CONFIG.API_URL){ pullProdInfo(); pull().then(flush); setInterval(()=>{ pull(); flush(); }, CONFIG.POLL_SEC*1000); }
 window.__df={cache:()=>cache,go,CONFIG};
 })();
 </script>
