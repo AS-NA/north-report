@@ -2004,6 +2004,7 @@
     stopAdminAutoRefresh();
     adminAutoRefreshTimer = setInterval(async ()=>{
       if(!$('view-admin').classList.contains('active')){ stopAdminAutoRefresh(); return; }
+      if(adminTab==='fill' || adminTab==='export') return; // 補登／匯出頁正在輸入，自動更新會把填到一半的數字洗掉，所以暫停（要更新請按「重新載入」）
       await refreshCheckins();
       renderAdmin();
     }, 8000);
