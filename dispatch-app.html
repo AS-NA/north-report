@@ -2448,44 +2448,44 @@
     });
     sheets.push(['工作項目統計', r4, [18,7,7,8,12,16,12,40,16]]);
     // 站點明細
-    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數','販售支線']];
-    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote,x.pcs,x.qb,x.qg,x.qp,x.sh['黑貓'],x.sh['新竹'],x.sh['佶傳'],storeInfoFor(x.site).map(o=>o.line).join('／')]));
-    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12,14,10,10,10,10,10,10,10,14]]);
+    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數']];
+    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote,x.pcs,x.qb,x.qg,x.qp,x.sh['黑貓'],x.sh['新竹'],x.sh['佶傳']]));
+    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12,14,10,10,10,10,10,10,10]]);
     // 不適用明細
     const r6 = [['日期','司機','站序','站點','工作項目','原因','指派人']];
     D.tasks.filter(t=>t[7]==='不適用').forEach(t=>r6.push([t[0],t[3],t[4],t[5],t[6],t[9],t[10]]));
     sheets.push(['不適用明細', r6, [11,10,6,20,16,24,12]]);
     // 工作項目明細
-    const r7 = [['日期','星期','區域','司機','站序','站點','工作項目','狀態','部分完成度%','不適用原因','指派人','件數','箱數','袋數','逐店登記明細','販售支線']];
-    D.tasks.forEach(t=>r7.push(t.concat([storeInfoFor(t[5]).map(o=>o.line).join('／')])));
-    sheets.push(['工作項目明細', r7, [11,7,7,9,6,20,16,8,10,22,12,9,9,9,40,14]]);
+    const r7 = [['日期','星期','區域','司機','站序','站點','工作項目','狀態','部分完成度%','不適用原因','指派人','件數','箱數','袋數','逐店登記明細']];
+    D.tasks.forEach(t=>r7.push(t));
+    sheets.push(['工作項目明細', r7, [11,7,7,9,6,20,16,8,10,22,12,9,9,9,40]]);
     const r9 = [['日期','星期','區域','司機','站序','站點','承運','狀態','總箱數','各店箱數']]; D.ships.forEach(x=>r9.push(x));
     sheets.push(['寄貨明細', r9, [11,7,7,9,6,20,8,10,9,50]]);
     // 未回報
     const r8 = [['日期','星期','區域','司機']]; D.missing.forEach(m=>r8.push(m));
     if(D.missing.length) sheets.push(['未回報', r8, [11,7,7,10]]);
-    // 店資料放在資料表最前面：店代號、店櫃名稱、坪數、店櫃地址；兩間店合併的站拆成兩列（第二列是「附列」，只有站的辨識欄，數字不重複計算）
+    // 店資料放在資料表最前面：店代號、店櫃名稱、坪數、店櫃地址、販售支線；兩間店合併的站拆成兩列（第二列是「附列」，只有站的辨識欄，數字不重複計算）
     const siteIdx = {'站點明細':[5,6], '工作項目明細':[5,6], '寄貨明細':[5,6], '不適用明細':[3,4]};
     sheets.forEach(sh=>{
       const cfg = siteIdx[sh[0]]; if(!cfg) return;
       const si = cfg[0], idLen = cfg[1];
       const out = [];
       sh[1].forEach((row,ri)=>{
-        if(ri===0){ out.push(['店代號','店櫃名稱','坪數','店櫃地址'].concat(row, ['列別'])); return; }
+        if(ri===0){ out.push(['店代號','店櫃名稱','坪數','店櫃地址','販售支線'].concat(row, ['列別'])); return; }
         if(!row.length){ out.push(row); return; }
         const info = storeInfoFor(row[si]);
         if(info.length<=1){
           const o = info[0];
-          out.push([o?o.code:'', o?o.name:row[si], o&&o.ping!=null?o.ping:null, o?o.addr:''].concat(row, ['']));
+          out.push([o?o.code:'', o?o.name:row[si], o&&o.ping!=null?o.ping:null, o?o.addr:'', o?o.line:''].concat(row, ['']));
         } else {
           info.forEach((o,k)=>{
             const body = k===0 ? row.concat(['主列']) : row.slice(0,idLen).concat(new Array(row.length-idLen).fill(null), ['附列（合併站，數字已計在主列）']);
-            out.push([o.code, o.name, o.ping!=null?o.ping:null, o.addr].concat(body));
+            out.push([o.code, o.name, o.ping!=null?o.ping:null, o.addr, o.line].concat(body));
           });
         }
       });
       sh[1] = out;
-      sh[2] = [10,24,8,44].concat(sh[2], [18]);
+      sh[2] = [10,24,8,44,12].concat(sh[2], [18]);
     });
     return {sheets, D};
   }
