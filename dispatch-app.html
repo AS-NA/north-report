@@ -407,6 +407,7 @@
       <div class="admintab" data-atab="rate">完成度</div>
       <div class="admintab" data-atab="reason">原因分析</div>
       <div class="admintab" data-atab="export">匯出</div>
+      <div class="admintab" data-atab="fill">補登數量</div>
       <div class="admintab" data-atab="people">排程與人員</div>
     </div>
     <div id="adminBody"></div>
@@ -2507,8 +2508,99 @@
     $('exportBtn').addEventListener('click', doExport);
   }
 
+  // ============ 補登數量（管理員依紙本補上送貨量、件數、箱袋數）============
+  let fillDriver = '', fillStop = -1;
+  function fillGetRec(d, date){
+    const rec = allCheckins.find(r=>r.key===driverKey(d)+'|'+date);
+    let st = null; try{ st = rec && rec.state ? (typeof rec.state==='string'?JSON.parse(rec.state):rec.state) : null; }catch(e){}
+    return {rec, st};
+  }
+  function renderFill(){
+    if(!exportUnlocked){
+      $('adminBody').innerHTML = `<div style="max-width:320px;margin:30px auto;text-align:center;">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px;">補登數量需要管理密碼</div>
+        <input type="password" id="fillPw" placeholder="請輸入管理密碼" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:14px;box-sizing:border-box;">
+        <div id="fillPwErr" style="color:var(--red);font-size:12px;min-height:18px;margin:6px 0;"></div>
+        <button class="bigbtn depart" id="fillPwBtn" style="width:100%;margin:0;padding:12px;">解鎖</button></div>`;
+      const go = ()=>{ if($('fillPw').value === ADMIN_FIX_PASSWORD){ exportUnlocked = true; renderFill(); } else { $('fillPwErr').textContent = '密碼錯誤，請重新輸入'; $('fillPw').value=''; } };
+      $('fillPwBtn').addEventListener('click', go);
+      $('fillPw').addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
+      return;
+    }
+    const wd = weekdayOfDateStr(adminDate);
+    const people = DRIVERS.filter(d=>!d.noSchedule && fillGetRec(d, adminDate).st && fillGetRec(d, adminDate).st.stops);
+    if(fillDriver && !people.some(d=>driverKey(d)===fillDriver)){ fillDriver=''; fillStop=-1; }
+    const cur = people.find(d=>driverKey(d)===fillDriver);
+    let stopsHtml = '', formHtml = '';
+    if(cur){
+      const {st} = fillGetRec(cur, adminDate);
+      const sched = getStopsFor(cur, wd, adminDate);
+      stopsHtml = `<div class="section-label" style="margin-top:14px;">選擇站點</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">` +
+        st.stops.map((s,i)=>{ const site = (s&&(s.selectedStore||s.site)) || (sched[i]&&sched[i].site) || ('第'+(i+1)+'站'); return `<button type="button" class="refreshsmall fillstopbtn" data-fs="${i}" style="${i===fillStop?'background:var(--accent,#2a9fd8);color:#fff;':''}">${i+1}. ${escapeHtml(site)}</button>`; }).join('') + `</div>`;
+      const s = fillStop>=0 ? st.stops[fillStop] : null;
+      if(s){
+        const dl = s.delivery || {};
+        const nv = v=> (typeof v==='number') ? v : '';
+        const inp = (attr, v)=>`<input type="number" inputmode="numeric" min="0" step="1" ${attr} value="${nv(v)}" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);">`;
+        let rows = `<div style="padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;">
+          <div style="font-weight:700;margin-bottom:8px;">本站送貨量</div>
+          <label style="display:block;margin-bottom:8px;"><input type="checkbox" id="fillDelNone" ${dl.none?'checked':''}> 本站無送貨</label>
+          箱 ${inp('id="fillDelBoxes"', dl.boxes)}　袋 ${inp('id="fillDelBags"', dl.bags)}</div>`;
+        Object.keys(s.tasks||{}).forEach(tn=>{
+          const r = s.tasks[tn]; if(!r || !['done','partial'].includes(r.status)) return;
+          if(hasPiecesInput(tn)){
+            rows += `<div style="padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;"><div style="font-weight:700;margin-bottom:8px;">${escapeHtml(tn)}（${/撤/.test(tn)?'實際撤出件數':'件數'}）</div>件數 ${inp('data-fill-pieces="'+escapeHtml(tn)+'"', r.pieces)}</div>`;
+          }
+          if(QTY3_TASKS.includes(tn)){
+            const q = r.qty || {};
+            rows += `<div style="padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;"><div style="font-weight:700;margin-bottom:8px;">${escapeHtml(tn)}</div>箱 ${inp('data-fill-qty="'+escapeHtml(tn)+'" data-k="boxes"', q.boxes)}　袋 ${inp('data-fill-qty="'+escapeHtml(tn)+'" data-k="bags"', q.bags)}　件 ${inp('data-fill-qty="'+escapeHtml(tn)+'" data-k="pieces"', q.pieces)}</div>`;
+          }
+        });
+        formHtml = rows + `<div style="font-size:12px;color:var(--text-mute);margin-bottom:10px;line-height:1.6;">只列出司機已標「完成／未完成」的工作項目。空白＝不更動；要清掉請輸入 0。工作項目狀態要改，請到「異常狀況」用修正按鈕。${s.backfill?'<br>此站已於 '+escapeHtml(String(s.backfill.at).slice(0,16).replace('T',' '))+' 補登過。':''}</div>
+          <button class="bigbtn depart" id="fillSaveBtn" style="width:auto;margin:0;padding:12px 24px;">儲存補登</button> <span id="fillMsg" style="margin-left:10px;color:var(--text-mute);"></span>`;
+      }
+    }
+    $('adminBody').innerHTML = `
+      <div class="datepicker" style="flex-wrap:wrap;gap:8px;">
+        <input type="date" id="adminDateInput" value="${adminDate}">
+        <select id="fillDriverSel" style="padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);"><option value="">選擇司機（${people.length} 位有紀錄）</option>${people.map(d=>`<option value="${escapeHtml(driverKey(d))}" ${driverKey(d)===fillDriver?'selected':''}>${escapeHtml(d.name)}（${escapeHtml(d.region)}）</option>`).join('')}</select>
+        <button class="refreshsmall" id="adminRefreshBtn">重新載入</button>
+      </div>
+      <div style="font-size:12px;color:var(--text-mute);margin:8px 0;line-height:1.6;">依紙本補登當天各站的送貨量、件數、箱袋數。儲存後會標註「管理員補登」。</div>
+      ${stopsHtml}${formHtml}`;
+    $('adminDateInput').addEventListener('change', e=>{ adminDate = e.target.value || adminDate; fillStop=-1; renderAdmin(); });
+    $('adminRefreshBtn').addEventListener('click', async ()=>{ await refreshCheckins(); renderAdmin(); });
+    $('fillDriverSel').addEventListener('change', e=>{ fillDriver = e.target.value; fillStop=-1; renderAdmin(); });
+    document.querySelectorAll('.fillstopbtn').forEach(b=> b.addEventListener('click', ()=>{ fillStop = +b.dataset.fs; renderAdmin(); }));
+    const sv = $('fillSaveBtn'); if(sv) sv.addEventListener('click', saveFill);
+  }
+  async function saveFill(){
+    const cur = DRIVERS.find(d=>driverKey(d)===fillDriver); if(!cur) return;
+    const {rec, st} = fillGetRec(cur, adminDate); if(!st) return;
+    const s = st.stops[fillStop]; if(!s) return;
+    const num = v=> (v===''||v==null) ? null : Math.max(0, Math.floor(Number(v)) || 0);
+    const none = $('fillDelNone').checked, b = num($('fillDelBoxes').value), g = num($('fillDelBags').value);
+    if(none) s.delivery = {none:true, boxes:0, bags:0};
+    else if(b!==null || g!==null) s.delivery = {none:false, boxes:b||0, bags:g||0};
+    document.querySelectorAll('input[data-fill-pieces]').forEach(i=>{ const v = num(i.value); if(v!==null && s.tasks[i.dataset.fillPieces]) s.tasks[i.dataset.fillPieces].pieces = v; });
+    document.querySelectorAll('input[data-fill-qty]').forEach(i=>{ const v = num(i.value), t = s.tasks[i.dataset.fillQty]; if(v!==null && t){ t.qty = t.qty || {}; t.qty[i.dataset.k] = v; } });
+    s.backfill = { at: new Date().toISOString(), by: '管理員補登' };
+    const payload = { action:'checkin', key:driverKey(cur)+'|'+adminDate, region:cur.region, name:cur.name, date:adminDate, state: JSON.stringify(st) };
+    const msg = $('fillMsg'); msg.textContent = '儲存中…';
+    try{
+      const ctl = new AbortController(); const tm = setTimeout(()=>ctl.abort(), 15000);
+      const res = await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload), signal: ctl.signal });
+      clearTimeout(tm);
+      const j = await res.json(); if(!j || !j.success) throw new Error('fail');
+      if(rec) rec.state = payload.state; else allCheckins.push({key:payload.key, region:cur.region, name:cur.name, date:adminDate, state:payload.state});
+      renderAdmin();
+      const m2 = $('fillMsg'); if(m2) m2.textContent = '已儲存補登';
+    }catch(e){ msg.textContent = '儲存失敗，請檢查網路後再試一次'; }
+  }
+
   function renderAdmin(){
     if(adminTab==='export'){ renderExport(); return; }
+    if(adminTab==='fill'){ renderFill(); return; }
     if(adminTab==='people'){
       const labels = {export:'匯出', people:'排程與人員'};
       $('adminBody').innerHTML = `<div class="placeholder">「${labels[adminTab]}」功能開發中，下一輪會加進來。</div>`;
