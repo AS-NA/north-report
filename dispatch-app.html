@@ -1080,6 +1080,17 @@
   // 單一站點的完成度（規則與全日完成度相同：寄貨不算、不適用不算、沒做的反灰項目不算）；沒有可計項目回傳 null
   // 不算進完成百分比的工作（仍需回報，但不計入 %）
   const NO_PCT_TASKS = ['收送貨'];
+  // 店家資料（店代號、販售支線、備註、坪數）：來源＝店家櫃位資料表；坪數待補。名稱含別名（例如 遠百、逢甲(門市作業)）
+  const STORE_INFO = {"中山一店": ["AS40", "AS+OL", "辣妹正裝+韓系LADY", null], "南西AS店": ["AS57", "AS", "辣妹正裝", null], "南西LADY店": ["AS24", "OL", "韓系LADY", null], "南西r.fav店": ["AS62", "IP", "聯名授權", null], "大安店": ["AS10", "AS+OL", "辣妹正裝+韓系LADY", null], "敦南AS店": ["AS04", "AS", "辣妹正裝", null], "敦南LADY店": ["AS05", "OL", "韓系LADY", null], "敦南大碼店": ["AS49", "PLUS", "大尺碼", null], "新莊宏匯店": ["AS73", "AS+OL", "辣妹正裝+韓系LADY", null], "西門r.fav店": ["AS70", "IP", "聯名授權", null], "西門大碼店": ["AS12", "PLUS", "大尺碼", null], "西門店": ["AS61", "AS+OL", "辣妹正裝+韓系LADY", null], "新竹巨城LADY店": ["AS35", "OL", "韓系LADY", null], "桃園台茂AS店": ["AS96", "AS", "辣妹正裝", null], "桃園台茂店": ["AS95", "OL+CA", "韓系LADY+歐美簡約質感", null], "桃園大江大碼店": ["AT04", "PLUS", "大尺碼", null], "桃園大江店": ["AS89", "AS+OL+CA", "辣妹正裝+韓系LADY+歐美簡約質感", null], "桃園統領大碼店": ["AS86", "PLUS", "大尺碼", null], "桃園統領店": ["AS72", "AS+OL", "辣妹正裝+韓系LADY", null], "一中CHIC.A店": ["AT15", "CA", "歐美簡約質感", null], "一中LADY店": ["AS25", "OL", "韓系LADY", null], "一中r.fav店": ["AT11", "IP", "聯名授權", null], "一中大碼店": ["AS29", "PLUS", "大尺碼", null], "一中店": ["AS17", "AS+CA", "辣妹正裝+歐美簡約質感", null], "台中漢神店": ["AT07", "AS+OL", "辣妹正裝+韓系LADY", null], "台中遠百店": ["AS66", "AS+OL", "辣妹正裝+韓系LADY", null], "文心秀泰LADY店": ["AS69", "OL", "韓系LADY", null], "文心秀泰大碼店": ["AS44", "PLUS", "大尺碼", null], "逢甲(門市作業)": ["AS15", "AS+OL", "辣妹正裝+韓系LADY", null], "逢甲店": ["AS15", "AS+OL", "辣妹正裝+韓系LADY", null], "遠百": ["AS66", "AS+OL", "辣妹正裝+韓系LADY", null], "遠百(門市作業)": ["AS66", "AS+OL", "辣妹正裝+韓系LADY", null], "台南南紡店": ["AT05", "AS+CA", "辣妹正裝+歐美簡約質感", null], "嘉義文化一店": ["AS93", "AS+OL", "辣妹正裝+韓系LADY", null], "嘉義秀泰大碼店": ["AS97", "PLUS", "大尺碼", null], "嘉義秀泰店": ["AS84", "AS+OL", "辣妹正裝+韓系LADY", null], "南紡CA": ["AT05", "AS+CA", "辣妹正裝+歐美簡約質感", null], "台南FOCUS大碼店": ["AS85", "PLUS", "大尺碼", null], "台南FOCUS店": ["AS34", "AS+OL", "辣妹正裝+韓系LADY", null], "台南南紡LADY店": ["AS38", "OL", "韓系LADY", null], "CA店": ["AS82", "CA", "歐美簡約質感", null], "三多遠百店": ["AS83", "AS+OL", "辣妹正裝+韓系LADY", null], "岡山秀泰LADY店": ["AS46", "OL", "韓系LADY", null], "左營新光店": ["AS59", "AS+OL", "辣妹正裝+韓系LADY", null], "高雄夢時代CHIC.A店": ["AS82", "CA", "歐美簡約質感", null], "高雄夢時代r.fav店": ["AT10", "IP", "聯名授權", null], "高雄夢時代大碼店": ["AS64", "PLUS", "大尺碼", null], "高雄夢時代店": ["AS45", "AS+OL", "辣妹正裝+韓系LADY", null], "高雄漢神LADY": ["AS81", "OL", "韓系LADY", null], "高雄漢神LADY店": ["AS81", "OL", "韓系LADY", null]};
+  function storeInfoFor(site){
+    if(!site) return [];
+    const out = [];
+    String(site).split('/').forEach(x=>{ x = x.trim(); const v = STORE_INFO[x]; if(v && !out.some(o=>o.name===x)) out.push({name:x, code:v[0], line:v[1], note:v[2], ping:v[3]}); });
+    return out;
+  }
+  function storeInfoText(site){
+    return storeInfoFor(site).map(o=>[o.code, o.line, o.ping?o.ping+'坪':''].filter(Boolean).join('・')).join('／');
+  }
   const noPct = (driver, name, stop) => NO_PCT_TASKS.includes(name) && !(stop && stop.pctAll); // 全線路線的站點(pctAll)收送貨也計入完成度
   function stopProgress(driver, stop, weekday, st){
     st = st || {};
@@ -1278,7 +1289,7 @@
     showView('view-stop');
     document.getElementById('view-stop').classList.add('selecting-store');
     $('stopSite').textContent = `${['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][idx]||(idx+1)} ${stop.site}`;
-    $('stopTime').textContent = stop.time;
+    $('stopTime').textContent = stop.time + (storeInfoText(stop.site) ? '　' + storeInfoText(stop.site) : '');
     const btnStyle = 'width:100%;text-align:left;margin-top:10px;';
     $('storeSelectBox').innerHTML = `
       <div class="storeselecttitle">今天這一站要做什麼？有發追加就去門市，沒有發追加就回台北倉。</div>
@@ -1307,7 +1318,7 @@
     showView('view-stop');
     document.getElementById('view-stop').classList.add('selecting-store');
     $('stopSite').textContent = `${['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][idx]||(idx+1)} ${stop.site}`;
-    $('stopTime').textContent = stop.time;
+    $('stopTime').textContent = stop.time + (storeInfoText(stop.site) ? '　' + storeInfoText(stop.site) : '');
     $('storeSelectBox').innerHTML = `
       <div class="storeselecttitle">這一站是「${escapeHtml(stop.site)}」，請先選擇今天實際要去哪一家門市，選定後這一站就會依這家店來記錄工作項目跟打卡。</div>
       ${stop.storeDropdown
@@ -1352,7 +1363,7 @@
     }
 
     $('stopSite').textContent = `${['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][idx]||(idx+1)} ${st.selectedStore||stop.site}`;
-    $('stopTime').textContent = stop.time;
+    $('stopTime').textContent = stop.time + (storeInfoText((st.selectedStore||stop.site)) ? '　' + storeInfoText((st.selectedStore||stop.site)) : '');
     const todayOverride = allOverrides.find(o=> o.site===stop.site && o.date===todayDateStr());
     let overrideBanner = document.getElementById('overrideBanner');
     if(!overrideBanner){
@@ -2320,7 +2331,7 @@
   const WKN = ['週日','週一','週二','週三','週四','週五','週六'];
   function exportDates(){ return exportMode==='week' ? buildWeekDates(adminDate) : [adminDate]; }
   function collectExport(dates){
-    const days=[], stops=[], tasks=[], missing=[];
+    const days=[], stops=[], tasks=[], ships=[], missing=[];
     dates.forEach(date=>{
       const wd = weekdayOfDateStr(date);
       DRIVERS.forEach(d=>{
@@ -2347,22 +2358,35 @@
           const boxes = dl && !dl.none && dl.boxes!=null && dl.boxes!=='' ? Number(dl.boxes) : null;
           const bags = dl && !dl.none && dl.bags!=null && dl.bags!=='' ? Number(dl.bags) : null;
           const row = {date, wk:WKN[wd], region:d.region, driver:d.name, idx:i+1, site, time:timeStr, arrive:a?fmtHM(s.arrivedAt):'', depart:dp?fmtHM(s.departedAt):'', late, dwell,
-            boxes, bags, delNote: dl ? (dl.none?'無送貨':'') : ((a&&dp)?'未填送貨量':''), done:0, partial:0, na:0, pctSum:0};
+            boxes, bags, delNote: dl ? (dl.none?'無送貨':'') : ((a&&dp)?'未填送貨量':''), done:0, partial:0, na:0, pctSum:0, pcs:0, qb:0, qg:0, qp:0, sh:{'黑貓':0,'新竹':0,'佶傳':0}};
           Object.keys(s.tasks||{}).forEach(tn=>{
-            const r = s.tasks[tn]; if(!r || !['done','partial','na'].includes(r.status)) return;
+            const r = s.tasks[tn]; if(!r) return;
             const n = EXPORT_NAME_MAP[tn] || tn;
-            if(EXPORT_SHIP.includes(n)) return;
+            if(EXPORT_SHIP.includes(n)){
+              const car = /黑貓/.test(n) ? '黑貓' : (/新竹/.test(n) ? '新竹' : '佶傳');
+              const bx = Array.isArray(r.boxes) ? r.boxes : [];
+              const tot = bx.reduce((a,x)=>a+(Number(x.qty)||0),0);
+              row.sh[car] += tot;
+              ships.push([date, WKN[wd], d.region, d.name, i+1, site, car, r.noShip ? '無寄貨' : (bx.length ? '有寄貨' : '未登記'), tot, bx.map(x=>x.site+' '+x.qty+'箱').join('、'), storeInfoFor(site).map(o=>o.code).join('／')]);
+              return;
+            }
+            if(!['done','partial','na'].includes(r.status)) return;
             const p = r.status==='partial' && typeof r.percent==='number' ? r.percent : null;
             const rs = r.status==='na' ? (r.reason && NA_REASON_MAP[r.reason] ? NA_REASON_MAP[r.reason].label : '未填原因') : '';
             const asg = r.assigner || '';
-            tasks.push([date, WKN[wd], d.region, d.name, i+1, site, n, r.status==='done'?'完成':(r.status==='partial'?'部分':'不適用'), p, rs, asg]);
+            // 工作數量：件數(撤貨/勻貨/支援EC)、箱袋件(歸倉類)、逐店登記(整理新品)
+            let qPcs = (typeof r.pieces==='number') ? r.pieces : null, qBox = null, qBag = null, qDet = '';
+            if(r.qty){ if(typeof r.qty.pieces==='number') qPcs = (qPcs||0) + r.qty.pieces; if(typeof r.qty.boxes==='number') qBox = r.qty.boxes; if(typeof r.qty.bags==='number') qBag = r.qty.bags; }
+            if(Array.isArray(r.items) && r.items.length){ qBox = r.items.reduce((a,x)=>a+(x.boxes||0),0); qPcs = (qPcs||0) + r.items.reduce((a,x)=>a+(x.pieces||0),0); qDet = r.items.map(x=>x.site+' '+(x.boxes||0)+'箱'+(x.pieces||0)+'件').join('、'); }
+            tasks.push([date, WKN[wd], d.region, d.name, i+1, site, n, r.status==='done'?'完成':(r.status==='partial'?'部分':'不適用'), p, rs, asg, qPcs, qBox, qBag, qDet]);
+            if(r.status!=='na'){ if(r.qty || (Array.isArray(r.items)&&r.items.length)){ row.qb += (qBox||0); row.qg += (qBag||0); row.qp += (qPcs||0); } else if(qPcs!==null) row.pcs += qPcs; }
             if(n!=='收送貨' || (st.route==='full' && d.fullLine)){ if(r.status==='done') row.done++; else if(r.status==='partial'){ row.partial++; row.pctSum += p||0; } else row.na++; }
           });
           stops.push(row);
         });
       });
     });
-    return {days, stops, tasks, missing};
+    return {days, stops, tasks, ships, missing};
   }
   const pctOf = (done, partial) => (done+partial) ? Math.round(done/(done+partial)*100) : '';
   function buildExportSheets(dates){
@@ -2370,8 +2394,8 @@
     const drivers = DRIVERS.filter(x=>!x.noSchedule && x.name!=='NANA');
     const sheets = [];
     // 1 每位司機
-    const h1 = ['司機','區域','有回報天數','休假天數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','加權完成度%（部分依實際填寫%）','晚到站數(>'+LATE_TOLERANCE_MIN+'分)','到站未離店','送貨箱數','送貨袋數'];
-    const r1 = [h1]; let T=[0,0,0,0,0,0,0,0,0,0,0];
+    const h1 = ['司機','區域','有回報天數','休假天數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','加權完成度%（部分依實際填寫%）','晚到站數(>'+LATE_TOLERANCE_MIN+'分)','到站未離店','送貨箱數','送貨袋數','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數'];
+    const r1 = [h1]; let T=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
     drivers.forEach(d=>{
       const dy = D.days.filter(x=>x[3]===d.name), sp = D.stops.filter(x=>x.driver===d.name);
       if(!dy.length) return;
@@ -2379,13 +2403,12 @@
       const done=sum(x=>x.done), par=sum(x=>x.partial), na=sum(x=>x.na), ps=sum(x=>x.pctSum);
       const arrived=sp.filter(x=>x.arrive).length, lateN=sp.filter(x=>x.late!=null && x.late>LATE_TOLERANCE_MIN).length, open=sp.filter(x=>x.arrive && !x.depart).length;
       const bx=sum(x=>x.boxes||0), bg=sum(x=>x.bags||0);
-      r1.push([d.name,d.region,dy.filter(x=>x[4]==='出勤').length,dy.filter(x=>x[4]!=='出勤').length,sp.length,arrived,done,par,na,pctOf(done,par),(done+par)?Math.round((done*100+ps)/(done+par)):'',lateN,open,bx,bg]);
-      [4,5,6,7,8,10,11,12,13].forEach((c,j)=>{});
-      T[0]+=dy.filter(x=>x[4]==='出勤').length;T[1]+=dy.filter(x=>x[4]!=='出勤').length;T[2]+=sp.length;T[3]+=arrived;T[4]+=done;T[5]+=par;T[6]+=na;T[7]+=ps;T[8]+=lateN;T[9]+=open;T[10]+=bx;T[11]=(T[11]||0)+bg;
+      r1.push([d.name,d.region,dy.filter(x=>x[4]==='出勤').length,dy.filter(x=>x[4]!=='出勤').length,sp.length,arrived,done,par,na,pctOf(done,par),(done+par)?Math.round((done*100+ps)/(done+par)):'',lateN,open,bx,bg,sum(x=>x.pcs),sum(x=>x.qb),sum(x=>x.qg),sum(x=>x.qp),sum(x=>x.sh['黑貓']),sum(x=>x.sh['新竹']),sum(x=>x.sh['佶傳'])]);
+      T[0]+=dy.filter(x=>x[4]==='出勤').length;T[1]+=dy.filter(x=>x[4]!=='出勤').length;T[2]+=sp.length;T[3]+=arrived;T[4]+=done;T[5]+=par;T[6]+=na;T[7]+=ps;T[8]+=lateN;T[9]+=open;T[10]+=bx;T[11]+=bg;T[12]+=sum(x=>x.pcs);T[13]+=sum(x=>x.qb);T[14]+=sum(x=>x.qg);T[15]+=sum(x=>x.qp);T[16]+=sum(x=>x.sh['黑貓']);T[17]+=sum(x=>x.sh['新竹']);T[18]=(T[18]||0)+sum(x=>x.sh['佶傳']);
     });
-    r1.push(['合計','',T[0],T[1],T[2],T[3],T[4],T[5],T[6],pctOf(T[4],T[5]),(T[4]+T[5])?Math.round((T[4]*100+T[7])/(T[4]+T[5])):'',T[8],T[9],T[10],T[11]]);
+    r1.push(['合計','',T[0],T[1],T[2],T[3],T[4],T[5],T[6],pctOf(T[4],T[5]),(T[4]+T[5])?Math.round((T[4]*100+T[7])/(T[4]+T[5])):'',T[8],T[9],T[10],T[11],T[12],T[13],T[14],T[15],T[16],T[17],T[18]]);
     r1.push([]); r1.push(['說明：完成比例=完成÷(完成＋部分)，不含不適用；收送貨、寄貨類不計入。沒有回報紀錄的司機不列入（見「未回報」分頁）。']);
-    sheets.push(['每位司機'+(dates.length>1?'（週合計）':''), r1, [10,7,10,9,7,8,7,7,8,16,18,14,10,9,9]]);
+    sheets.push(['每位司機'+(dates.length>1?'（週合計）':''), r1, [10,7,10,9,7,8,7,7,8,16,18,14,10,9,9,16,10,10,10,10,10,10]]);
     // 2 週：司機×日
     if(dates.length>1){
       const r2 = [['司機',...dates.map(x=>WKN[weekdayOfDateStr(x)]+' '+x.slice(5)),'週合計']];
@@ -2417,17 +2440,19 @@
     });
     sheets.push(['工作項目統計', r4, [18,7,7,8,12,16,12,40,16]]);
     // 站點明細
-    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註']];
-    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote]));
-    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12]]);
+    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數','店代號','販售支線','坪數']];
+    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote,x.pcs,x.qb,x.qg,x.qp,x.sh['黑貓'],x.sh['新竹'],x.sh['佶傳'],storeInfoFor(x.site).map(o=>o.code).join('／'),storeInfoFor(x.site).map(o=>o.line).join('／'),storeInfoFor(x.site).map(o=>o.ping||'').filter(Boolean).join('／')]));
+    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12,14,10,10,10,10,10,10,10,14,8]]);
     // 不適用明細
     const r6 = [['日期','司機','站序','站點','工作項目','原因','指派人']];
     D.tasks.filter(t=>t[7]==='不適用').forEach(t=>r6.push([t[0],t[3],t[4],t[5],t[6],t[9],t[10]]));
     sheets.push(['不適用明細', r6, [11,10,6,20,16,24,12]]);
     // 工作項目明細
-    const r7 = [['日期','星期','區域','司機','站序','站點','工作項目','狀態','部分完成度%','不適用原因','指派人']];
-    D.tasks.forEach(t=>r7.push(t));
-    sheets.push(['工作項目明細', r7, [11,7,7,9,6,20,16,8,10,22,12]]);
+    const r7 = [['日期','星期','區域','司機','站序','站點','工作項目','狀態','部分完成度%','不適用原因','指派人','件數','箱數','袋數','逐店登記明細','店代號','販售支線']];
+    D.tasks.forEach(t=>r7.push(t.concat([storeInfoFor(t[5]).map(o=>o.code).join('／'), storeInfoFor(t[5]).map(o=>o.line).join('／')])));
+    sheets.push(['工作項目明細', r7, [11,7,7,9,6,20,16,8,10,22,12,9,9,9,40,10,14]]);
+    const r9 = [['日期','星期','區域','司機','站序','站點','承運','狀態','總箱數','各店箱數','店代號']]; D.ships.forEach(x=>r9.push(x));
+    sheets.push(['寄貨明細', r9, [11,7,7,9,6,20,8,10,9,50]]);
     // 未回報
     const r8 = [['日期','星期','區域','司機']]; D.missing.forEach(m=>r8.push(m));
     if(D.missing.length) sheets.push(['未回報', r8, [11,7,7,10]]);
