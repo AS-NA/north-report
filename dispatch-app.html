@@ -2464,18 +2464,28 @@
     // 未回報
     const r8 = [['日期','星期','區域','司機']]; D.missing.forEach(m=>r8.push(m));
     if(D.missing.length) sheets.push(['未回報', r8, [11,7,7,10]]);
-    // 店資料放在資料表最前面：店代號、店櫃名稱、坪數、店櫃地址
-    const siteIdx = {'站點明細':5, '工作項目明細':5, '寄貨明細':5, '不適用明細':3};
+    // 店資料放在資料表最前面：店代號、店櫃名稱、坪數、店櫃地址；兩間店合併的站拆成兩列（第二列是「附列」，只有站的辨識欄，數字不重複計算）
+    const siteIdx = {'站點明細':[5,6], '工作項目明細':[5,6], '寄貨明細':[5,6], '不適用明細':[3,4]};
     sheets.forEach(sh=>{
-      const si = siteIdx[sh[0]]; if(si===undefined) return;
-      sh[1] = sh[1].map((row,ri)=>{
-        if(ri===0) return ['店代號','店櫃名稱','坪數','店櫃地址'].concat(row);
-        if(!row.length) return row;
+      const cfg = siteIdx[sh[0]]; if(!cfg) return;
+      const si = cfg[0], idLen = cfg[1];
+      const out = [];
+      sh[1].forEach((row,ri)=>{
+        if(ri===0){ out.push(['店代號','店櫃名稱','坪數','店櫃地址'].concat(row, ['列別'])); return; }
+        if(!row.length){ out.push(row); return; }
         const info = storeInfoFor(row[si]);
-        const pings = info.map(o=>o.ping).filter(v=>v!=null && v!=='');
-        return [info.map(o=>o.code).join('／'), row[si], pings.length===1 ? pings[0] : (pings.length>1 ? pings.join('／') : null), info.map(o=>o.addr).filter(Boolean).join('／')].concat(row);
+        if(info.length<=1){
+          const o = info[0];
+          out.push([o?o.code:'', o?o.name:row[si], o&&o.ping!=null?o.ping:null, o?o.addr:''].concat(row, ['']));
+        } else {
+          info.forEach((o,k)=>{
+            const body = k===0 ? row.concat(['主列']) : row.slice(0,idLen).concat(new Array(row.length-idLen).fill(null), ['附列（合併站，數字已計在主列）']);
+            out.push([o.code, o.name, o.ping!=null?o.ping:null, o.addr].concat(body));
+          });
+        }
       });
-      sh[2] = [10,24,8,44].concat(sh[2]);
+      sh[1] = out;
+      sh[2] = [10,24,8,44].concat(sh[2], [18]);
     });
     return {sheets, D};
   }
