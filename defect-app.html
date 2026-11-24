@@ -108,6 +108,17 @@ table.mx2{border-collapse:collapse;font-size:12px;width:max-content;min-width:10
 .sticky-act{position:sticky;bottom:calc(64px + env(safe-area-inset-bottom));background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:8px;box-shadow:0 -2px 8px rgba(0,0,0,.06)}
 .hint{font-size:12.5px;color:var(--mute)}
 .pill{font-size:12px;background:#eef0f4;border-radius:8px;padding:2px 7px;margin-left:4px}
+
+.pm{margin-top:8px}
+.pcard{background:#eef4ff;border:1px solid #c9d9fb;border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.55}
+.pcard b{font-size:14.5px}
+.sg{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.sg div{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13.5px}
+.sg div:last-child{border-bottom:0}.sg div small{color:var(--mute);display:block}
+.sg div:active{background:#eef4ff}
+.skurow{display:flex;gap:8px}.skurow input{flex:1}
+.scanbtn{border:0;background:#111827;color:#fff;border-radius:10px;padding:0 14px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+#cam{width:100%;border-radius:12px;background:#000;max-height:60vh}
 </style>
 </head>
 <body>
@@ -164,6 +175,32 @@ const pingTxt = s => s&&s.ping!=null ? s.ping+'坪' : '坪數未填';
 const storeOpt = (s,sel) => `<option value="${s.code}" ${sel?'selected':''}>${esc(s.name)}（${s.code}）${pingTxt(s)}・${esc(s.line||'未填')}</option>`;
 const newId = () => 'D'+nowStr().slice(2,10).replace(/-/g,'')+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
 function toast(t){ const e=$('toast'); e.textContent=t; e.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(()=>e.classList.remove('on'),2200); }
+
+// ================= 商品資料（來自試算表「商品資料」分頁） =================
+// 欄位順序：條碼, 款號, 商品名稱, 顏色, 尺寸, 販售支線, 品類, 吊牌價
+const PROD = { rows: lsGet('df_prod',{rows:[],at:''}).rows, at: lsGet('df_prod',{rows:[],at:''}).at, byCode:new Map(), bySku:new Map() };
+function indexProd(){
+  PROD.byCode.clear(); PROD.bySku.clear();
+  PROD.rows.forEach(r=>{
+    const c=String(r[0]||'').trim().toUpperCase(), k=String(r[1]||'').trim().toUpperCase();
+    if(c) PROD.byCode.set(c,r);
+    if(k){ if(!PROD.bySku.has(k)) PROD.bySku.set(k,[]); PROD.bySku.get(k).push(r); }
+  });
+}
+indexProd();
+async function pullProducts(force){
+  if(!CONFIG.API_URL) return false;
+  try{
+    const res=await fetch(CONFIG.API_URL+'?action=products'); const j=await res.json();
+    if(!j.ok) throw new Error(j.error);
+    PROD.rows=j.rows||[]; PROD.at=j.updatedAt||nowStr(); indexProd();
+    lsSet('df_prod',{rows:PROD.rows,at:PROD.at});
+    if(force) toast(`商品資料已更新：${PROD.rows.length} 筆`);
+    return true;
+  }catch(e){ console.warn(e); if(force) toast('商品資料更新失敗，稍後再試'); return false; }
+}
+const pInfo = r => ({ barcode:String(r[0]||''), sku:String(r[1]||''), pname:String(r[2]||''), color:String(r[3]||''), size:String(r[4]||''), pline:String(r[5]||''), pcat:String(r[6]||''), price:r[7] });
+const cs = p => [p.color,p.size].filter(Boolean).join(' / ');
 
 // ================= 資料 / 狀態 =================
 let cache = lsGet('df_cache', {});          // id -> record
@@ -296,7 +333,7 @@ function openMe(){
   };
 }
 // ================= 登記瑕疵 =================
-let form = { store: me.store, major:null, sub:null, sku:'', color:'', qty:1, note:'', photos:[] };
+let form = { store: me.store, major:null, sub:null, sku:'', color:'', qty:1, note:'', photos:[], p:null };
 function renderReg(){
   const v=$('v-reg');
   const st = storeBy(form.store);
@@ -311,7 +348,9 @@ function renderReg(){
     ${form.major?`<div class="hint" style="margin:10px 0 6px">${esc(form.major)} → 請選小類別</div><div class="chips sub">${subs.map(c=>`<button class="chip ${form.sub===c[1]?'on':''}" data-act="sub" data-k="${esc(c[1])}">${esc(c[1])}<small>${esc(c[2])}</small></button>`).join('')}</div>`:''}
   </div>
   <div class="card"><h3>② 商品資料</h3>
-    <label class="f" style="margin-top:0">款號 / 商品編號（必填）</label><input type="text" id="f-sku" value="${esc(form.sku)}" autocapitalize="characters" autocomplete="off" placeholder="例：AS23W0456">
+    <label class="f" style="margin-top:0">掃條碼或輸入款號（必填）</label>
+    <div class="skurow"><input type="text" id="f-sku" value="${esc(form.sku)}" autocapitalize="characters" autocomplete="off" placeholder="掃描槍直接掃，或輸入款號/條碼"><button class="scanbtn" data-act="scan">📷 掃碼</button></div>
+    <div class="pm" id="f-pm"></div>
     <label class="f">顏色 / 尺寸（選填）</label><input type="text" id="f-color" value="${esc(form.color)}" autocomplete="off" placeholder="例：黑 / M">
     <label class="f">瑕疵數量</label>
     <div class="stepper" style="width:max-content"><button data-act="qty" data-d="-1">－</button><input type="number" id="f-qty" value="${form.qty}" min="1" inputmode="numeric"><button data-act="qty" data-d="1">＋</button></div>
@@ -323,11 +362,52 @@ function renderReg(){
     <label class="f">備註</label><textarea id="f-note" placeholder="例：左袖口約2cm破洞">${esc(form.note)}</textarea>
   </div>
   <button class="btn block" id="f-submit" style="padding:15px;font-size:16px">送出登記</button>`;
-  $('f-sku').oninput=e=>form.sku=e.target.value;
+  $('f-sku').oninput=e=>{ form.sku=e.target.value; form.p=null; showProd(); };
+  $('f-sku').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); pickByInput(); } };
+  showProd();
   $('f-color').oninput=e=>form.color=e.target.value;
   $('f-note').oninput=e=>form.note=e.target.value;
   $('f-qty').oninput=e=>form.qty=Math.max(1,parseInt(e.target.value)||1);
   $('f-submit').onclick=submitReg;
+}
+function showProd(){
+  const box=$('f-pm'); if(!box) return;
+  const q=($('f-sku').value||'').trim().toUpperCase();
+  if(form.p){ const p=form.p; box.innerHTML=`<div class="pcard"><b>${esc(p.pname||p.sku)}</b>${p.pline?` <span class="pill">${esc(p.pline)}</span>`:''}<br>款號 ${esc(p.sku)}${cs(p)?'・'+esc(cs(p)):''}${p.pcat?'・'+esc(p.pcat):''}${p.barcode?'<br><span class="hint">條碼 '+esc(p.barcode)+'</span>':''}</div>`; return; }
+  if(!q||!PROD.rows.length){ box.innerHTML = q&&CONFIG.API_URL&&!PROD.rows.length?'<div class="hint">尚未載入商品資料，可直接手動輸入款號</div>':''; return; }
+  const exactCode=PROD.byCode.get(q);
+  if(exactCode){ return setProd(pInfo(exactCode)); }
+  const variants=PROD.bySku.get(q);
+  if(variants){
+    box.innerHTML=`<div class="hint" style="margin-bottom:4px">${esc(pInfo(variants[0]).pname)}・請選顏色／尺寸（或略過）</div><div class="sg">${variants.slice(0,40).map((r,i)=>`<div data-act="pickvar" data-i="${i}">${esc(cs(pInfo(r))||'（無顏色尺寸）')}<small>${esc(pInfo(r).barcode||'')}</small></div>`).join('')}</div>`; return;
+  }
+  if(q.length>=3){
+    const seen=[]; for(const [k,rows] of PROD.bySku){ if(k.includes(q)){ seen.push(k); if(seen.length>=6) break; } }
+    box.innerHTML = seen.length?`<div class="sg">${seen.map(k=>`<div data-act="picksku" data-k="${esc(k)}">${esc(k)}<small>${esc(pInfo(PROD.bySku.get(k)[0]).pname)}</small></div>`).join('')}</div>`:'<div class="hint">查無此款號，可直接手動輸入送出</div>';
+  } else box.innerHTML='';
+}
+function setProd(p){ form.p=p; form.sku=p.sku; form.color=cs(p); const s=$('f-sku'); if(s) s.value=p.sku; const c=$('f-color'); if(c) c.value=form.color; showProd(); }
+function pickByInput(){ const q=$('f-sku').value.trim().toUpperCase(); const c=PROD.byCode.get(q); if(c) return setProd(pInfo(c)); const v=PROD.bySku.get(q); if(v&&v.length===1) return setProd(pInfo(v[0])); showProd(); }
+// 掃碼
+let camStream=null, camStop=false;
+async function openScan(){
+  openSheet(`<h2>掃描條碼</h2><p class="hint">把吊牌上的條碼放進畫面中央</p><video id="cam" playsinline muted></video><div class="row" style="margin-top:12px"><button class="btn gray grow" data-act="stopscan">取消</button></div>`);
+  camStop=false;
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    const v=$('cam'); v.srcObject=camStream; v.play().catch(()=>{});
+    let det=null;
+    if('BarcodeDetector' in window){ try{ det=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf','qr_code']}); }catch(e){} }
+    if(!det){ await loadScanLib(); det={ detect: async el=>{ const cv=document.createElement('canvas'); cv.width=el.videoWidth; cv.height=el.videoHeight; cv.getContext('2d').drawImage(el,0,0); const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',.9)); const f=new File([blob],'x.jpg',{type:'image/jpeg'}); const h=new Html5Qrcode('scan-tmp'); try{ const t=await h.scanFile(f,false); return [{rawValue:t}]; }catch(e){ return []; } finally{ try{h.clear();}catch(e){} } } }; }
+    const loop=async()=>{ if(camStop) return; try{ const r=await det.detect(v); if(r&&r.length){ stopScan(); return onScanned(r[0].rawValue); } }catch(e){} setTimeout(loop,det.constructor&&det.constructor.name==='BarcodeDetector'?150:600); };
+    loop();
+  }catch(e){ stopScan(); toast('無法開啟相機，請允許相機權限或改手動輸入'); }
+}
+function loadScanLib(){ if(window.Html5Qrcode) return Promise.resolve(); return new Promise((ok,ng)=>{ if(!$('scan-tmp')){ const d=document.createElement('div'); d.id='scan-tmp'; d.style.display='none'; document.body.appendChild(d);} const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js'; s.onload=ok; s.onerror=ng; document.head.appendChild(s); }); }
+function stopScan(){ camStop=true; if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; } closeSheet(); }
+function onScanned(code){
+  code=String(code||'').trim(); const s=$('f-sku'); if(s) s.value=code; form.sku=code; form.p=null;
+  const hit=PROD.byCode.get(code.toUpperCase()); if(hit){ setProd(pInfo(hit)); toast('已帶入商品資料'); } else { pickByInput(); toast(PROD.bySku.has(code.toUpperCase())?'請選顏色／尺寸':'查無商品，已填入掃描內容'); }
 }
 const lastRec = () => all().find(r=>r.regBy===me.name && r.sku);
 function submitReg(){
@@ -336,14 +416,16 @@ function submitReg(){
   if(!form.store){ toast('請選擇登記門市'); return chooseStore(); }
   if(!form.sub){ toast('請選擇瑕疵類型'); return; }
   if(!form.sku){ toast('請輸入款號'); $('f-sku').focus(); return; }
+  if(!form.p){ const v=PROD.byCode.get(form.sku)||(PROD.bySku.get(form.sku)||[])[0]; if(v) form.p=pInfo(v); }
   const dup = live().find(r=>r.store===form.store && r.sku===form.sku && r.sub===form.sub && r.color===form.color && Date.now()-toD(r.regAt).getTime()<30*60000);
   if(dup && !confirm(`30 分鐘內已登記過相同款號與瑕疵（${dup.id}），確定要再登記一筆嗎？`)) return;
   const st=storeBy(form.store), cat=CATS.find(c=>c[1]===form.sub);
   const rec={ id:newId(), store:st.code, storeName:st.name, region:st.region, regAt:nowStr(), regBy:me.name,
-    sku:form.sku, color:form.color, qty:form.qty, cat:cat[0], sub:cat[1], note:form.note, photos:form.photos.slice() };
+    sku:form.sku, color:form.color, qty:form.qty, cat:cat[0], sub:cat[1], note:form.note, photos:form.photos.slice(),
+    barcode:form.p?form.p.barcode:'', pname:form.p?form.p.pname:'', pline:form.p?form.p.pline:'', pcat:form.p?form.p.pcat:'', price0:form.p&&form.p.price!==''?form.p.price:'' };
   recent=[form.sub,...recent.filter(k=>k!==form.sub)].slice(0,8); lsSet('df_recent',recent);
   save(rec);
-  form = { store:form.store, major:null, sub:null, sku:'', color:'', qty:1, note:'', photos:[] };
+  form = { store:form.store, major:null, sub:null, sku:'', color:'', qty:1, note:'', photos:[], p:null };
   renderReg(); window.scrollTo(0,0); toast('已登記 '+rec.id+'，可繼續登記下一件');
 }
 function chooseStore(){
@@ -384,7 +466,7 @@ function itemHtml(r, sel){
   return `<div class="item" data-act="detail" data-id="${r.id}">
     ${sel!==undefined?`<input type="checkbox" data-act="sel" data-id="${r.id}" ${sel?'checked':''}>`:''}
     <div class="l"><div class="t">${esc(r.sku)}${r.color?' <span class="pill">'+esc(r.color)+'</span>':''} × ${r.qty}</div>
-    <div class="m">${esc(r.sub)}・${esc(r.storeName)}・${short(r.regAt)}</div>
+    ${r.pname?`<div class="m">${esc(r.pname)}</div>`:''}<div class="m">${esc(r.sub)}・${esc(r.storeName)}・${short(r.regAt)}</div>
     ${resultText(r)?`<div class="m">${resultText(r)}</div>`:''}</div>
     <div style="text-align:right"><span class="badge ${BADGE[r.status]}">${r.status}</span><br>${ageTag(r)}</div></div>`;
 }
@@ -461,7 +543,7 @@ function openDetail(id){
   const canVoid = !r.void && ( (r.status==='已登記' && (me.store===r.store || r.regBy===me.name)) || unlocked.adm );
   openSheet(`<h2>${esc(r.sku)} × ${r.qty} <span class="badge ${BADGE[r.status]}">${r.status}</span></h2><div class="hint">${r.id}</div>
   <dl class="kv"><dt>門市</dt><dd>${esc(r.storeName)}（${r.store}）</dd><dt>坪數/支線</dt><dd>${pingTxt(storeBy(r.store))}・${esc((storeBy(r.store)||{}).line||'未填')}</dd><dt>店櫃地址</dt><dd>${esc((storeBy(r.store)||{}).addr||'')}</dd><dt>瑕疵類型</dt><dd>${esc(r.cat)} › ${esc(r.sub)}</dd>
-  ${r.color?`<dt>顏色/尺寸</dt><dd>${esc(r.color)}</dd>`:''}${r.note?`<dt>備註</dt><dd>${esc(r.note)}</dd>`:''}
+  ${r.pname?`<dt>商品名稱</dt><dd>${esc(r.pname)}${r.pline?'（'+esc(r.pline)+'）':''}</dd>`:''}${r.color?`<dt>顏色/尺寸</dt><dd>${esc(r.color)}</dd>`:''}${r.barcode?`<dt>條碼</dt><dd>${esc(r.barcode)}</dd>`:''}${r.note?`<dt>備註</dt><dd>${esc(r.note)}</dd>`:''}
   ${r.resAt?`<dt>處理結果</dt><dd>${resultText(r)}</dd>`:''}${r.scrapNote?`<dt>報廢原因</dt><dd>${esc(r.scrapNote)}</dd>`:''}</dl>
   ${(r.photos||[]).length?`<div class="thumbs">${r.photos.map(p=>`<a href="${esc(p)}" target="_blank"><img src="${esc(p)}"></a>`).join('')}</div>`:''}
   <div class="tl">${tl.map(t=>`<div><b>${short(t[0])}</b>　${t[1]}</div>`).join('')}</div>
@@ -533,6 +615,7 @@ function renderAdm(){
   } else {
     body=`<div class="card"><h3>匯出報表</h3><p class="hint">Excel 內含：明細、日期×小類別、各店彙總、未結案滯留清單。</p><button class="btn block" data-act="export">下載 Excel</button></div>
     <div class="card"><h3>門市資料（${STORES.length} 間）</h3><div class="mx" style="max-height:340px"><table class="mx2"><thead><tr><th class="l">店名</th><th>店代號</th><th>坪數</th><th>支線</th><th>地址</th><th>近${admDays}天件數</th><th>件/坪</th></tr></thead><tbody>${STORES.map(s=>{const n=live().filter(r=>r.store===s.code&&inRange(r)).reduce((x,r)=>x+r.qty,0);return `<tr><td class="l">${esc(s.name)}</td><td>${s.code}</td><td>${s.ping??''}</td><td>${esc(s.line||'')}</td><td style="text-align:left">${esc(s.addr||'')}</td><td>${n||''}</td><td>${n&&s.ping?(n/s.ping).toFixed(2):''}</td></tr>`}).join('')}</tbody></table></div></div>
+    <div class="card"><h3>商品資料（每週更新）</h3><p class="hint">目前 ${PROD.rows.length} 筆${PROD.at?'・最後讀取 '+esc(String(PROD.at).slice(0,16)):''}。更新方式：開啟 Google 試算表的「商品資料」分頁，貼上最新資料即可；app 每次開啟都會自動讀取。</p>${CONFIG.API_URL?'<button class="btn sec block" data-act="upprod">立即重新讀取商品資料</button>':'<p class="hint">示範模式未連線，無商品資料。</p>'}</div>
     <div class="card"><h3>資料</h3><p class="hint">模式：${CONFIG.API_URL?'已連線 Google 試算表':'示範模式（資料只在這台裝置）'}　紀錄數：${all().length}</p>
     ${CONFIG.API_URL?'':`<button class="btn sec block" data-act="demo" style="margin-bottom:8px">載入示範資料（約 45 筆）</button><button class="btn red block" data-act="clearall">清除本機所有資料</button>`}</div>`;
   }
@@ -548,8 +631,8 @@ async function loadXlsx(){
 async function doExport(){
   let X; try{ X=await loadXlsx(); }catch(e){ return toast('匯出元件載入失敗，請確認網路'); }
   const A=all();
-  const detail=[['瑕疵編號','登記時間','店代號','店名','坪數','販售支線','店櫃地址','區域','登記人','款號','顏色/尺寸','數量','大類','小類','備註','狀態','滯留天數','開始修復時間','修復人員','結果登記時間','轉正品','轉特賣','轉報廢','特賣價','特賣去向','報廢單號','報廢核准人','結案時間','作廢原因']]
-   .concat(A.map(r=>[r.id,r.regAt,r.store,r.storeName,(storeBy(r.store)||{}).ping??'',(storeBy(r.store)||{}).line||'',(storeBy(r.store)||{}).addr||'',r.region,r.regBy,r.sku,r.color||'',r.qty,r.cat,r.sub,r.note||'',r.status,ageDays(r),r.startAt||'',r.startBy||'',r.resAt||'',r.ok||0,r.sale||0,r.scrap||0,r.price||'',r.dest||'',r.scrapNo||'',r.scrapBy||'',r.closeAt||'',r.voidWhy||'']));
+  const detail=[['瑕疵編號','登記時間','店代號','店名','坪數','販售支線','店櫃地址','區域','登記人','款號','商品名稱','商品支線','商品品類','條碼','顏色/尺寸','數量','大類','小類','備註','狀態','滯留天數','開始修復時間','修復人員','結果登記時間','轉正品','轉特賣','轉報廢','特賣價','特賣去向','報廢單號','報廢核准人','結案時間','作廢原因']]
+   .concat(A.map(r=>[r.id,r.regAt,r.store,r.storeName,(storeBy(r.store)||{}).ping??'',(storeBy(r.store)||{}).line||'',(storeBy(r.store)||{}).addr||'',r.region,r.regBy,r.sku,r.pname||'',r.pline||'',r.pcat||'',r.barcode||'',r.color||'',r.qty,r.cat,r.sub,r.note||'',r.status,ageDays(r),r.startAt||'',r.startBy||'',r.resAt||'',r.ok||0,r.sale||0,r.scrap||0,r.price||'',r.dest||'',r.scrapNo||'',r.scrapBy||'',r.closeAt||'',r.voidWhy||'']));
   const L=A.filter(r=>!r.void);
   const days=[...new Set(L.map(r=>dayOf(r.regAt)))].sort();
   const mx=[['大類','小類',...days,'合計']];
@@ -595,7 +678,12 @@ document.addEventListener('click',e=>{
     case 'pickrecent': { const c=CATS.find(c=>c[1]===k); form.major=c[0]; form.sub=k; keepForm(); renderReg(); break; }
     case 'qty': { const q=$('f-qty'); form.qty=Math.max(1,(parseInt(q.value)||1)+(+b.dataset.d)); q.value=form.qty; break; }
     case 'chgstore': chooseStore(); break;
-    case 'copylast': { const r=lastRec(); form.sku=r.sku; form.color=r.color||''; $('f-sku').value=form.sku; $('f-color').value=form.color; break; }
+    case 'scan': keepForm(); openScan(); break;
+    case 'stopscan': stopScan(); break;
+    case 'picksku': { const k=b.dataset.k; $('f-sku').value=k; form.sku=k; form.p=null; showProd(); break; }
+    case 'pickvar': { const q=$('f-sku').value.trim().toUpperCase(); setProd(pInfo(PROD.bySku.get(q)[+b.dataset.i])); break; }
+    case 'upprod': pullProducts(true).then(()=>renderAll()); break;
+    case 'copylast': { const r=lastRec(); form.sku=r.sku; form.color=r.color||''; $('f-sku').value=form.sku; $('f-color').value=form.color; form.p=r.pname?{barcode:r.barcode||'',sku:r.sku,pname:r.pname,color:r.color||'',size:'',pline:r.pline||'',pcat:r.pcat||'',price:r.price0||''}:null; showProd(); break; }
     case 'addphoto': keepForm(); $('file').click(); break;
     case 'delphoto': keepForm(); form.photos.splice(+b.dataset.i,1); renderReg(); break;
     case 'me': openMe(); break;
@@ -632,7 +720,7 @@ function renderAll(){
 // 初始化
 if(!me.name) setTimeout(openMe,300);
 renderReg(); renderAll();
-if(CONFIG.API_URL){ pull().then(flush); setInterval(()=>{ pull(); flush(); }, CONFIG.POLL_SEC*1000); }
+if(CONFIG.API_URL){ pullProducts(); pull().then(flush); setInterval(()=>{ pull(); flush(); }, CONFIG.POLL_SEC*1000); }
 window.__df={cache:()=>cache,go,CONFIG};
 })();
 </script>
