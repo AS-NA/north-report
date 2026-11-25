@@ -108,6 +108,7 @@ table.mx2{border-collapse:collapse;font-size:12px;width:max-content;min-width:10
 .toast.on{display:block}
 .sticky-act{position:sticky;bottom:calc(64px + env(safe-area-inset-bottom));background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:8px;box-shadow:0 -2px 8px rgba(0,0,0,.06)}
 .hint{font-size:12.5px;color:var(--mute)}
+.grp{display:flex;align-items:center;gap:8px;padding:4px 0 8px;border-bottom:2px solid var(--line);margin-bottom:2px;font-size:14px}.grp input{width:20px;height:20px}
 .pill{font-size:12px;background:#eef0f4;border-radius:8px;padding:2px 7px;margin-left:4px}
 
 .pm{margin-top:8px}
@@ -223,13 +224,15 @@ const ageTag = r => { const s=statusOf(r); if(!CONFIG.SLA[s]) return ''; const a
 const all = () => Object.values(cache).sort((a,b)=>b.regAt.localeCompare(a.regAt));
 const live = () => all().filter(r=>!r.void);
 
-function save(rec){
-  rec.updatedAt = nowStr()+'.'+String(Date.now()%1000).padStart(3,'0');
+let seqN=0;
+function save(rec,quiet){
+  rec.updatedAt = nowStr()+'.'+String(Date.now()%1000).padStart(3,'0')+String((seqN++)%10);
   rec.status = statusOf(rec);
   cache[rec.id] = rec;
   if(!outbox.includes(rec.id)) outbox.push(rec.id);
-  persist(); flush(); renderAll();
+  if(!quiet){ persist(); flush(); renderAll(); }
 }
+function saveDone(){ persist(); flush(); renderAll(); }
 
 // ================= 雲端同步 =================
 let flushing=false;
@@ -238,14 +241,16 @@ async function flush(){
   flushing=true; setSync('busy');
   try{
     while(outbox.length){
-      const id=outbox[0], rec=cache[id];
-      if(!rec){ outbox.shift(); continue; }
-      const sent=rec.updatedAt;
-      const res = await fetch(CONFIG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',record:rec})});
+      const ids=outbox.slice(0,20).filter(id=>cache[id]);
+      if(!ids.length){ outbox.splice(0,20); continue; }
+      const sent={}; ids.forEach(id=>sent[id]=cache[id].updatedAt);
+      const body = ids.length===1 ? {action:'save',record:cache[ids[0]]} : {action:'saveBatch',records:ids.map(id=>cache[id])};
+      const res = await fetch(CONFIG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});
       const j = await res.json();
       if(!j.ok) throw new Error(j.error||'save failed');
-      outbox.shift();
-      if(cache[id].updatedAt===sent) cache[id]=j.record; else outbox.push(id);   // 傳送期間又被修改：再送一次最新版
+      const back = j.records || [j.record];
+      outbox = outbox.filter(id=>!ids.includes(id));
+      back.forEach(sr=>{ const lr=cache[sr.id]; if(!lr) return; if(lr.updatedAt===sent[sr.id]) cache[sr.id]=sr; else outbox.push(sr.id); });   // 傳送期間又被修改：再送一次最新版
       persist();
     }
     setSync('ok');
@@ -480,32 +485,102 @@ function itemHtml(r, sel){
 }
 
 // ================= 修復處理 =================
-let fixTab='wait', fixRegion='', sel=new Set();
+let fixTab='wait', sel=new Set();
+let FX={region:'',store:'',cat:'',q:'',sort:'old',group:'none',mine:false,late:false,limit:50};
+let fxList=[];
+function fxFilter(){
+  const base=live().filter(r=>r.status===(fixTab==='wait'?'已登記':'修復中'));
+  const q=FX.q.trim().toUpperCase();
+  let L=base.filter(r=>(!FX.region||r.region===FX.region)&&(!FX.store||r.store===FX.store)&&(!FX.cat||catsOf(r).includes(FX.cat))
+    &&(!q||(r.sku||'').toUpperCase().includes(q)||(r.pname||'').toUpperCase().includes(q)||(r.barcode||'').includes(q)||(r.color||'').toUpperCase().includes(q))
+    &&(!FX.mine||r.startBy===me.name)&&(!FX.late||ageLevel(r)!==''));
+  const key=fixTab==='wait'?'regAt':'startAt';
+  const cmp={old:(a,b)=>a[key].localeCompare(b[key]), new:(a,b)=>b[key].localeCompare(a[key]), sku:(a,b)=>a.sku.localeCompare(b.sku)||a[key].localeCompare(b[key]), store:(a,b)=>a.storeName.localeCompare(b.storeName)||a.sku.localeCompare(b.sku)}[FX.sort];
+  return {base,list:L.sort(cmp)};
+}
+const grpKey=r=>FX.group==='store'?r.storeName: FX.group==='sku'?r.sku+(r.pname?'｜'+r.pname:''): FX.group==='sub'?subText(r): FX.group==='region'?r.region:'';
 function renderFix(){
   const v=$('v-fix');
-  const wait=live().filter(r=>r.status==='已登記'), fix=live().filter(r=>r.status==='修復中');
-  const f=r=>!fixRegion||r.region===fixRegion;
-  const asc=(a,b)=>a.regAt.localeCompare(b.regAt);
-  const list=(fixTab==='wait'?wait:fix).filter(f).sort(asc);
-  [...sel].forEach(id=>{ if(!cache[id]||cache[id].status!=='已登記') sel.delete(id); });
-  v.innerHTML=`<div class="seg"><button class="${fixTab==='wait'?'on':''}" data-act="fixtab" data-k="wait">待修復 ${wait.length}</button><button class="${fixTab==='fix'?'on':''}" data-act="fixtab" data-k="fix">修復中 ${fix.length}</button></div>
-  <div class="row" style="margin-bottom:10px"><select id="fx-reg" class="grow"><option value="">全部區域</option>${REGIONS.map(r=>`<option ${r===fixRegion?'selected':''}>${r}</option>`).join('')}</select>
-  ${fixTab==='wait'?`<button class="btn sec sm" data-act="selall">全選</button>`:''}</div>
-  <div class="card">${list.length?list.map(r=>fixTab==='wait'?itemHtml(r,sel.has(r.id)):fixItem(r)).join(''):'<div class="empty">目前沒有項目 👍</div>'}</div>
-  ${fixTab==='wait'&&sel.size?`<div class="sticky-act"><button class="btn block" data-act="batchstart">開始修復（已選 ${sel.size} 筆）</button></div>`:''}`;
-  $('fx-reg').onchange=e=>{ fixRegion=e.target.value; renderFix(); };
+  if(document.activeElement&&document.activeElement.id==='fx-q'){ return renderFixList(); }
+  const L0=live(), nWait=L0.filter(r=>r.status==='已登記').length, nFix=L0.filter(r=>r.status==='修復中').length;
+  const {base}=fxFilter();
+  const stores=[...new Map(base.filter(r=>!FX.region||r.region===FX.region).map(r=>[r.store,r.storeName])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+  v.innerHTML=`<div class="seg"><button class="${fixTab==='wait'?'on':''}" data-act="fixtab" data-k="wait">待修復 ${nWait}</button><button class="${fixTab==='fix'?'on':''}" data-act="fixtab" data-k="fix">修復中 ${nFix}</button></div>
+  <div class="card" style="padding:10px">
+    <div class="row" style="margin-bottom:8px"><select id="fx-reg" class="grow"><option value="">全部區域</option>${REGIONS.map(r=>`<option ${r===FX.region?'selected':''}>${r}</option>`).join('')}</select>
+      <select id="fx-store" class="grow"><option value="">全部門市</option>${stores.map(([c,n])=>`<option value="${c}" ${c===FX.store?'selected':''}>${esc(n)}</option>`).join('')}</select></div>
+    <div class="row" style="margin-bottom:8px"><select id="fx-cat" class="grow"><option value="">全部瑕疵類型</option>${MAJORS.map(m=>`<option ${m===FX.cat?'selected':''}>${esc(m)}</option>`).join('')}</select>
+      <input type="text" id="fx-q" class="grow" placeholder="搜尋款號／商品名稱／條碼" value="${esc(FX.q)}" autocomplete="off"></div>
+    <div class="row"><select id="fx-sort" class="grow">${[['old','最舊優先'],['new','最新優先'],['sku','依款號'],['store','依門市']].map(([k,n])=>`<option value="${k}" ${FX.sort===k?'selected':''}>排序：${n}</option>`).join('')}</select>
+      <select id="fx-group" class="grow">${[['none','不分組'],['store','依門市分組'],['sku','依款號分組'],['sub','依瑕疵分組'],['region','依區域分組']].map(([k,n])=>`<option value="${k}" ${FX.group===k?'selected':''}>${n}</option>`).join('')}</select></div>
+    <div class="row" style="margin-top:8px;font-size:13px;gap:14px"><label><input type="checkbox" id="fx-late" ${FX.late?'checked':''}> 只看逾期</label>${fixTab==='fix'?`<label><input type="checkbox" id="fx-mine" ${FX.mine?'checked':''}> 只看我開始的</label>`:''}<span class="grow"></span><button class="btn gray sm" data-act="fxreset">清除條件</button></div>
+  </div>
+  <div id="fx-sum" class="hint" style="margin:0 2px 8px"></div>
+  <div id="fx-list"></div><div id="fx-bar"></div>`;
+  const on=(id,k,fn)=>{ $(id).onchange=e=>{ fn(e.target); FX.limit=50; renderFix(); }; };
+  on('fx-reg','region',x=>{ FX.region=x.value; FX.store=''; });
+  on('fx-store','store',x=>FX.store=x.value); on('fx-cat','cat',x=>FX.cat=x.value);
+  on('fx-sort','sort',x=>FX.sort=x.value); on('fx-group','group',x=>FX.group=x.value);
+  $('fx-late').onchange=e=>{ FX.late=e.target.checked; FX.limit=50; renderFix(); };
+  if($('fx-mine')) $('fx-mine').onchange=e=>{ FX.mine=e.target.checked; FX.limit=50; renderFix(); };
+  $('fx-q').oninput=e=>{ FX.q=e.target.value; FX.limit=50; renderFixList(); };
+  renderFixList();
 }
-function fixItem(r){
-  return `<div class="item" data-act="detail" data-id="${r.id}"><div class="l"><div class="t">${esc(r.sku)}${r.color?' <span class="pill">'+esc(r.color)+'</span>':''} × ${r.qty}</div>
-  <div class="m">${esc(subText(r))}・${esc(r.storeName)}</div><div class="m">${esc(r.startBy)} 於 ${short(r.startAt)} 開始</div>
-  <div class="row" style="margin-top:8px"><button class="btn sm" data-act="result" data-id="${r.id}">登記結果</button><button class="btn sec sm" data-act="allok" data-id="${r.id}">全數轉正品</button></div></div>
+function renderFixList(){
+  const {list}=fxFilter(); fxList=list;
+  [...sel].forEach(id=>{ const r=cache[id]; if(!r||r.status!==(fixTab==='wait'?'已登記':'修復中')) sel.delete(id); });
+  const qty=a=>a.reduce((s,r)=>s+r.qty,0);
+  const selRecs=[...sel].map(id=>cache[id]);
+  const allSel=list.length&&list.every(r=>sel.has(r.id));
+  $('fx-sum').innerHTML=`符合 <b>${list.length}</b> 筆／<b>${qty(list)}</b> 件　<button class="btn sec sm" data-act="fxall">${allSel?'取消全選':`全選符合的 ${list.length} 筆`}</button>`;
+  const shown=list.slice(0,FX.limit); let html='';
+  if(!shown.length) html='<div class="card"><div class="empty">目前沒有項目 👍</div></div>';
+  else if(FX.group==='none') html='<div class="card">'+shown.map(r=>fixRow(r)).join('')+'</div>';
+  else {
+    const g=new Map(); shown.forEach(r=>{ const k=grpKey(r); if(!g.has(k)) g.set(k,[]); g.get(k).push(r); });
+    const full=new Map(); list.forEach(r=>{ const k=grpKey(r); if(!full.has(k)) full.set(k,[]); full.set(k,full.get(k).concat(r)); });
+    html=[...g.entries()].map(([k,rs])=>{ const all=full.get(k); const ck=all.every(r=>sel.has(r.id));
+      return `<div class="card"><label class="grp"><input type="checkbox" data-act="selgrp" data-g="${esc(k)}" ${ck?'checked':''}> <b>${esc(k)}</b> <span class="hint">${all.length} 筆／${qty(all)} 件</span></label>${rs.map(r=>fixRow(r)).join('')}</div>`; }).join('');
+  }
+  if(list.length>shown.length) html+=`<button class="btn sec block" data-act="fxmore">顯示更多（還有 ${list.length-shown.length} 筆）</button>`;
+  $('fx-list').innerHTML=html;
+  $('fx-bar').innerHTML = sel.size?`<div class="sticky-act"><div class="hint" style="margin-bottom:6px">已選 <b>${sel.size}</b> 筆／<b>${qty(selRecs)}</b> 件　<a href="#" data-act="fxclear">取消選取</a></div>${fixTab==='wait'?`<button class="btn block" data-act="batchstart">批次開始修復</button>`:`<button class="btn block" data-act="batchresult">批次登記結果</button>`}</div>`:'';
+}
+function fixRow(r){
+  const ck=sel.has(r.id);
+  return `<div class="item" data-act="detail" data-id="${r.id}"><input type="checkbox" data-act="sel" data-id="${r.id}" ${ck?'checked':''}>
+  <div class="l"><div class="t">${esc(r.sku)}${r.color?' <span class="pill">'+esc(r.color)+'</span>':''} × ${r.qty}</div>
+  ${r.pname?`<div class="m">${esc(r.pname)}</div>`:''}<div class="m">${esc(subText(r))}・${esc(r.storeName)}</div>
+  <div class="m">${fixTab==='wait'?'登記 '+short(r.regAt):esc(r.startBy)+' 於 '+short(r.startAt)+' 開始'}</div>
+  ${fixTab==='fix'?`<div class="row" style="margin-top:8px"><button class="btn sm" data-act="result" data-id="${r.id}">登記結果</button><button class="btn sec sm" data-act="allok" data-id="${r.id}">全數轉正品</button></div>`:''}</div>
   <div style="text-align:right">${ageTag(r)}</div></div>`;
 }
 function needName(){ if(!me.name){ toast('請先設定姓名'); openMe(); return false; } return true; }
 function startRepair(ids){
   if(!needName()) return;
-  ids.forEach(id=>{ const r=cache[id]; if(r&&r.status==='已登記'){ r.startAt=nowStr(); r.startBy=me.name; save(r); } });
-  sel.clear(); toast(`已開始修復 ${ids.length} 筆`); fixTab='fix'; renderAll();
+  const rs=ids.map(i=>cache[i]).filter(r=>r&&r.status==='已登記'); if(!rs.length) return;
+  if(rs.length>1 && !confirm(`確定要開始修復 ${rs.length} 筆（共 ${rs.reduce((s,r)=>s+r.qty,0)} 件）？`)) return;
+  rs.forEach(r=>{ r.startAt=nowStr(); r.startBy=me.name; save(r,true); });
+  sel.clear(); toast(`已開始修復 ${rs.length} 筆`); fixTab='fix'; saveDone();
+}
+// 批次登記結果：選取的每一筆「整筆」套用同一種結果；要拆數量的請單筆登記
+function openBulkResult(ids){
+  const rs=ids.map(i=>cache[i]).filter(r=>r&&r.status==='修復中'); if(!rs.length) return;
+  const tot=rs.reduce((s,r)=>s+r.qty,0); let k='ok', dest=CONFIG.DESTS[0], note='';
+  const draw=()=>{
+    openSheet(`<h2>批次登記結果</h2><p class="hint">共 <b>${rs.length}</b> 筆／<b>${tot}</b> 件，每一筆整筆套用同一種結果。需要拆分數量的請回清單單筆登記。</p>
+    <div class="role" style="grid-template-columns:1fr">${[['ok','✅ 修復完成 → 轉正品（回庫）'],['sale','🏷 無法修復 → 轉特賣品'],['scrap','🗑 無法修復 → 轉報廢（待管理員核准）']].map(([v,n])=>`<button data-k="${v}" class="${k===v?'on':''}" style="text-align:left;padding:12px 14px">${n}</button>`).join('')}</div>
+    ${k==='sale'?`<label class="f">特賣去向</label><select id="bk-dest">${CONFIG.DESTS.map(d=>`<option ${d===dest?'selected':''}>${d}</option>`).join('')}</select>`:''}
+    ${k==='scrap'?`<label class="f">報廢原因（選填）</label><input type="text" id="bk-note" value="${esc(note)}" placeholder="例：布料破損無法補強">`:''}
+    <div class="row" style="margin-top:14px"><button class="btn gray grow" data-act="close">取消</button><button class="btn grow" id="bk-ok">確認送出（${rs.length} 筆）</button></div>`);
+    $('sheet').onclick=e=>{ const b=e.target.closest('.role button'); if(!b) return; keep(); k=b.dataset.k; draw(); };
+    $('bk-ok').onclick=()=>{ keep(); if(!needName()) return; const t0=nowStr();
+      rs.forEach(r=>{ r.resAt=t0; r.resBy=me.name; r.ok=k==='ok'?r.qty:0; r.sale=k==='sale'?r.qty:0; r.scrap=k==='scrap'?r.qty:0;
+        if(k==='sale') r.dest=dest; if(k==='scrap') r.scrapNote=note; else r.closeAt=t0; save(r,true); });
+      sel.clear(); closeSheet(); saveDone(); toast(k==='scrap'?`已送出 ${rs.length} 筆，待管理員報廢核准`:`已結案 ${rs.length} 筆`); };
+  };
+  const keep=()=>{ const d=$('bk-dest'); if(d) dest=d.value; const n=$('bk-note'); if(n) note=n.value; };
+  draw();
 }
 function openResult(id){
   const r=cache[id]; if(!r) return;
@@ -679,7 +754,7 @@ function loadDemo(){
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]'); if(!b) return;
   const a=b.dataset.act, id=b.dataset.id, k=b.dataset.k;
-  if(a==='sel'){ e.stopPropagation(); const set=curView==='adm'?admSel:sel; (b.checked?set.add(id):set.delete(id)); renderAll(); return; }
+  if(a==='sel'){ e.stopPropagation(); const set=curView==='adm'?admSel:sel; (b.checked?set.add(id):set.delete(id)); if(curView==='fix') renderFixList(); else renderAll(); return; }
   switch(a){
     case 'major': form.major=k; keepForm(); renderReg(); break;
     case 'sub': toggleSub(k); break;
@@ -696,8 +771,13 @@ document.addEventListener('click',e=>{
     case 'delphoto': keepForm(); form.photos.splice(+b.dataset.i,1); renderReg(); break;
     case 'me': openMe(); break;
     case 'minef': mineFilter=k; renderMine(); break;
-    case 'fixtab': fixTab=k; renderFix(); break;
-    case 'selall': { const f=r=>!fixRegion||r.region===fixRegion; live().filter(r=>r.status==='已登記'&&f(r)).forEach(r=>sel.add(r.id)); renderFix(); break; }
+    case 'fixtab': fixTab=k; sel.clear(); FX.limit=50; renderFix(); break;
+    case 'fxreset': FX={region:'',store:'',cat:'',q:'',sort:'old',group:'none',mine:false,late:false,limit:50}; renderFix(); break;
+    case 'fxall': { const allSel=fxList.length&&fxList.every(r=>sel.has(r.id)); fxList.forEach(r=>allSel?sel.delete(r.id):sel.add(r.id)); renderFixList(); break; }
+    case 'fxclear': e.preventDefault(); sel.clear(); renderFixList(); break;
+    case 'fxmore': FX.limit+=50; renderFixList(); break;
+    case 'selgrp': { e.stopPropagation(); const rs=fxList.filter(r=>grpKey(r)===b.dataset.g); rs.forEach(r=>b.checked?sel.add(r.id):sel.delete(r.id)); renderFixList(); return; }
+    case 'batchresult': openBulkResult([...sel]); break;
     case 'batchstart': startRepair([...sel]); break;
     case 'startone': closeSheet(); startRepair([id]); break;
     case 'result': closeSheet(); openResult(id); break;
