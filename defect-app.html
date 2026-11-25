@@ -50,6 +50,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid #b9cbf7;border-color:v
 .chip small{display:block;font-size:11.5px;opacity:.75;margin-top:2px}
 .chips.major .chip{flex:1 1 calc(50% - 8px);min-width:140px;font-weight:600}
 .chips.sub .chip{flex:1 1 calc(50% - 8px)}
+.sel-sum{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;font-size:13px;color:var(--mute)}.sel-sum .chip{padding:5px 10px;font-size:13px}
 .chips.recent .chip{padding:7px 10px;font-size:13px;border-style:dashed}
 .btn{border:0;border-radius:10px;padding:12px 16px;font:inherit;font-weight:600;cursor:pointer;background:var(--pri);color:#fff}
 .btn.sec{background:#fff;color:var(--pri);border:1px solid var(--pri)}
@@ -190,6 +191,10 @@ async function pullProdInfo(force){
   if(!CONFIG.API_URL) return;
   try{ const j=await (await fetch(CONFIG.API_URL+'?action=prodinfo')).json(); if(j.ok){ PROD.count=j.count; if(force){ PQ.clear(); toast('商品資料共 '+j.count.toLocaleString()+' 筆'); } } }catch(e){ if(force) toast('讀取失敗，稍後再試'); }
 }
+const subsOf = r => (r.subs&&r.subs.length)?r.subs:[r.sub];
+const subText = r => subsOf(r).join('＋');
+const catsOf = r => { const a=r.cats&&r.cats.length?r.cats:[r.cat]; return [...new Set(a)]; };
+const MAXSUB = 3;
 const pInfo = r => ({ barcode:String(r[0]||''), sku:String(r[1]||''), pname:String(r[2]||''), color:String(r[3]||''), size:String(r[4]||''), pline:String(r[5]||''), pcat:String(r[6]||''), price:r[7] });
 const cs = p => [p.color,p.size].filter(Boolean).join(' / ');
 
@@ -324,7 +329,7 @@ function openMe(){
   };
 }
 // ================= 登記瑕疵 =================
-let form = { store: me.store, major:null, sub:null, sku:'', color:'', qty:1, note:'', photos:[], p:null };
+let form = { store: me.store, major:null, subs:[], sku:'', color:'', qty:1, note:'', photos:[], p:null };
 function renderReg(){
   const v=$('v-reg');
   const st = storeBy(form.store);
@@ -334,9 +339,11 @@ function renderReg(){
   <div class="card"><div class="row"><div class="grow"><div class="hint">登記門市</div><b>${st?esc(st.name)+'（'+st.code+'）':'尚未選擇門市'}</b>${st?`<div class="hint">${st.region}・${pingTxt(st)}・販售支線 ${esc(st.line||'未填')}<br>${esc(st.addr||'')}</div>`:''}</div>
   <button class="btn sec sm" data-act="chgstore">更換</button></div></div>
   <div class="card"><h3>① 瑕疵類型</h3>
-    ${rec.length?`<div class="hint" style="margin-bottom:6px">最近常用</div><div class="chips recent" style="margin-bottom:10px">${rec.map(k=>`<button class="chip ${form.sub===k?'on':''}" data-act="pickrecent" data-k="${esc(k)}">${esc(k)}</button>`).join('')}</div>`:''}
-    <div class="chips major">${MAJORS.map(m=>`<button class="chip ${form.major===m?'on':''}" data-act="major" data-k="${esc(m)}">${esc(m)}</button>`).join('')}</div>
-    ${form.major?`<div class="hint" style="margin:10px 0 6px">${esc(form.major)} → 請選小類別</div><div class="chips sub">${subs.map(c=>`<button class="chip ${form.sub===c[1]?'on':''}" data-act="sub" data-k="${esc(c[1])}">${esc(c[1])}<small>${esc(c[2])}</small></button>`).join('')}</div>`:''}
+    <div class="hint" style="margin:-4px 0 8px">一件商品有多處瑕疵時，可複選（最多 ${MAXSUB} 項）</div>
+    ${form.subs.length?`<div class="sel-sum">已選：${form.subs.map(k=>`<button class="chip on" data-act="sub" data-k="${esc(k)}">${esc(k)} ✕</button>`).join('')}</div>`:''}
+    ${rec.length?`<div class="hint" style="margin-bottom:6px">最近常用</div><div class="chips recent" style="margin-bottom:10px">${rec.map(k=>`<button class="chip ${form.subs.includes(k)?'on':''}" data-act="pickrecent" data-k="${esc(k)}">${esc(k)}</button>`).join('')}</div>`:''}
+    <div class="chips major">${MAJORS.map(m=>{ const n=form.subs.filter(k=>CATS.find(c=>c[1]===k)[0]===m).length; return `<button class="chip ${form.major===m?'on':''}" data-act="major" data-k="${esc(m)}">${esc(m)}${n?` <span class="pill" style="background:#ffd966;color:#333">${n}</span>`:''}</button>`; }).join('')}</div>
+    ${form.major?`<div class="hint" style="margin:10px 0 6px">${esc(form.major)} → 點選小類別（可再切換其他大類繼續加選）</div><div class="chips sub">${subs.map(c=>`<button class="chip ${form.subs.includes(c[1])?'on':''}" data-act="sub" data-k="${esc(c[1])}">${esc(c[1])}<small>${esc(c[2])}</small></button>`).join('')}</div>`:''}
   </div>
   <div class="card"><h3>② 商品資料</h3>
     <label class="f" style="margin-top:0">掃條碼或輸入款號（必填）</label>
@@ -415,18 +422,18 @@ async function submitReg(){
   form.sku=$('f-sku').value.trim().toUpperCase(); form.color=$('f-color').value.trim(); form.note=$('f-note').value.trim(); form.qty=Math.max(1,parseInt($('f-qty').value)||1);
   if(!me.name){ toast('請先設定姓名'); return openMe(); }
   if(!form.store){ toast('請選擇登記門市'); return chooseStore(); }
-  if(!form.sub){ toast('請選擇瑕疵類型'); return; }
+  if(!form.subs.length){ toast('請選擇瑕疵類型（可複選）'); return; }
   if(!form.sku){ toast('請輸入款號'); $('f-sku').focus(); return; }
   if(!form.p && CONFIG.API_URL){ try{ const j=await Promise.race([lookupRemote(form.sku),new Promise((_,no)=>setTimeout(no,2500))]); if(j.mode==='barcode'||(j.mode==='sku'&&j.rows.length===1)) form.p=pInfo(j.rows[0]); else if(j.mode==='sku'&&j.rows.length>1){ const r0=pInfo(j.rows[0]); form.p={barcode:'',sku:r0.sku,pname:r0.pname,color:'',size:'',pline:r0.pline,pcat:r0.pcat,price:r0.price}; } }catch(e){} }
-  const dup = live().find(r=>r.store===form.store && r.sku===form.sku && r.sub===form.sub && r.color===form.color && Date.now()-toD(r.regAt).getTime()<30*60000);
+  const dup = live().find(r=>r.store===form.store && r.sku===form.sku && subText(r)===form.subs.join('＋') && r.color===form.color && Date.now()-toD(r.regAt).getTime()<30*60000);
   if(dup && !confirm(`30 分鐘內已登記過相同款號與瑕疵（${dup.id}），確定要再登記一筆嗎？`)) return;
-  const st=storeBy(form.store), cat=CATS.find(c=>c[1]===form.sub);
+  const st=storeBy(form.store), cat=CATS.find(c=>c[1]===form.subs[0]), cats=[...new Set(form.subs.map(k=>CATS.find(c=>c[1]===k)[0]))];
   const rec={ id:newId(), store:st.code, storeName:st.name, region:st.region, regAt:nowStr(), regBy:me.name,
-    sku:form.sku, color:form.color, qty:form.qty, cat:cat[0], sub:cat[1], note:form.note, photos:form.photos.slice(),
+    sku:form.sku, color:form.color, qty:form.qty, cat:cat[0], sub:cat[1], cats:cats, subs:form.subs.slice(), note:form.note, photos:form.photos.slice(),
     barcode:form.p?form.p.barcode:'', pname:form.p?form.p.pname:'', pline:form.p?form.p.pline:'', pcat:form.p?form.p.pcat:'', price0:form.p&&form.p.price!==''?form.p.price:'' };
-  recent=[form.sub,...recent.filter(k=>k!==form.sub)].slice(0,8); lsSet('df_recent',recent);
+  recent=[...form.subs,...recent.filter(k=>!form.subs.includes(k))].slice(0,8); lsSet('df_recent',recent);
   save(rec);
-  form = { store:form.store, major:null, sub:null, sku:'', color:'', qty:1, note:'', photos:[], p:null };
+  form = { store:form.store, major:null, subs:[], sku:'', color:'', qty:1, note:'', photos:[], p:null };
   renderReg(); window.scrollTo(0,0); toast('已登記 '+rec.id+'，可繼續登記下一件');
 }
 function chooseStore(){
@@ -467,7 +474,7 @@ function itemHtml(r, sel){
   return `<div class="item" data-act="detail" data-id="${r.id}">
     ${sel!==undefined?`<input type="checkbox" data-act="sel" data-id="${r.id}" ${sel?'checked':''}>`:''}
     <div class="l"><div class="t">${esc(r.sku)}${r.color?' <span class="pill">'+esc(r.color)+'</span>':''} × ${r.qty}</div>
-    ${r.pname?`<div class="m">${esc(r.pname)}</div>`:''}<div class="m">${esc(r.sub)}・${esc(r.storeName)}・${short(r.regAt)}</div>
+    ${r.pname?`<div class="m">${esc(r.pname)}</div>`:''}<div class="m">${esc(subText(r))}・${esc(r.storeName)}・${short(r.regAt)}</div>
     ${resultText(r)?`<div class="m">${resultText(r)}</div>`:''}</div>
     <div style="text-align:right"><span class="badge ${BADGE[r.status]}">${r.status}</span><br>${ageTag(r)}</div></div>`;
 }
@@ -490,7 +497,7 @@ function renderFix(){
 }
 function fixItem(r){
   return `<div class="item" data-act="detail" data-id="${r.id}"><div class="l"><div class="t">${esc(r.sku)}${r.color?' <span class="pill">'+esc(r.color)+'</span>':''} × ${r.qty}</div>
-  <div class="m">${esc(r.sub)}・${esc(r.storeName)}</div><div class="m">${esc(r.startBy)} 於 ${short(r.startAt)} 開始</div>
+  <div class="m">${esc(subText(r))}・${esc(r.storeName)}</div><div class="m">${esc(r.startBy)} 於 ${short(r.startAt)} 開始</div>
   <div class="row" style="margin-top:8px"><button class="btn sm" data-act="result" data-id="${r.id}">登記結果</button><button class="btn sec sm" data-act="allok" data-id="${r.id}">全數轉正品</button></div></div>
   <div style="text-align:right">${ageTag(r)}</div></div>`;
 }
@@ -505,7 +512,7 @@ function openResult(id){
   const st={ok:r.qty,sale:0,scrap:0,price:'',dest:CONFIG.DESTS[0],note:''};
   const draw=()=>{
     const sum=st.ok+st.sale+st.scrap, good=sum===r.qty && (st.sale===0||(+st.price>0));
-    openSheet(`<h2>登記修復結果</h2><div class="hint">${esc(r.sku)}${r.color?'・'+esc(r.color):''}・${esc(r.sub)}・共 <b>${r.qty}</b> 件</div>
+    openSheet(`<h2>登記修復結果</h2><div class="hint">${esc(r.sku)}${r.color?'・'+esc(r.color):''}・${esc(subText(r))}・共 <b>${r.qty}</b> 件</div>
     <div class="row" style="margin:10px 0"><button class="btn sec sm grow" data-q="all-ok">全部修好</button><button class="btn sec sm grow" data-q="all-sale">全部特賣</button><button class="btn sec sm grow" data-q="all-scrap">全部報廢</button></div>
     ${[['ok','修復完成 → 轉正品（回庫）'],['sale','無法修復 → 轉特賣品'],['scrap','無法修復 → 轉報廢']].map(([k,t])=>`<label class="f">${t}</label><div class="stepper" style="width:max-content"><button data-s="${k}" data-d="-1">－</button><input type="number" data-n="${k}" value="${st[k]}" min="0"><button data-s="${k}" data-d="1">＋</button></div>`).join('')}
     ${st.sale>0?`<div class="card" style="margin-top:10px;background:#fafbff"><label class="f" style="margin-top:0">特賣價（每件，元）</label><input type="number" id="r-price" value="${st.price}" inputmode="numeric"><label class="f">特賣去向</label><select id="r-dest">${CONFIG.DESTS.map(d=>`<option ${d===st.dest?'selected':''}>${d}</option>`).join('')}</select></div>`:''}
@@ -543,7 +550,7 @@ function openDetail(id){
     r.closeAt&&[r.closeAt,'系統結案'], r.voidAt&&[r.voidAt,`${r.voidBy} 作廢：${r.voidWhy||''}`] ].filter(Boolean);
   const canVoid = !r.void && ( (r.status==='已登記' && (me.store===r.store || r.regBy===me.name)) || unlocked.adm );
   openSheet(`<h2>${esc(r.sku)} × ${r.qty} <span class="badge ${BADGE[r.status]}">${r.status}</span></h2><div class="hint">${r.id}</div>
-  <dl class="kv"><dt>門市</dt><dd>${esc(r.storeName)}（${r.store}）</dd><dt>坪數/支線</dt><dd>${pingTxt(storeBy(r.store))}・${esc((storeBy(r.store)||{}).line||'未填')}</dd><dt>店櫃地址</dt><dd>${esc((storeBy(r.store)||{}).addr||'')}</dd><dt>瑕疵類型</dt><dd>${esc(r.cat)} › ${esc(r.sub)}</dd>
+  <dl class="kv"><dt>門市</dt><dd>${esc(r.storeName)}（${r.store}）</dd><dt>坪數/支線</dt><dd>${pingTxt(storeBy(r.store))}・${esc((storeBy(r.store)||{}).line||'未填')}</dd><dt>店櫃地址</dt><dd>${esc((storeBy(r.store)||{}).addr||'')}</dd><dt>瑕疵類型</dt><dd>${subsOf(r).map(k=>{const c=CATS.find(c=>c[1]===k);return esc((c?c[0]+' › ':'')+k);}).join('<br>')}</dd>
   ${r.pname?`<dt>商品名稱</dt><dd>${esc(r.pname)}${r.pline?'（'+esc(r.pline)+'）':''}</dd>`:''}${r.color?`<dt>顏色/尺寸</dt><dd>${esc(r.color)}</dd>`:''}${r.barcode?`<dt>條碼</dt><dd>${esc(r.barcode)}</dd>`:''}${r.note?`<dt>備註</dt><dd>${esc(r.note)}</dd>`:''}
   ${r.resAt?`<dt>處理結果</dt><dd>${resultText(r)}</dd>`:''}${r.scrapNote?`<dt>報廢原因</dt><dd>${esc(r.scrapNote)}</dd>`:''}</dl>
   ${(r.photos||[]).length?`<div class="thumbs">${r.photos.map(p=>`<a href="${esc(p)}" target="_blank"><img src="${esc(p)}"></a>`).join('')}</div>`:''}
@@ -583,8 +590,8 @@ function renderAdm(){
     const ok=R.reduce((s,r)=>s+(r.ok||0),0), sale=R.reduce((s,r)=>s+(r.sale||0),0), scrap=R.reduce((s,r)=>s+(r.scrap||0),0), tot=ok+sale+scrap;
     const avg=closed.length?(closed.reduce((s,r)=>s+(toD(r.closeAt)-toD(r.regAt)),0)/closed.length/86400000):0;
     const byStore={}; R.forEach(r=>{ byStore[r.storeName]=(byStore[r.storeName]||0)+r.qty; });
-    const byCat={}; R.forEach(r=>{ byCat[r.cat]=(byCat[r.cat]||0)+r.qty; });
-    const bySub={}; R.forEach(r=>{ bySub[r.sub]=(bySub[r.sub]||0)+r.qty; });
+    const byCat={}; R.forEach(r=>{ catsOf(r).forEach(c=>{ byCat[c]=(byCat[c]||0)+r.qty; }); });
+    const bySub={}; R.forEach(r=>{ subsOf(r).forEach(k=>{ bySub[k]=(bySub[k]||0)+r.qty; }); });
     const stores=Object.entries(byStore).sort((a,b)=>b[1]-a[1]).slice(0,10), cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]), subs=Object.entries(bySub).sort((a,b)=>b[1]-a[1]).slice(0,8);
     const stuck=L.filter(r=>r.status!=='已結案').sort((a,b)=>ageDays(b)-ageDays(a)).slice(0,10);
     body=`<div class="kpis"><div class="kpi"><b>${qtySum(wait)}</b><span>待修復(件)</span></div><div class="kpi"><b>${qtySum(fix)}</b><span>修復中(件)</span></div><div class="kpi ${scrapW.length?'warn':''}"><b>${qtySum(scrapW.map(r=>({qty:r.scrap})))}</b><span>待報廢核准(件)</span></div></div>
@@ -594,7 +601,7 @@ function renderAdm(){
     <div class="card"><h3>滯留最久（未結案）</h3>${stuck.length?stuck.map(r=>itemHtml(r)).join(''):'<div class="empty">沒有未結案項目</div>'}</div>
     <div class="card"><h3>各店瑕疵件數（前10）</h3>${hbars(stores,stores[0]&&stores[0][1])||'<div class="hint">無資料</div>'}</div>
     <div class="card"><h3>各販售支線件數（每坪）</h3>${(()=>{const m={},pg={};STORES.forEach(s=>{const k=s.line||'未填';pg[k]=(pg[k]||0)+(s.ping||0);});R.forEach(r=>{const k=(storeBy(r.store)||{}).line||'未填';m[k]=(m[k]||0)+r.qty;});const a=Object.entries(m).sort((x,y)=>y[1]-x[1]);return hbars(a.map(([k,v])=>[k+(pg[k]?'（'+(v/pg[k]).toFixed(2)+'/坪）':''),v]),a[0]&&a[0][1],'#1b9a8a')||'<div class="hint">無資料</div>';})()}</div>
-    <div class="card"><h3>大類別佔比</h3>${hbars(cats,cats[0]&&cats[0][1],'#7a4fd6')||'<div class="hint">無資料</div>'}</div>
+    <div class="card"><h3>大類別佔比（複選各算一次）</h3>${hbars(cats,cats[0]&&cats[0][1],'#7a4fd6')||'<div class="hint">無資料</div>'}</div>
     <div class="card"><h3>最常見小類別（前8）</h3>${hbars(subs,subs[0]&&subs[0][1],'#d6692f')||'<div class="hint">無資料</div>'}</div>`;
   } else if(admTab==='scrap'){
     body=`<div class="card"><h3>待報廢核准（${scrapW.length} 筆）</h3>${scrapW.length?scrapW.sort((a,b)=>a.resAt.localeCompare(b.resAt)).map(r=>itemHtml(r,admSel.has(r.id))).join(''):'<div class="empty">沒有待核准項目</div>'}</div>
@@ -602,7 +609,7 @@ function renderAdm(){
     ${admSel.size?`<div class="sticky-act"><button class="btn block" data-act="admapprove">登記報廢單號（已選 ${admSel.size} 筆）</button></div>`:''}`;
   } else if(admTab==='mx'){
     const days=[]; for(let i=admDays-1;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); days.push(`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`); }
-    const cell={}; let mxMax=0; L.forEach(r=>{ const k=r.sub+'|'+dayOf(r.regAt); cell[k]=(cell[k]||0)+r.qty; mxMax=Math.max(mxMax,cell[k]); });
+    const cell={}; let mxMax=0; L.forEach(r=>{ subsOf(r).forEach(sb=>{ const k=sb+'|'+dayOf(r.regAt); cell[k]=(cell[k]||0)+r.qty; mxMax=Math.max(mxMax,cell[k]); }); });
     let rows='';
     MAJORS.forEach(m=>{
       const dayTot=days.map(d=>CATS.filter(c=>c[0]===m).reduce((s,c)=>s+(cell[c[1]+'|'+d]||0),0));
@@ -612,7 +619,7 @@ function renderAdm(){
     });
     const totals=days.map(d=>L.filter(r=>dayOf(r.regAt)===d).reduce((s,r)=>s+r.qty,0));
     body=`<div class="seg">${[7,14,30].map(d=>`<button class="${admDays===d?'on':''}" data-act="admdays" data-k="${d}">近${d}天</button>`).join('')}</div>
-    <div class="card"><h3>日期 × 瑕疵小類別（件數，依登記日）</h3><div class="mx"><table class="mx2"><thead><tr><th class="l">類別</th>${days.map(d=>`<th>${d.slice(5)}</th>`).join('')}<th>合計</th></tr></thead><tbody>${rows}<tr class="g"><td class="l">每日合計</td>${totals.map(x=>`<td>${x||''}</td>`).join('')}<td>${totals.reduce((a,b)=>a+b,0)}</td></tr></tbody></table></div></div>`;
+    <div class="card"><h3>日期 × 瑕疵小類別（件數，依登記日）</h3><p class="hint" style="margin:-4px 0 8px">一件商品複選多種瑕疵時，每種類別各算一次；「每日合計」是實際瑕疵件數。</p><div class="mx"><table class="mx2"><thead><tr><th class="l">類別</th>${days.map(d=>`<th>${d.slice(5)}</th>`).join('')}<th>合計</th></tr></thead><tbody>${rows}<tr class="g"><td class="l">每日合計</td>${totals.map(x=>`<td>${x||''}</td>`).join('')}<td>${totals.reduce((a,b)=>a+b,0)}</td></tr></tbody></table></div></div>`;
   } else {
     body=`<div class="card"><h3>匯出報表</h3><p class="hint">Excel 內含：明細、日期×小類別、各店彙總、未結案滯留清單。</p><button class="btn block" data-act="export">下載 Excel</button></div>
     <div class="card"><h3>門市資料（${STORES.length} 間）</h3><div class="mx" style="max-height:340px"><table class="mx2"><thead><tr><th class="l">店名</th><th>店代號</th><th>坪數</th><th>支線</th><th>地址</th><th>近${admDays}天件數</th><th>件/坪</th></tr></thead><tbody>${STORES.map(s=>{const n=live().filter(r=>r.store===s.code&&inRange(r)).reduce((x,r)=>x+r.qty,0);return `<tr><td class="l">${esc(s.name)}</td><td>${s.code}</td><td>${s.ping??''}</td><td>${esc(s.line||'')}</td><td style="text-align:left">${esc(s.addr||'')}</td><td>${n||''}</td><td>${n&&s.ping?(n/s.ping).toFixed(2):''}</td></tr>`}).join('')}</tbody></table></div></div>
@@ -633,16 +640,16 @@ async function doExport(){
   let X; try{ X=await loadXlsx(); }catch(e){ return toast('匯出元件載入失敗，請確認網路'); }
   const A=all();
   const detail=[['瑕疵編號','登記時間','店代號','店名','坪數','販售支線','店櫃地址','區域','登記人','款號','商品名稱','商品支線','商品品類','條碼','顏色/尺寸','數量','大類','小類','備註','狀態','滯留天數','開始修復時間','修復人員','結果登記時間','轉正品','轉特賣','轉報廢','特賣價','特賣去向','報廢單號','報廢核准人','結案時間','作廢原因']]
-   .concat(A.map(r=>[r.id,r.regAt,r.store,r.storeName,(storeBy(r.store)||{}).ping??'',(storeBy(r.store)||{}).line||'',(storeBy(r.store)||{}).addr||'',r.region,r.regBy,r.sku,r.pname||'',r.pline||'',r.pcat||'',r.barcode||'',r.color||'',r.qty,r.cat,r.sub,r.note||'',r.status,ageDays(r),r.startAt||'',r.startBy||'',r.resAt||'',r.ok||0,r.sale||0,r.scrap||0,r.price||'',r.dest||'',r.scrapNo||'',r.scrapBy||'',r.closeAt||'',r.voidWhy||'']));
+   .concat(A.map(r=>[r.id,r.regAt,r.store,r.storeName,(storeBy(r.store)||{}).ping??'',(storeBy(r.store)||{}).line||'',(storeBy(r.store)||{}).addr||'',r.region,r.regBy,r.sku,r.pname||'',r.pline||'',r.pcat||'',r.barcode||'',r.color||'',r.qty,catsOf(r).join('＋'),subText(r),r.note||'',r.status,ageDays(r),r.startAt||'',r.startBy||'',r.resAt||'',r.ok||0,r.sale||0,r.scrap||0,r.price||'',r.dest||'',r.scrapNo||'',r.scrapBy||'',r.closeAt||'',r.voidWhy||'']));
   const L=A.filter(r=>!r.void);
   const days=[...new Set(L.map(r=>dayOf(r.regAt)))].sort();
   const mx=[['大類','小類',...days,'合計']];
-  CATS.forEach(c=>{ const vals=days.map(d=>L.filter(r=>r.sub===c[1]&&dayOf(r.regAt)===d).reduce((s,r)=>s+r.qty,0)); mx.push([c[0],c[1],...vals,vals.reduce((a,b)=>a+b,0)]); });
+  CATS.forEach(c=>{ const vals=days.map(d=>L.filter(r=>subsOf(r).includes(c[1])&&dayOf(r.regAt)===d).reduce((s,r)=>s+r.qty,0)); mx.push([c[0],c[1],...vals,vals.reduce((a,b)=>a+b,0)]); });
   mx.push(['每日合計','',...days.map(d=>L.filter(r=>dayOf(r.regAt)===d).reduce((s,r)=>s+r.qty,0)),L.reduce((s,r)=>s+r.qty,0)]);
   const sm=[['店代號','店名','坪數','販售支線','區域','登記件數','待修復','修復中','待報廢','已結案','轉正品','轉特賣','轉報廢','修復成功率','每坪瑕疵件數']];
   STORES.forEach(s=>{ const a=L.filter(r=>r.store===s.code); const q=f=>a.filter(f).reduce((x,r)=>x+r.qty,0); const ok=a.reduce((x,r)=>x+(r.ok||0),0), sa=a.reduce((x,r)=>x+(r.sale||0),0), sc=a.reduce((x,r)=>x+(r.scrap||0),0);
     sm.push([s.code,s.name,s.ping??'',s.line||'',s.region,q(()=>true),q(r=>r.status==='已登記'),q(r=>r.status==='修復中'),q(r=>r.status==='待報廢核准'),q(r=>r.status==='已結案'),ok,sa,sc,(ok+sa+sc)?+(ok/(ok+sa+sc)).toFixed(3):'',s.ping?+(q(()=>true)/s.ping).toFixed(2):'']); });
-  const st=[['瑕疵編號','狀態','滯留天數','店名','款號','數量','小類','目前階段開始時間']].concat(L.filter(r=>r.status!=='已結案').sort((a,b)=>ageDays(b)-ageDays(a)).map(r=>[r.id,r.status,ageDays(r),r.storeName,r.sku,r.qty,r.sub,stageStart(r)]));
+  const st=[['瑕疵編號','狀態','滯留天數','店名','款號','數量','小類','目前階段開始時間']].concat(L.filter(r=>r.status!=='已結案').sort((a,b)=>ageDays(b)-ageDays(a)).map(r=>[r.id,r.status,ageDays(r),r.storeName,r.sku,r.qty,subText(r),stageStart(r)]));
   const wb=X.utils.book_new();
   [['明細',detail],['日期x小類別',mx],['各店彙總',sm],['未結案滯留',st]].forEach(([n,d])=>{ const ws=X.utils.aoa_to_sheet(d); ws['!cols']=d[0].map(()=>({wch:14})); X.utils.book_append_sheet(wb,ws,n); });
   X.writeFile(wb,`瑕疵品報表_${nowStr().slice(0,10)}.xlsx`); toast('已下載');
@@ -674,9 +681,9 @@ document.addEventListener('click',e=>{
   const a=b.dataset.act, id=b.dataset.id, k=b.dataset.k;
   if(a==='sel'){ e.stopPropagation(); const set=curView==='adm'?admSel:sel; (b.checked?set.add(id):set.delete(id)); renderAll(); return; }
   switch(a){
-    case 'major': form.major=k; if(form.sub&&CATS.find(c=>c[1]===form.sub)[0]!==k) form.sub=null; keepForm(); renderReg(); break;
-    case 'sub': form.sub=k; keepForm(); renderReg(); break;
-    case 'pickrecent': { const c=CATS.find(c=>c[1]===k); form.major=c[0]; form.sub=k; keepForm(); renderReg(); break; }
+    case 'major': form.major=k; keepForm(); renderReg(); break;
+    case 'sub': toggleSub(k); break;
+    case 'pickrecent': { const c=CATS.find(c=>c[1]===k); if(!form.subs.includes(k)) form.major=c[0]; toggleSub(k); break; }
     case 'qty': { const q=$('f-qty'); form.qty=Math.max(1,(parseInt(q.value)||1)+(+b.dataset.d)); q.value=form.qty; break; }
     case 'chgstore': chooseStore(); break;
     case 'scan': keepForm(); openScan(); break;
@@ -707,6 +714,7 @@ document.addEventListener('click',e=>{
     case 'clearall': if(confirm('確定清除本機所有瑕疵資料？')){ cache={}; outbox=[]; persist(); renderAll(); } break;
   }
 });
+function toggleSub(k){ keepForm(); const i=form.subs.indexOf(k); if(i>=0) form.subs.splice(i,1); else if(form.subs.length>=MAXSUB){ toast('最多選 '+MAXSUB+' 項'); return; } else form.subs.push(k); renderReg(); }
 function keepForm(){ const s=$('f-sku'); if(!s) return; form.sku=s.value; form.color=$('f-color').value; form.note=$('f-note').value; form.qty=Math.max(1,parseInt($('f-qty').value)||1); }
 
 function renderAll(){
