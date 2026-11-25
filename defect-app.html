@@ -467,7 +467,7 @@ function renderMine(){
 }
 function resultText(r){
   if(!r.resAt) return '';
-  const a=[]; if(r.ok) a.push(`正品${r.ok}`); if(r.sale) a.push(`特賣${r.sale}（$${r.price}・${esc(r.dest||'')}）`); if(r.scrap) a.push(`報廢${r.scrap}${r.scrapNo?'・單號'+esc(r.scrapNo):''}`);
+  const a=[]; if(r.ok) a.push(`正品${r.ok}`); if(r.sale) a.push(`特賣${r.sale}（${esc(r.dest||'')}）`); if(r.scrap) a.push(`報廢${r.scrap}${r.scrapNo?'・單號'+esc(r.scrapNo):''}`);
   return a.join('｜');
 }
 function itemHtml(r, sel){
@@ -511,11 +511,11 @@ function openResult(id){
   const r=cache[id]; if(!r) return;
   const st={ok:r.qty,sale:0,scrap:0,price:'',dest:CONFIG.DESTS[0],note:''};
   const draw=()=>{
-    const sum=st.ok+st.sale+st.scrap, good=sum===r.qty && (st.sale===0||(+st.price>0));
+    const sum=st.ok+st.sale+st.scrap, good=sum===r.qty;
     openSheet(`<h2>登記修復結果</h2><div class="hint">${esc(r.sku)}${r.color?'・'+esc(r.color):''}・${esc(subText(r))}・共 <b>${r.qty}</b> 件</div>
     <div class="row" style="margin:10px 0"><button class="btn sec sm grow" data-q="all-ok">全部修好</button><button class="btn sec sm grow" data-q="all-sale">全部特賣</button><button class="btn sec sm grow" data-q="all-scrap">全部報廢</button></div>
     ${[['ok','修復完成 → 轉正品（回庫）'],['sale','無法修復 → 轉特賣品'],['scrap','無法修復 → 轉報廢']].map(([k,t])=>`<label class="f">${t}</label><div class="stepper" style="width:max-content"><button data-s="${k}" data-d="-1">－</button><input type="number" data-n="${k}" value="${st[k]}" min="0"><button data-s="${k}" data-d="1">＋</button></div>`).join('')}
-    ${st.sale>0?`<div class="card" style="margin-top:10px;background:#fafbff"><label class="f" style="margin-top:0">特賣價（每件，元）</label><input type="number" id="r-price" value="${st.price}" inputmode="numeric"><label class="f">特賣去向</label><select id="r-dest">${CONFIG.DESTS.map(d=>`<option ${d===st.dest?'selected':''}>${d}</option>`).join('')}</select></div>`:''}
+    ${st.sale>0?`<div class="card" style="margin-top:10px;background:#fafbff"><label class="f" style="margin-top:0">特賣去向</label><select id="r-dest">${CONFIG.DESTS.map(d=>`<option ${d===st.dest?'selected':''}>${d}</option>`).join('')}</select></div>`:''}
     ${st.scrap>0?`<label class="f">報廢原因（選填）</label><input type="text" id="r-note" value="${esc(st.note)}" placeholder="例：布料破損無法補強">`:''}
     <p class="hint" style="margin-top:10px">${sum===r.qty?'數量已分配完成 ✔':`目前合計 ${sum} / ${r.qty}，${sum<r.qty?'還差 '+(r.qty-sum):'多了 '+(sum-r.qty)} 件`}${st.scrap>0?'<br>報廢品將交由管理員登記報廢單號後結案。':''}</p>
     <div class="row"><button class="btn gray grow" data-act="close">取消</button><button class="btn grow" id="r-ok" ${good?'':'disabled'}>確認送出</button></div>`);
@@ -529,11 +529,11 @@ function openResult(id){
     $('r-ok').onclick=()=>{ keep();
       if(!needName()) return;
       r.resAt=nowStr(); r.resBy=me.name; r.ok=st.ok; r.sale=st.sale; r.scrap=st.scrap;
-      if(st.sale){ r.price=+st.price; r.dest=st.dest; }
+      if(st.sale){ r.dest=st.dest; }
       if(st.scrap){ r.scrapNote=st.note; } else { r.closeAt=r.resAt; }
       save(r); closeSheet(); toast(st.scrap?'已送出，待管理員報廢核准':'已結案'); };
   };
-  function keep(){ const p=$('r-price'); if(p) st.price=p.value; const d=$('r-dest'); if(d) st.dest=d.value; const n=$('r-note'); if(n) st.note=n.value; }
+  function keep(){ const d=$('r-dest'); if(d) st.dest=d.value; const n=$('r-note'); if(n) st.note=n.value; }
   draw();
 }
 function quickAllOk(id){
@@ -639,8 +639,8 @@ async function loadXlsx(){
 async function doExport(){
   let X; try{ X=await loadXlsx(); }catch(e){ return toast('匯出元件載入失敗，請確認網路'); }
   const A=all();
-  const detail=[['瑕疵編號','登記時間','店代號','店名','坪數','販售支線','店櫃地址','區域','登記人','款號','商品名稱','商品支線','商品品類','條碼','顏色/尺寸','數量','大類','小類','備註','狀態','滯留天數','開始修復時間','修復人員','結果登記時間','轉正品','轉特賣','轉報廢','特賣價','特賣去向','報廢單號','報廢核准人','結案時間','作廢原因']]
-   .concat(A.map(r=>[r.id,r.regAt,r.store,r.storeName,(storeBy(r.store)||{}).ping??'',(storeBy(r.store)||{}).line||'',(storeBy(r.store)||{}).addr||'',r.region,r.regBy,r.sku,r.pname||'',r.pline||'',r.pcat||'',r.barcode||'',r.color||'',r.qty,catsOf(r).join('＋'),subText(r),r.note||'',r.status,ageDays(r),r.startAt||'',r.startBy||'',r.resAt||'',r.ok||0,r.sale||0,r.scrap||0,r.price||'',r.dest||'',r.scrapNo||'',r.scrapBy||'',r.closeAt||'',r.voidWhy||'']));
+  const detail=[['瑕疵編號','登記時間','店代號','店名','坪數','販售支線','店櫃地址','區域','登記人','款號','商品名稱','商品支線','商品品類','條碼','顏色/尺寸','數量','大類','小類','備註','狀態','滯留天數','開始修復時間','修復人員','結果登記時間','轉正品','轉特賣','轉報廢','特賣去向','報廢單號','報廢核准人','結案時間','作廢原因']]
+   .concat(A.map(r=>[r.id,r.regAt,r.store,r.storeName,(storeBy(r.store)||{}).ping??'',(storeBy(r.store)||{}).line||'',(storeBy(r.store)||{}).addr||'',r.region,r.regBy,r.sku,r.pname||'',r.pline||'',r.pcat||'',r.barcode||'',r.color||'',r.qty,catsOf(r).join('＋'),subText(r),r.note||'',r.status,ageDays(r),r.startAt||'',r.startBy||'',r.resAt||'',r.ok||0,r.sale||0,r.scrap||0,r.dest||'',r.scrapNo||'',r.scrapBy||'',r.closeAt||'',r.voidWhy||'']));
   const L=A.filter(r=>!r.void);
   const days=[...new Set(L.map(r=>dayOf(r.regAt)))].sort();
   const mx=[['大類','小類',...days,'合計']];
