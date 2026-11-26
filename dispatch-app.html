@@ -461,6 +461,12 @@
   const $ = id => document.getElementById(id);
   const WEEKDAY_NAMES = ['日','一','二','三','四','五','六'];
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpNQnSSTS_aFf_CbXH2q2JtxTP_1_veEJBkw43hwjNTF4_YiMypSF3t75l-2fKaIBY/exec';
+  // 行駛距離資料來源（leg-api-apps-script.gs 部署後的網址）；留空＝匯出報表不含行駛距離
+  const LEGS_URL = '';
+  let exportLegs = {};   // key: 日期|司機|站序 → {km, gmin, act, state}
+  // 固定行駛距離（公里）：key = 司機|星期(1-5)|站序（＝從上一站到這一站）。路線調整時更新這張表。
+  const FIXED_KM = {"朱銘澤|1|2":1.1,"朱銘澤|1|3":0.0,"朱銘澤|2|2":1.1,"朱銘澤|2|3":0.0,"朱銘澤|3|2":1.1,"朱銘澤|3|3":0.2,"朱銘澤|4|2":0.0,"朱銘澤|4|3":0.0,"林柏均|1|2":0.3,"林柏均|1|3":0.4,"林柏均|1|4":0.1,"林柏均|1|5":0.1,"林柏均|2|2":0.3,"林柏均|2|3":0.7,"林柏均|2|4":0.5,"林柏均|3|2":0.5,"林柏均|3|3":0.0,"林柏均|3|4":0.1,"賴昱誠|2|2":0.6,"賴昱誠|4|2":0.2,"陳兆晏|1|2":13.2,"陳兆晏|1|3":12.9,"陳兆晏|1|4":8.4,"陳兆晏|2|2":13.1,"陳兆晏|2|3":12.0,"陳兆晏|2|4":8.4,"陳兆晏|3|2":13.2,"陳兆晏|3|3":12.9,"陳兆晏|3|4":8.7,"陳兆晏|4|2":13.3,"陳兆晏|4|3":12.9,"陳兆晏|4|4":8.2,"陳兆晏|5|2":13.5,"陳兆晏|5|3":12.9,"陳兆晏|5|4":8.0,"陳狄獻|1|2":42.5,"陳狄獻|1|3":45.8,"陳狄獻|2|2":42.6,"陳狄獻|2|3":45.8,"陳狄獻|3|2":41.0,"陳狄獻|3|3":45.0,"陳狄獻|4|2":42.7,"陳狄獻|4|3":45.8,"陳狄獻|5|2":45.0,"陳狄獻|5|3":45.8,"吳昀彥|1|2":5.0,"吳昀彥|1|3":7.0,"吳昀彥|1|4":6.7,"吳昀彥|1|5":0.1,"吳昀彥|1|6":5.5,"吳昀彥|2|2":5.5,"吳昀彥|2|3":7.1,"吳昀彥|2|4":6.8,"吳昀彥|2|5":0.2,"吳昀彥|2|6":5.6,"吳昀彥|3|2":5.5,"吳昀彥|3|3":6.9,"吳昀彥|3|4":6.7,"吳昀彥|3|5":0.1,"吳昀彥|3|6":5.8,"吳昀彥|4|2":0.0,"吳昀彥|4|3":7.1,"吳昀彥|4|4":6.9,"吳昀彥|4|5":0.1,"吳昀彥|4|6":7.1,"吳昀彥|5|2":6.0,"吳昀彥|5|3":7.1,"吳昀彥|5|4":7.1,"吳昀彥|5|5":0.1,"吳昀彥|5|6":6.3,"王郁文|1|2":4.5,"王郁文|1|3":4.4,"王郁文|1|4":5.9,"王郁文|1|5":0.2,"王郁文|1|6":5.5,"王郁文|2|2":5.9,"王郁文|2|3":4.4,"王郁文|2|4":5.7,"王郁文|2|5":0.2,"王郁文|2|6":5.6,"王郁文|3|2":5.9,"王郁文|3|3":4.2,"王郁文|3|4":5.7,"王郁文|3|5":0.2,"王郁文|3|6":6.0,"王郁文|4|2":5.9,"王郁文|4|3":4.4,"王郁文|4|4":5.9,"王郁文|4|5":0.2,"王郁文|4|6":5.6,"王郁文|5|2":5.9,"王郁文|5|3":4.3,"王郁文|5|4":5.0,"王郁文|5|5":0.2,"王郁文|5|6":6.3,"王柏淵|1|2":0.8,"王柏淵|1|3":70.0,"王柏淵|1|4":3.0,"王柏淵|1|5":70.3,"王柏淵|1|6":0.7,"王柏淵|1|7":0.8,"王柏淵|2|2":0.5,"王柏淵|2|3":0.8,"王柏淵|2|4":3.0,"王柏淵|2|5":3.0,"王柏淵|2|6":1.0,"王柏淵|2|7":1.0,"王柏淵|3|2":0.8,"王柏淵|3|3":71.0,"王柏淵|3|4":3.0,"王柏淵|3|5":70.0,"王柏淵|3|6":0.7,"王柏淵|3|7":0.8,"王柏淵|4|2":0.8,"王柏淵|4|3":68.5,"王柏淵|4|4":3.0,"王柏淵|4|5":70.0,"王柏淵|4|6":0.5,"王柏淵|4|7":0.3,"王柏淵|4|9":0.0,"王柏淵|5|2":0.8,"王柏淵|5|3":71.2,"王柏淵|5|4":3.1,"王柏淵|5|5":69.9,"王柏淵|5|6":0.5,"王柏淵|5|7":0.8,"陳琮斌|1|2":0.0,"陳琮斌|1|3":3.4,"陳琮斌|1|4":0.0,"陳琮斌|2|2":0.0,"陳琮斌|2|3":3.2,"陳琮斌|2|4":0.0,"陳琮斌|3|2":0.0,"陳琮斌|3|3":3.5,"陳琮斌|3|4":0.1,"陳琮斌|4|2":0.0,"陳琮斌|4|3":3.5,"陳琮斌|4|4":0.1,"陳琮斌|5|2":0.0,"陳琮斌|5|3":3.3,"陳琮斌|5|4":0.5,"朱家宏|1|2":11.3,"朱家宏|1|3":3.4,"朱家宏|1|4":20.3,"朱家宏|2|2":11.4,"朱家宏|2|3":3.3,"朱家宏|2|4":20.2,"朱家宏|3|2":11.3,"朱家宏|3|3":3.2,"朱家宏|3|4":20.5,"朱家宏|4|2":12.0,"朱家宏|4|3":3.3,"朱家宏|4|4":20.0,"朱家宏|5|2":12.0,"朱家宏|5|3":3.4,"朱家宏|5|4":15.0,"李尚鴻|1|2":32.6,"李尚鴻|1|3":31.1,"李尚鴻|1|4":3.3,"李尚鴻|2|2":0.0,"李尚鴻|2|3":28.0,"李尚鴻|2|4":2.6,"李尚鴻|2|5":7.0,"李尚鴻|2|6":2.5,"李尚鴻|3|2":32.0,"李尚鴻|3|3":31.5,"李尚鴻|3|4":3.4,"李尚鴻|3|5":7.0,"李尚鴻|3|6":2.5,"李尚鴻|4|2":32.0,"李尚鴻|4|3":28.0,"李尚鴻|4|4":3.3,"李尚鴻|5|2":32.0,"李尚鴻|5|3":28.0,"李尚鴻|5|4":3.3};
+  const fixedKm = (driver, date, idx) => { const wd = new Date(date+'T00:00:00+08:00').getDay(); const v = FIXED_KM[driver+'|'+wd+'|'+idx]; return v===undefined ? null : v; };
   const LATE_TOLERANCE_MIN = 10;
 
   // ============ DRIVER DATA ============
@@ -2366,7 +2372,7 @@
           const boxes = dl && !dl.none && dl.boxes!=null && dl.boxes!=='' ? Number(dl.boxes) : null;
           const bags = dl && !dl.none && dl.bags!=null && dl.bags!=='' ? Number(dl.bags) : null;
           const row = {date, wk:WKN[wd], region:d.region, driver:d.name, idx:i+1, site, time:timeStr, arrive:a?fmtHM(s.arrivedAt):'', depart:dp?fmtHM(s.departedAt):'', late, dwell,
-            boxes, bags, delNote: dl ? (dl.none?'無送貨':'') : ((a&&dp)?'未填送貨量':''), done:0, partial:0, na:0, pctSum:0, pcs:0, qb:0, qg:0, qp:0, sh:{'黑貓':0,'新竹':0,'佶傳':0}};
+            full: !!(st.route==='full' && d.fullLine), boxes, bags, delNote: dl ? (dl.none?'無送貨':'') : ((a&&dp)?'未填送貨量':''), done:0, partial:0, na:0, pctSum:0, pcs:0, qb:0, qg:0, qp:0, sh:{'黑貓':0,'新竹':0,'佶傳':0}};
           Object.keys(s.tasks||{}).forEach(tn=>{
             const r = s.tasks[tn]; if(!r) return;
             const n = EXPORT_NAME_MAP[tn] || tn;
@@ -2402,7 +2408,10 @@
     const drivers = DRIVERS.filter(x=>!x.noSchedule && x.name!=='NANA');
     const sheets = [];
     // 1 每位司機
-    const h1 = ['司機','區域','有回報天數','休假天數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','加權完成度%（部分依實際填寫%）','晚到站數(>'+LATE_TOLERANCE_MIN+'分)','到站未離店','送貨箱數','送貨袋數','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數'];
+    const h1 = ['司機','區域','有回報天數','休假天數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','加權完成度%（部分依實際填寫%）','晚到站數(>'+LATE_TOLERANCE_MIN+'分)','到站未離店','送貨箱數','送貨袋數','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數','行駛里程(km)'];
+    const lg = x => exportLegs[x.date+'|'+x.driver+'|'+x.idx];
+    const km = x => { if(!LEGS_URL){ if(!x.arrive || x.idx===1 || x.full) return 0; const v=fixedKm(x.driver,x.date,x.idx); return v===null?0:v; } const l=lg(x); return (l && l.state==='OK' && typeof l.km==='number') ? l.km : 0; };
+    const legCols = x => { if(!LEGS_URL){ if(x.idx===1) return ['']; if(x.full) return ['全線(未設定)']; const v=fixedKm(x.driver,x.date,x.idx); return [v===null?'':v]; } const l=lg(x); if(x.idx===1) return ['','','','首站']; if(!l) return ['','','','無距離資料']; return l.state==='OK' ? [l.km,l.gmin,l.act,'OK'] : ['','',l.act,l.state||'無距離資料']; };
     const r1 = [h1]; let T=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
     drivers.forEach(d=>{
       const dy = D.days.filter(x=>x[3]===d.name), sp = D.stops.filter(x=>x.driver===d.name);
@@ -2411,12 +2420,12 @@
       const done=sum(x=>x.done), par=sum(x=>x.partial), na=sum(x=>x.na), ps=sum(x=>x.pctSum);
       const arrived=sp.filter(x=>x.arrive).length, lateN=sp.filter(x=>x.late!=null && x.late>LATE_TOLERANCE_MIN).length, open=sp.filter(x=>x.arrive && !x.depart).length;
       const bx=sum(x=>x.boxes||0), bg=sum(x=>x.bags||0);
-      r1.push([d.name,d.region,dy.filter(x=>x[4]==='出勤').length,dy.filter(x=>x[4]!=='出勤').length,sp.length,arrived,done,par,na,pctOf(done,par),(done+par)?Math.round((done*100+ps)/(done+par)):'',lateN,open,bx,bg,sum(x=>x.pcs),sum(x=>x.qb),sum(x=>x.qg),sum(x=>x.qp),sum(x=>x.sh['黑貓']),sum(x=>x.sh['新竹']),sum(x=>x.sh['佶傳'])]);
-      T[0]+=dy.filter(x=>x[4]==='出勤').length;T[1]+=dy.filter(x=>x[4]!=='出勤').length;T[2]+=sp.length;T[3]+=arrived;T[4]+=done;T[5]+=par;T[6]+=na;T[7]+=ps;T[8]+=lateN;T[9]+=open;T[10]+=bx;T[11]+=bg;T[12]+=sum(x=>x.pcs);T[13]+=sum(x=>x.qb);T[14]+=sum(x=>x.qg);T[15]+=sum(x=>x.qp);T[16]+=sum(x=>x.sh['黑貓']);T[17]+=sum(x=>x.sh['新竹']);T[18]=(T[18]||0)+sum(x=>x.sh['佶傳']);
+      r1.push([d.name,d.region,dy.filter(x=>x[4]==='出勤').length,dy.filter(x=>x[4]!=='出勤').length,sp.length,arrived,done,par,na,pctOf(done,par),(done+par)?Math.round((done*100+ps)/(done+par)):'',lateN,open,bx,bg,sum(x=>x.pcs),sum(x=>x.qb),sum(x=>x.qg),sum(x=>x.qp),sum(x=>x.sh['黑貓']),sum(x=>x.sh['新竹']),sum(x=>x.sh['佶傳']),Math.round(sum(km)*10)/10]);
+      T[0]+=dy.filter(x=>x[4]==='出勤').length;T[1]+=dy.filter(x=>x[4]!=='出勤').length;T[2]+=sp.length;T[3]+=arrived;T[4]+=done;T[5]+=par;T[6]+=na;T[7]+=ps;T[8]+=lateN;T[9]+=open;T[10]+=bx;T[11]+=bg;T[12]+=sum(x=>x.pcs);T[13]+=sum(x=>x.qb);T[14]+=sum(x=>x.qg);T[15]+=sum(x=>x.qp);T[16]+=sum(x=>x.sh['黑貓']);T[17]+=sum(x=>x.sh['新竹']);T[18]=(T[18]||0)+sum(x=>x.sh['佶傳']);T[19]=(T[19]||0)+sum(km);
     });
-    r1.push(['合計','',T[0],T[1],T[2],T[3],T[4],T[5],T[6],pctOf(T[4],T[5]),(T[4]+T[5])?Math.round((T[4]*100+T[7])/(T[4]+T[5])):'',T[8],T[9],T[10],T[11],T[12],T[13],T[14],T[15],T[16],T[17],T[18]]);
-    r1.push([]); r1.push(['說明：完成比例=完成÷(完成＋部分)，不含不適用；收送貨、寄貨類不計入。沒有回報紀錄的司機不列入（見「未回報」分頁）。']);
-    sheets.push(['每位司機'+(dates.length>1?'（週合計）':''), r1, [10,7,10,9,7,8,7,7,8,16,18,14,10,9,9,16,10,10,10,10,10,10]]);
+    r1.push(['合計','',T[0],T[1],T[2],T[3],T[4],T[5],T[6],pctOf(T[4],T[5]),(T[4]+T[5])?Math.round((T[4]*100+T[7])/(T[4]+T[5])):'',T[8],T[9],T[10],T[11],T[12],T[13],T[14],T[15],T[16],T[17],T[18],Math.round((T[19]||0)*10)/10]);
+    r1.push([]); r1.push(['說明：完成比例=完成÷(完成＋部分)，不含不適用；收送貨、寄貨類不計入。行駛里程＝各站「上一站→本站」固定距離（依路線固定表，不受塞車、用餐、繞路影響）加總，只計有到站的站，每天第 1 站不計；李尚鴻跑全線的站未計入。沒有回報紀錄的司機不列入（見「未回報」分頁）。']);
+    sheets.push(['每位司機'+(dates.length>1?'（週合計）':''), r1, [10,7,10,9,7,8,7,7,8,16,18,14,10,9,9,16,10,10,10,10,10,10,12]]);
     // 2 週：司機×日
     if(dates.length>1){
       const r2 = [['司機',...dates.map(x=>WKN[weekdayOfDateStr(x)]+' '+x.slice(5)),'週合計']];
@@ -2430,13 +2439,13 @@
       dates.forEach(dt=>{ const sp=D.stops.filter(x=>x.date===dt); const a=sp.reduce((s,x)=>s+x.done,0), b=sp.reduce((s,x)=>s+x.partial,0); ad+=a; ap+=b; all.push(pctOf(a,b)); });
       all.push(pctOf(ad,ap)); r2.push(all); r2.push([]); r2.push(['空白＝當天沒有該司機的回報紀錄或沒有可計算的項目。']);
       sheets.push(['每日完成比例%（司機×日）', r2, [10,12,12,12,12,12,10]]);
-      const r3 = [['日期','星期','有回報司機數','休假人數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','晚到站數','送貨箱數','送貨袋數']];
+      const r3 = [['日期','星期','有回報司機數','休假人數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','晚到站數','送貨箱數','送貨袋數','行駛里程(km)']];
       dates.forEach(dt=>{
         const sp=D.stops.filter(x=>x.date===dt), dy=D.days.filter(x=>x[0]===dt);
         const s=f=>sp.reduce((a,x)=>a+f(x),0);
-        r3.push([dt,WKN[weekdayOfDateStr(dt)],dy.filter(x=>x[4]==='出勤').length,dy.filter(x=>x[4]!=='出勤').length,sp.length,sp.filter(x=>x.arrive).length,s(x=>x.done),s(x=>x.partial),s(x=>x.na),pctOf(s(x=>x.done),s(x=>x.partial)),sp.filter(x=>x.late!=null&&x.late>LATE_TOLERANCE_MIN).length,s(x=>x.boxes||0),s(x=>x.bags||0)]);
+        r3.push([dt,WKN[weekdayOfDateStr(dt)],dy.filter(x=>x[4]==='出勤').length,dy.filter(x=>x[4]!=='出勤').length,sp.length,sp.filter(x=>x.arrive).length,s(x=>x.done),s(x=>x.partial),s(x=>x.na),pctOf(s(x=>x.done),s(x=>x.partial)),sp.filter(x=>x.late!=null&&x.late>LATE_TOLERANCE_MIN).length,s(x=>x.boxes||0),s(x=>x.bags||0),Math.round(s(km)*10)/10]);
       });
-      sheets.push(['每日總覽', r3, [11,7,12,9,7,8,7,7,8,16,10,9,9]]);
+      sheets.push(['每日總覽', r3, [11,7,12,9,7,8,7,7,8,16,10,9,9,12]]);
     }
     // 工作項目統計
     const byT = {};
@@ -2448,9 +2457,9 @@
     });
     sheets.push(['工作項目統計', r4, [18,7,7,8,12,16,12,40,16]]);
     // 站點明細
-    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數']];
-    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote,x.pcs,x.qb,x.qg,x.qp,x.sh['黑貓'],x.sh['新竹'],x.sh['佶傳']]));
-    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12,14,10,10,10,10,10,10,10]]);
+    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數',...(LEGS_URL ? ['距上一站行駛(km)','Google預估車程(分)','實際行駛時間(分)','路段狀態'] : ['距上一站固定距離(km)'])]];
+    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote,x.pcs,x.qb,x.qg,x.qp,x.sh['黑貓'],x.sh['新竹'],x.sh['佶傳'],...legCols(x)]));
+    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12,14,10,10,10,10,10,10,10,...(LEGS_URL?[12,12,12,10]:[14])]]);
     // 不適用明細
     const r6 = [['日期','司機','站序','站點','工作項目','原因','指派人']];
     D.tasks.filter(t=>t[7]==='不適用').forEach(t=>r6.push([t[0],t[3],t[4],t[5],t[6],t[9],t[10]]));
@@ -2505,6 +2514,17 @@
   }
   async function doExport(){
     const dates = exportDates();
+    const msg0 = $('exportMsg'); exportLegs = {};
+    if(LEGS_URL){
+      msg0.textContent = '讀取行駛距離中…';
+      try{
+        const ac = new AbortController(); const tm = setTimeout(()=>ac.abort(), 20000);
+        const res = await fetch(LEGS_URL+'?action=legs&from='+dates[0]+'&to='+dates[dates.length-1], {signal: ac.signal}); clearTimeout(tm);
+        const j = await res.json();
+        if(j && j.ok) (j.rows||[]).forEach(r=>{ exportLegs[r[0]+'|'+r[1]+'|'+r[2]] = {km:r[3], gmin:r[4], act:r[5], state:r[6]}; });
+        else throw new Error('bad');
+      }catch(e){ msg0.textContent = '行駛距離載入失敗，本次報表不含距離欄位。'; await new Promise(r=>setTimeout(r,1200)); }
+    }
     const {sheets} = buildExportSheets(dates);
     const base = dates.length>1 ? `物流工作分析_${dates[0]}至${dates[dates.length-1].slice(5)}` : `物流工作分析_${dates[0]}`;
     const msg = $('exportMsg'); msg.textContent = '產生中…';
@@ -2557,7 +2577,7 @@
         <tbody>${body}<tr><td><b>合計</b></td><td>${tot[2]}</td><td>${tot[4]}</td><td>${tot[6]}</td><td>${tot[7]}</td><td>${tot[8]}</td><td><b>${tot[9]===''?'—':tot[9]+'%'}</b></td><td>${tot[11]}</td></tr></tbody>
       </table></div>
       <div style="margin:14px 0;"><button class="bigbtn depart" id="exportBtn" style="width:auto;margin:0;padding:12px 22px;">下載 Excel（${dates.length>1?'整週':'單日'}分析報表）</button> <span id="exportMsg" style="margin-left:10px;color:var(--text-mute);"></span></div>
-      <div style="font-size:13px;color:var(--text-mute);line-height:1.6;">Excel 內含：每位司機${dates.length>1?'（週合計）、司機×日完成比例、每日總覽':''}、工作項目統計、站點明細、不適用明細、工作項目明細${D.missing.length?'、未回報':''}。完成比例＝完成÷(完成＋部分)，不含不適用；收送貨、寄貨類不計入。</div>`;
+      <div style="font-size:13px;color:var(--text-mute);line-height:1.6;">Excel 內含：每位司機${dates.length>1?'（週合計）、司機×日完成比例、每日總覽':''}、工作項目統計、站點明細（含每站行駛距離）、不適用明細、工作項目明細${D.missing.length?'、未回報':''}。完成比例＝完成÷(完成＋部分)，不含不適用；收送貨、寄貨類不計入。</div>`;
     $('expModeDay').addEventListener('click', ()=>{ exportMode='day'; renderAdmin(); });
     $('expModeWeek').addEventListener('click', ()=>{ exportMode='week'; renderAdmin(); });
     $('adminDateInput').addEventListener('change', e=>{ adminDate = e.target.value || adminDate; renderAdmin(); });
