@@ -463,6 +463,8 @@
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpNQnSSTS_aFf_CbXH2q2JtxTP_1_veEJBkw43hwjNTF4_YiMypSF3t75l-2fKaIBY/exec';
   // 行駛距離資料來源（leg-api-apps-script.gs 部署後的網址）；留空＝匯出報表不含行駛距離
   const LEGS_URL = '';
+  const SIGNOFF_URL = 'https://script.google.com/macros/s/AKfycbw7ra5Idl7sRaKyb-XJViYNI2pM-qtjWQxjtvFirJnlr3rGDHpGNy6cj8SyWt9XgwS9/exec';  // 門市簽核（空字串＝報表不含簽核）
+  let exportSign = null;   // null＝未載入（報表不含簽核欄）；{} 起＝已載入 key: 日期|司機|時段 → [{store,manager,task,result,reason}]
   let exportLegs = {};   // key: 日期|司機|站序 → {km, gmin, act, state}
   // 固定行駛距離（公里）：key = 司機|星期(1-5)|站序（＝從上一站到這一站）。路線調整時更新這張表。
   const FIXED_KM = {"朱銘澤|1|2":1.1,"朱銘澤|1|3":0.0,"朱銘澤|2|2":1.1,"朱銘澤|2|3":0.0,"朱銘澤|3|2":1.1,"朱銘澤|3|3":0.2,"朱銘澤|4|2":0.0,"朱銘澤|4|3":0.0,"林柏均|1|2":0.3,"林柏均|1|3":0.4,"林柏均|1|4":0.1,"林柏均|1|5":0.1,"林柏均|2|2":0.3,"林柏均|2|3":0.7,"林柏均|2|4":0.5,"林柏均|3|2":0.5,"林柏均|3|3":0.0,"林柏均|3|4":0.1,"賴昱誠|2|2":0.6,"賴昱誠|4|2":0.2,"陳兆晏|1|2":13.2,"陳兆晏|1|3":12.9,"陳兆晏|1|4":8.4,"陳兆晏|2|2":13.1,"陳兆晏|2|3":12.0,"陳兆晏|2|4":8.4,"陳兆晏|3|2":13.2,"陳兆晏|3|3":12.9,"陳兆晏|3|4":8.7,"陳兆晏|4|2":13.3,"陳兆晏|4|3":12.9,"陳兆晏|4|4":8.2,"陳兆晏|5|2":13.5,"陳兆晏|5|3":12.9,"陳兆晏|5|4":8.0,"陳狄獻|1|2":42.5,"陳狄獻|1|3":45.8,"陳狄獻|2|2":42.6,"陳狄獻|2|3":45.8,"陳狄獻|3|2":41.0,"陳狄獻|3|3":45.0,"陳狄獻|4|2":42.7,"陳狄獻|4|3":45.8,"陳狄獻|5|2":45.0,"陳狄獻|5|3":45.8,"吳昀彥|1|2":5.0,"吳昀彥|1|3":7.0,"吳昀彥|1|4":6.7,"吳昀彥|1|5":0.1,"吳昀彥|1|6":5.5,"吳昀彥|2|2":5.5,"吳昀彥|2|3":7.1,"吳昀彥|2|4":6.8,"吳昀彥|2|5":0.2,"吳昀彥|2|6":5.6,"吳昀彥|3|2":5.5,"吳昀彥|3|3":6.9,"吳昀彥|3|4":6.7,"吳昀彥|3|5":0.1,"吳昀彥|3|6":5.8,"吳昀彥|4|2":0.0,"吳昀彥|4|3":7.1,"吳昀彥|4|4":6.9,"吳昀彥|4|5":0.1,"吳昀彥|4|6":7.1,"吳昀彥|5|2":6.0,"吳昀彥|5|3":7.1,"吳昀彥|5|4":7.1,"吳昀彥|5|5":0.1,"吳昀彥|5|6":6.3,"王郁文|1|2":4.5,"王郁文|1|3":4.4,"王郁文|1|4":5.9,"王郁文|1|5":0.2,"王郁文|1|6":5.5,"王郁文|2|2":5.9,"王郁文|2|3":4.4,"王郁文|2|4":5.7,"王郁文|2|5":0.2,"王郁文|2|6":5.6,"王郁文|3|2":5.9,"王郁文|3|3":4.2,"王郁文|3|4":5.7,"王郁文|3|5":0.2,"王郁文|3|6":6.0,"王郁文|4|2":5.9,"王郁文|4|3":4.4,"王郁文|4|4":5.9,"王郁文|4|5":0.2,"王郁文|4|6":5.6,"王郁文|5|2":5.9,"王郁文|5|3":4.3,"王郁文|5|4":5.0,"王郁文|5|5":0.2,"王郁文|5|6":6.3,"王柏淵|1|2":0.8,"王柏淵|1|3":70.0,"王柏淵|1|4":3.0,"王柏淵|1|5":70.3,"王柏淵|1|6":0.7,"王柏淵|1|7":0.8,"王柏淵|2|2":0.5,"王柏淵|2|3":0.8,"王柏淵|2|4":3.0,"王柏淵|2|5":3.0,"王柏淵|2|6":1.0,"王柏淵|2|7":1.0,"王柏淵|3|2":0.8,"王柏淵|3|3":71.0,"王柏淵|3|4":3.0,"王柏淵|3|5":70.0,"王柏淵|3|6":0.7,"王柏淵|3|7":0.8,"王柏淵|4|2":0.8,"王柏淵|4|3":68.5,"王柏淵|4|4":3.0,"王柏淵|4|5":70.0,"王柏淵|4|6":0.5,"王柏淵|4|7":0.3,"王柏淵|4|9":0.0,"王柏淵|5|2":0.8,"王柏淵|5|3":71.2,"王柏淵|5|4":3.1,"王柏淵|5|5":69.9,"王柏淵|5|6":0.5,"王柏淵|5|7":0.8,"陳琮斌|1|2":0.0,"陳琮斌|1|3":3.4,"陳琮斌|1|4":0.0,"陳琮斌|2|2":0.0,"陳琮斌|2|3":3.2,"陳琮斌|2|4":0.0,"陳琮斌|3|2":0.0,"陳琮斌|3|3":3.5,"陳琮斌|3|4":0.1,"陳琮斌|4|2":0.0,"陳琮斌|4|3":3.5,"陳琮斌|4|4":0.1,"陳琮斌|5|2":0.0,"陳琮斌|5|3":3.3,"陳琮斌|5|4":0.5,"朱家宏|1|2":11.3,"朱家宏|1|3":3.4,"朱家宏|1|4":20.3,"朱家宏|2|2":11.4,"朱家宏|2|3":3.3,"朱家宏|2|4":20.2,"朱家宏|3|2":11.3,"朱家宏|3|3":3.2,"朱家宏|3|4":20.5,"朱家宏|4|2":12.0,"朱家宏|4|3":3.3,"朱家宏|4|4":20.0,"朱家宏|5|2":12.0,"朱家宏|5|3":3.4,"朱家宏|5|4":15.0,"李尚鴻|1|2":32.6,"李尚鴻|1|3":31.1,"李尚鴻|1|4":3.3,"李尚鴻|2|2":0.0,"李尚鴻|2|3":28.0,"李尚鴻|2|4":2.6,"李尚鴻|2|5":7.0,"李尚鴻|2|6":2.5,"李尚鴻|3|2":32.0,"李尚鴻|3|3":31.5,"李尚鴻|3|4":3.4,"李尚鴻|3|5":7.0,"李尚鴻|3|6":2.5,"李尚鴻|4|2":32.0,"李尚鴻|4|3":28.0,"李尚鴻|4|4":3.3,"李尚鴻|5|2":32.0,"李尚鴻|5|3":28.0,"李尚鴻|5|4":3.3};
@@ -2416,6 +2418,16 @@
     const sheets = [];
     // 1 每位司機
     const h1 = ['司機','區域','有回報天數','休假天數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','加權完成度%（部分依實際填寫%）','晚到站數(>'+LATE_TOLERANCE_MIN+'分)','到站未離店','送貨箱數','送貨袋數','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數','行駛里程(km)'];
+    const signRows = x => {
+      if(exportSign===null) return [];
+      const c = exportSign[x.date+'|'+x.driver+'|'+String(x.time||'').trim()] || [];
+      if(!c.length) return c;
+      const parts = String(x.site||'').split(/[\/、,，]/).map(s=>s.trim()).filter(Boolean);
+      const m = c.filter(r=>{ const s=String(r.store||''); return parts.some(p=>s.includes(p)||p.includes(s)) || String(x.site||'').includes(s); });
+      return m.length ? m : c;
+    };
+    const signStat = x => { if(exportSign===null) return ''; if(!x.arrive) return ''; const c=signRows(x); if(!c.length) return '未簽核'; return c.some(r=>r.result==='異議') ? '有異議' : '已簽核'; };
+    const signCols = x => { if(exportSign===null) return []; const c=signRows(x); const dis=c.filter(r=>r.result==='異議'); return [signStat(x), [...new Set(c.map(r=>r.manager).filter(Boolean))].join('、'), dis.map(r=>(r.task||'')+'：'+(r.reason||'')).join('；')]; };
     const lg = x => exportLegs[x.date+'|'+x.driver+'|'+x.idx];
     const km = x => { if(!LEGS_URL){ if(!x.arrive || x.idx===1 || x.full) return 0; const v=fixedKm(x.driver,x.date,x.idx); return v===null?0:v; } const l=lg(x); return (l && l.state==='OK' && typeof l.km==='number') ? l.km : 0; };
     const legCols = x => { if(!LEGS_URL){ if(x.idx===1) return ['']; if(x.full) return ['全線(未設定)']; const v=fixedKm(x.driver,x.date,x.idx); return [v===null?'':v]; } const l=lg(x); if(x.idx===1) return ['','','','首站']; if(!l) return ['','','','無距離資料']; return l.state==='OK' ? [l.km,l.gmin,l.act,'OK'] : ['','',l.act,l.state||'無距離資料']; };
@@ -2490,12 +2502,21 @@
     });
     sheets.push(['工作項目統計', r4, [18,7,7,8,12,16,12,40,16]]);
     // 站點明細
-    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數',...(LEGS_URL ? ['距上一站行駛(km)','Google預估車程(分)','實際行駛時間(分)','路段狀態'] : ['距上一站固定距離(km)'])]];
-    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote,x.pcs,x.qb,x.qg,x.qp,x.sh['黑貓'],x.sh['新竹'],x.sh['佶傳'],...legCols(x)]));
-    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12,14,10,10,10,10,10,10,10,...(LEGS_URL?[12,12,12,10]:[14])]]);
+    const r5 = [['日期','星期','區域','司機','站序','站點','預定時段','到站','離站','晚到(分,負=提早)','停留(分)','完成','部分','不適用','站點完成率%（部分依實際填寫%）','送貨箱數','送貨袋數','送貨備註','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數',...(LEGS_URL ? ['距上一站行駛(km)','Google預估車程(分)','實際行駛時間(分)','路段狀態'] : ['距上一站固定距離(km)']),...(exportSign!==null?['門市簽核','簽核人','異議內容']:[])]];
+    D.stops.forEach(x=>r5.push([x.date,x.wk,x.region,x.driver,x.idx,x.site,x.time,x.arrive,x.depart,x.late,x.dwell,x.done,x.partial,x.na,(x.done+x.partial)?Math.round((x.done*100+x.pctSum)/(x.done+x.partial)):'',x.boxes,x.bags,x.delNote,x.pcs,x.qb,x.qg,x.qp,x.sh['黑貓'],x.sh['新竹'],x.sh['佶傳'],...legCols(x),...signCols(x)]));
+    sheets.push(['站點明細', r5, [11,7,7,9,6,20,13,8,8,12,9,6,6,7,16,9,9,12,14,10,10,10,10,10,10,10,...(LEGS_URL?[12,12,12,10]:[14]),...(exportSign!==null?[10,14,40]:[])]]);
     // 不適用明細
     const r6 = [['日期','司機','站序','站點','工作項目','原因','指派人']];
     D.tasks.filter(t=>t[7]==='不適用').forEach(t=>r6.push([t[0],t[3],t[4],t[5],t[6],t[9],t[10]]));
+    if(exportSign!==null){
+      const vis = D.stops.filter(x=>x.arrive);
+      const agg = (keyFn, names) => names.map(n=>{ const v=vis.filter(x=>keyFn(x)===n); if(!v.length) return null; const sg=v.filter(x=>signStat(x)==='已簽核').length, di=v.filter(x=>signStat(x)==='有異議').length, un=v.length-sg-di; return [n,v.length,sg+di,un,Math.round((sg+di)/v.length*100),di]; }).filter(Boolean);
+      const rs=[['【依司機】','','','','',''],['司機','有到站站數','已簽核站數','未簽核站數','簽核率%','有異議站數'],...agg(x=>x.driver,[...new Set(vis.map(x=>x.driver))]),[],['【依站點】','','','','',''],['站點','有到站站數','已簽核站數','未簽核站數','簽核率%','有異議站數'],...agg(x=>x.site,[...new Set(vis.map(x=>x.site))]),[],['【異議明細】','','','','',''],['日期','司機','站點','簽核人','工作項目','異議原因']];
+      vis.forEach(x=>signRows(x).filter(r=>r.result==='異議').forEach(r=>rs.push([x.date,x.driver,r.store||x.site,r.manager||'',r.task||'',r.reason||''])));
+      const tv=vis.length, ts=vis.filter(x=>signStat(x)!=='未簽核').length;
+      rs.push([],['全部簽核率',tv?Math.round(ts/tv*100)+'%':'—','（已簽核含有異議；未簽核＝有到站但門市尚未簽核）']);
+      sheets.push(['簽核統計', rs, [20,12,12,12,10,12]]);
+    }
     sheets.push(['不適用明細', r6, [11,10,6,20,16,24,12]]);
     // 工作項目明細
     const r7 = [['日期','星期','區域','司機','站序','站點','工作項目','狀態','部分完成度%','不適用原因','指派人','件數','箱數','袋數','逐店登記明細']];
@@ -2557,6 +2578,17 @@
         if(j && j.ok) (j.rows||[]).forEach(r=>{ exportLegs[r[0]+'|'+r[1]+'|'+r[2]] = {km:r[3], gmin:r[4], act:r[5], state:r[6]}; });
         else throw new Error('bad');
       }catch(e){ msg0.textContent = '行駛距離載入失敗，本次報表不含距離欄位。'; await new Promise(r=>setTimeout(r,1200)); }
+    }
+    exportSign = null;
+    if(SIGNOFF_URL){
+      msg0.textContent = '讀取門市簽核中…';
+      try{
+        const ac2 = new AbortController(); const tm2 = setTimeout(()=>ac2.abort(), 20000);
+        const res2 = await fetch(SIGNOFF_URL+'?action=all&pw='+encodeURIComponent(ADMIN_FIX_PASSWORD)+'&from='+dates[0]+'&to='+dates[dates.length-1], {signal: ac2.signal}); clearTimeout(tm2);
+        const j2 = await res2.json();
+        if(j2 && j2.success){ exportSign = {}; (j2.rows||[]).forEach(r=>{ const k=r.date+'|'+r.driver+'|'+String(r.slot||'').trim(); (exportSign[k]=exportSign[k]||[]).push(r); }); }
+        else throw new Error('bad');
+      }catch(e){ exportSign = null; msg0.textContent = '門市簽核載入失敗（可能尚未更新簽核程式），本次報表不含簽核欄位。'; await new Promise(r=>setTimeout(r,1500)); }
     }
     const {sheets} = buildExportSheets(dates);
     const base = dates.length>1 ? `物流工作分析_${dates[0]}至${dates[dates.length-1].slice(5)}` : `物流工作分析_${dates[0]}`;
