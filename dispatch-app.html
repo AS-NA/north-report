@@ -2343,7 +2343,14 @@
   const EXPORT_NAME_MAP = {'撤貨抓貨(只抓倉庫)':'撤貨抓貨','支援EC撤貨':'支援EC','追加整理歸倉':'追加整理入倉','新品區整理':'新品整理','新品入倉整理':'新品整理','勻貨歸倉':'商品歸倉','官網補貨歸倉':'商品歸倉','補貨歸倉':'商品歸倉','勻補貨歸倉':'商品歸倉','收送貨確認':'收送貨','倉庫整理':'整倉併袋','整倉並袋':'整倉併袋','追加歸倉':'追加整理入倉','追加歸庫':'追加整理入倉','洗濾網':'濾網清潔','商品歸庫':'商品歸倉'};
   const EXPORT_SHIP = ['寄黑貓','黑貓宅急便','寄新竹物流','新竹物流','佶傳'];
   const WKN = ['週日','週一','週二','週三','週四','週五','週六'];
-  function exportDates(){ return exportMode==='week' ? buildWeekDates(adminDate) : [adminDate]; }
+  let rangeEnd = '';
+  function rangeDates(){
+    const out=[]; const s=new Date(adminDate+'T00:00:00+08:00'); const e=new Date((rangeEnd && rangeEnd>=adminDate ? rangeEnd : adminDate)+'T00:00:00+08:00');
+    for(let d=new Date(s); d<=e && out.length<31; d.setDate(d.getDate()+1)){ if(d.getDay()>=1 && d.getDay()<=5) out.push(dateStrFromDate(d)); }
+    return out.length ? out : [adminDate];
+  }
+  function nthWorkday(startStr, n){ const d=new Date(startStr+'T00:00:00+08:00'); let c=(d.getDay()>=1&&d.getDay()<=5)?1:0; while(c<n){ d.setDate(d.getDate()+1); if(d.getDay()>=1&&d.getDay()<=5) c++; } return dateStrFromDate(d); }
+  function exportDates(){ return exportMode==='week' ? buildWeekDates(adminDate) : exportMode==='range' ? rangeDates() : [adminDate]; }
   function collectExport(dates){
     const days=[], stops=[], tasks=[], ships=[], missing=[];
     dates.forEach(date=>{
@@ -2446,6 +2453,32 @@
         r3.push([dt,WKN[weekdayOfDateStr(dt)],dy.filter(x=>x[4]==='出勤').length,dy.filter(x=>x[4]!=='出勤').length,sp.length,sp.filter(x=>x.arrive).length,s(x=>x.done),s(x=>x.partial),s(x=>x.na),pctOf(s(x=>x.done),s(x=>x.partial)),sp.filter(x=>x.late!=null&&x.late>LATE_TOLERANCE_MIN).length,s(x=>x.boxes||0),s(x=>x.bags||0),Math.round(s(km)*10)/10]);
       });
       sheets.push(['每日總覽', r3, [11,7,12,9,7,8,7,7,8,16,10,9,9,12]]);
+      // 每人每日里程（司機×日）＋合計
+      const r11=[['司機','區域',...dates.map(dt=>dt.slice(5)+' '+WKN[weekdayOfDateStr(dt)]),'合計(km)']];
+      const dayT=dates.map(()=>0);
+      drivers.forEach(dr=>{
+        const mine=D.stops.filter(x=>x.driver===dr.name); if(!mine.length) return;
+        const row=[dr.name,dr.region]; let tot=0;
+        dates.forEach((dt,i)=>{ const v=Math.round(mine.filter(x=>x.date===dt).reduce((s,x)=>s+km(x),0)*10)/10; row.push(v||''); tot+=v; dayT[i]+=v; });
+        row.push(Math.round(tot*10)/10); r11.push(row);
+      });
+      r11.push(['全體','',...dayT.map(v=>Math.round(v*10)/10),Math.round(dayT.reduce((a,b)=>a+b,0)*10)/10]);
+      sheets.push(['每人每日里程', r11, [10,8,...dates.map(()=>11),12]]);
+      // 每人每週里程（週一～週日為一週）
+      const monOf = dt => { const d=new Date(dt+'T00:00:00+08:00'); const k=(d.getDay()+6)%7; d.setDate(d.getDate()-k); const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); };
+      const weeks=[...new Set(dates.map(monOf))].sort();
+      const r10=[['司機','區域',...weeks.map(w=>w+' 起該週(km)'),'合計(km)']];
+      const colT=weeks.map(()=>0);
+      drivers.forEach(dr=>{
+        const mine=D.stops.filter(x=>x.driver===dr.name); if(!mine.length) return;
+        const row=[dr.name,dr.region]; let tot=0;
+        weeks.forEach((w,i)=>{ const v=Math.round(mine.filter(x=>monOf(x.date)===w).reduce((s,x)=>s+km(x),0)*10)/10; row.push(v||''); tot+=v; colT[i]+=v; });
+        row.push(Math.round(tot*10)/10); r10.push(row);
+      });
+      const gt=colT.reduce((a,b)=>a+b,0);
+      r10.push(['全體','',...colT.map(v=>Math.round(v*10)/10),Math.round(gt*10)/10]); r10.push([]);
+      r10.push(['每週以週一～週日計；里程＝有到站各站的固定距離加總；空白＝該週沒有里程。選取日期若只涵蓋該週一部分，該週只算選取範圍內的天數。']);
+      sheets.push(['每人每週里程', r10, [10,8,...weeks.map(()=>18),12]]);
     }
     // 工作項目統計
     const byT = {};
@@ -2562,24 +2595,32 @@
     const dates = exportDates();
     const {sheets, D} = buildExportSheets(dates);
     const rows = sheets[0][1];
-    const body = rows.slice(1, -3).map(r=>`<tr><td>${escapeHtml(r[0])}</td><td>${r[2]}</td><td>${r[4]}</td><td>${r[6]}</td><td>${r[7]}</td><td>${r[8]}</td><td><b>${r[9]===''?'—':r[9]+'%'}</b></td><td>${r[11]}</td></tr>`).join('');
+    const kmI = rows[0].indexOf('行駛里程(km)');
+    const kmCell = r => kmI<0 ? '' : `<td>${r[kmI]===''||r[kmI]===undefined?'—':r[kmI]}</td>`;
+    const body = rows.slice(1, -3).map(r=>`<tr><td>${escapeHtml(r[0])}</td><td>${r[2]}</td><td>${r[4]}</td><td>${r[6]}</td><td>${r[7]}</td><td>${r[8]}</td><td><b>${r[9]===''?'—':r[9]+'%'}</b></td><td>${r[11]}</td>${kmCell(r)}</tr>`).join('');
     const tot = rows[rows.length-3];
     $('adminBody').innerHTML = `
       <div class="datepicker" style="flex-wrap:wrap;gap:8px;">
         <button class="refreshsmall" id="expModeDay" style="${exportMode==='day'?'background:var(--accent,#2a9fd8);color:#fff;':''}">單日</button>
         <button class="refreshsmall" id="expModeWeek" style="${exportMode==='week'?'background:var(--accent,#2a9fd8);color:#fff;':''}">整週（週一～週五）</button>
+        <button class="refreshsmall" id="expModeRange" style="${exportMode==='range'?'background:var(--accent,#2a9fd8);color:#fff;':''}">自訂天數</button>
         <input type="date" id="adminDateInput" value="${adminDate}">
+        ${exportMode==='range' ? `<span>～</span><input type="date" id="rangeEndInput" value="${dates[dates.length-1]}">
+        <span style="flex-basis:100%;display:flex;gap:6px;align-items:center;">從起始日起算工作日：${[2,3,4,5].map(n=>`<button class="refreshsmall rangeN" data-n="${n}">${n}天</button>`).join('')}</span>` : ''}
         <button class="refreshsmall" id="adminRefreshBtn">重新載入</button>
       </div>
-      <div class="weekhead">${dates.length>1 ? dates[0]+' ～ '+dates[dates.length-1] : dates[0]}　·　${D.days.length} 筆出勤／休假紀錄　·　${D.missing.length} 筆未回報</div>
+      <div class="weekhead">${dates.length>1 ? dates[0]+' ～ '+dates[dates.length-1]+'　共 '+dates.length+' 個工作天　總里程 '+(kmI<0?'—':tot[kmI])+' km' : dates[0]}　·　${D.days.length} 筆出勤／休假紀錄　·　${D.missing.length} 筆未回報</div>
       <div class="weektablewrap"><table class="weektable">
-        <thead><tr><th>司機</th><th>出勤天</th><th>站數</th><th>完成</th><th>部分</th><th>不適用</th><th>完成比例</th><th>晚到</th></tr></thead>
-        <tbody>${body}<tr><td><b>合計</b></td><td>${tot[2]}</td><td>${tot[4]}</td><td>${tot[6]}</td><td>${tot[7]}</td><td>${tot[8]}</td><td><b>${tot[9]===''?'—':tot[9]+'%'}</b></td><td>${tot[11]}</td></tr></tbody>
+        <thead><tr><th>司機</th><th>出勤天</th><th>站數</th><th>完成</th><th>部分</th><th>不適用</th><th>完成比例</th><th>晚到</th><th>里程km</th></tr></thead>
+        <tbody>${body}<tr><td><b>合計</b></td><td>${tot[2]}</td><td>${tot[4]}</td><td>${tot[6]}</td><td>${tot[7]}</td><td>${tot[8]}</td><td><b>${tot[9]===''?'—':tot[9]+'%'}</b></td><td>${tot[11]}</td>${kmCell(tot)}</tr></tbody>
       </table></div>
-      <div style="margin:14px 0;"><button class="bigbtn depart" id="exportBtn" style="width:auto;margin:0;padding:12px 22px;">下載 Excel（${dates.length>1?'整週':'單日'}分析報表）</button> <span id="exportMsg" style="margin-left:10px;color:var(--text-mute);"></span></div>
+      <div style="margin:14px 0;"><button class="bigbtn depart" id="exportBtn" style="width:auto;margin:0;padding:12px 22px;">下載 Excel（${dates.length>1?(exportMode==='range'?dates.length+'天':'整週'):'單日'}分析報表）</button> <span id="exportMsg" style="margin-left:10px;color:var(--text-mute);"></span></div>
       <div style="font-size:13px;color:var(--text-mute);line-height:1.6;">Excel 內含：每位司機${dates.length>1?'（週合計）、司機×日完成比例、每日總覽':''}、工作項目統計、站點明細（含每站行駛距離）、不適用明細、工作項目明細${D.missing.length?'、未回報':''}。完成比例＝完成÷(完成＋部分)，不含不適用；收送貨、寄貨類不計入。</div>`;
     $('expModeDay').addEventListener('click', ()=>{ exportMode='day'; renderAdmin(); });
     $('expModeWeek').addEventListener('click', ()=>{ exportMode='week'; renderAdmin(); });
+    $('expModeRange').addEventListener('click', ()=>{ exportMode='range'; rangeEnd = adminDate; renderAdmin(); });
+    if($('rangeEndInput')) $('rangeEndInput').addEventListener('change', e=>{ rangeEnd = e.target.value || rangeEnd; renderAdmin(); });
+    document.querySelectorAll('.rangeN').forEach(b=>b.addEventListener('click', ()=>{ rangeEnd = nthWorkday(adminDate, +b.dataset.n); renderAdmin(); }));
     $('adminDateInput').addEventListener('change', e=>{ adminDate = e.target.value || adminDate; renderAdmin(); });
     $('adminRefreshBtn').addEventListener('click', async ()=>{ await refreshCheckins(); renderAdmin(); });
     $('exportBtn').addEventListener('click', doExport);
