@@ -1420,7 +1420,12 @@
     showView('view-stop');
   }
 
+  // 台北三位（林柏均／朱銘澤／賴昱誠）週一到週五都沒有收送貨：不顯示送貨量、離店不用填、報表不計送貨
+  const NO_DELIVERY_DRIVERS = ['林柏均','朱銘澤','賴昱誠'];
+  const noDelivery = d => !!(d && NO_DELIVERY_DRIVERS.includes(d.name));
   function renderDelivery(st, locked){
+    const dbx = $('deliveryBox'); if(dbx) dbx.style.display = noDelivery(currentDriver) ? 'none' : '';
+    if(noDelivery(currentDriver)) return;
     const d = st.delivery || {};
     const none = !!d.none;
     $('delNone').checked = none;
@@ -1964,7 +1969,7 @@
       renderTaskRows(stop, st, weekday, false);
       return;
     }
-    const dv = readDelivery(st);
+    const dv = noDelivery(currentDriver) ? {none:true} : readDelivery(st);
     if(!dv.none && (dv.boxes==null && dv.bags==null)){
       setStopStatus('⚠ 請填本站送貨量（貨箱／袋），沒有送貨請勾「本站沒有送貨」', true);
       $('delBoxes').focus();
@@ -2381,7 +2386,7 @@
           const boxes = dl && !dl.none && dl.boxes!=null && dl.boxes!=='' ? Number(dl.boxes) : null;
           const bags = dl && !dl.none && dl.bags!=null && dl.bags!=='' ? Number(dl.bags) : null;
           const row = {date, wk:WKN[wd], region:d.region, driver:d.name, idx:i+1, site, time:timeStr, arrive:a?fmtHM(s.arrivedAt):'', depart:dp?fmtHM(s.departedAt):'', late, dwell,
-            full: !!(st.route==='full' && d.fullLine), boxes, bags, delNote: dl ? (dl.none?'無送貨':'') : ((a&&dp)?'未填送貨量':''), done:0, partial:0, na:0, pctSum:0, pcs:0, qb:0, qg:0, qp:0, sh:{'黑貓':0,'新竹':0,'佶傳':0}};
+            full: !!(st.route==='full' && d.fullLine), boxes, bags, delNote: noDelivery(d) ? '' : (dl ? (dl.none?'無送貨':'') : ((a&&dp)?'未填送貨量':'')), done:0, partial:0, na:0, pctSum:0, pcs:0, qb:0, qg:0, qp:0, sh:{'黑貓':0,'新竹':0,'佶傳':0}};
           Object.keys(s.tasks||{}).forEach(tn=>{
             const r = s.tasks[tn]; if(!r) return;
             const n = EXPORT_NAME_MAP[tn] || tn;
@@ -2704,7 +2709,7 @@
         const dl = s.delivery || {};
         const nv = v=> (typeof v==='number') ? v : '';
         const inp = (attr, v)=>`<input type="number" inputmode="numeric" min="0" step="1" ${attr} value="${nv(v)}" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);">`;
-        let rows = `<div style="padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;">
+        let rows = noDelivery(cur) ? '' : `<div style="padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;">
           <div style="font-weight:700;margin-bottom:8px;">本站送貨量</div>
           <label style="display:block;margin-bottom:8px;"><input type="checkbox" id="fillDelNone" ${dl.none?'checked':''}> 本站無送貨</label>
           箱 ${inp('id="fillDelBoxes"', dl.boxes)}　袋 ${inp('id="fillDelBags"', dl.bags)}</div>`;
@@ -2741,7 +2746,7 @@
     const {rec, st} = fillGetRec(cur, adminDate); if(!st) return;
     const s = st.stops[fillStop]; if(!s) return;
     const num = v=> (v===''||v==null) ? null : Math.max(0, Math.floor(Number(v)) || 0);
-    const none = $('fillDelNone').checked, b = num($('fillDelBoxes').value), g = num($('fillDelBags').value);
+    const none = $('fillDelNone') ? $('fillDelNone').checked : false, b = $('fillDelBoxes') ? num($('fillDelBoxes').value) : null, g = $('fillDelBags') ? num($('fillDelBags').value) : null;
     if(none) s.delivery = {none:true, boxes:0, bags:0};
     else if(b!==null || g!==null) s.delivery = {none:false, boxes:b||0, bags:g||0};
     document.querySelectorAll('input[data-fill-pieces]').forEach(i=>{ const v = num(i.value); if(v!==null && s.tasks[i.dataset.fillPieces]) s.tasks[i.dataset.fillPieces].pieces = v; });
