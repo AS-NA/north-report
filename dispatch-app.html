@@ -540,7 +540,7 @@
         E:[T('寄黑貓',[1,2,3,4,5]),T('寄新竹物流',[1,2,3,4,5]),T('佶傳',[1,2,3,4,5])],
         G:[T('撤貨抓貨',[1,2]),T('區內勻貨',[1,2]),T('跨區勻貨',[1,2]),T('支援EC',[2,3]),T('新品整理',[2]),T('整倉併袋',[3,4,5]),T('新品入倉',[3]),T('商品歸倉',[4,5])]
       },
-      dailyStops:[ {site:'一中店',time:'10:40-11:00',table:'B'}, {site:'台中漢神店',time:'11:20-11:40',table:'B'}, {site:'逢甲店',time:'12:00-12:10',table:'B'}, {site:'一中LADY店',time:'12:30-13:00',table:'E'}, {site:'一中大碼店/一中r.fav店',time:'15:00-17:00',table:'A',exclude:['支援EC'],storeOptions:['一中r.fav店','一中CHIC.A店']}, {site:'台中漢神店',time:'17:20-19:30',table:'G'} ]
+      dailyStops:[ {site:'一中店',time:'10:50-11:05',table:'B'}, {site:'台中漢神店',time:'11:25-11:45',table:'B'}, {site:'逢甲店',time:'12:05-12:15',table:'B'}, {site:'一中LADY店',time:'12:50-13:20',table:'E'}, {site:'一中大碼店/一中r.fav店',time:'15:00-17:00',table:'A',exclude:['支援EC'],storeOptions:['一中r.fav店','一中CHIC.A店']}, {site:'台中漢神店',time:'17:20-19:30',table:'G'} ]
     },
     { region:'台北', code:'北1', name:'林柏均', hours:'依當日排程',
       tables:{},
@@ -2418,16 +2418,25 @@
     const sheets = [];
     // 1 每位司機
     const h1 = ['司機','區域','有回報天數','休假天數','站數','有到站','完成','部分','不適用','完成比例%（不含不適用）','加權完成度%（部分依實際填寫%）','晚到站數(>'+LATE_TOLERANCE_MIN+'分)','到站未離店','送貨箱數','送貨袋數','工作件數（撤貨／勻貨／支援）','歸倉類箱數','歸倉類袋數','歸倉類件數','寄黑貓箱數','寄新竹箱數','寄佶傳箱數','行駛里程(km)'];
-    const signRows = x => {
+    // 合併站（例如「一中店/一中LADY店」）每間門市各自簽核，所以拆開來算
+    const siteParts = x => { const ps=String(x.site||'').split(/[\/、,，]/).map(s=>s.trim()).filter(Boolean); return ps.length?ps:['']; };
+    const signRowsFor = (x, part) => {
       if(exportSign===null) return [];
       const c = exportSign[x.date+'|'+x.driver+'|'+String(x.time||'').trim()] || [];
-      if(!c.length) return c;
-      const parts = String(x.site||'').split(/[\/、,，]/).map(s=>s.trim()).filter(Boolean);
-      const m = c.filter(r=>{ const s=String(r.store||''); return parts.some(p=>s.includes(p)||p.includes(s)) || String(x.site||'').includes(s); });
-      return m.length ? m : c;
+      const m = c.filter(r=>{ const s=String(r.store||''); return s && part && (s===part || s.includes(part) || part.includes(s)); });
+      if(m.length) return m;
+      return siteParts(x).length===1 ? c : [];
     };
-    const signStat = x => { if(exportSign===null) return ''; if(!x.arrive) return ''; const c=signRows(x); if(!c.length) return '未簽核'; return c.some(r=>r.result==='異議') ? '有異議' : '已簽核'; };
-    const signCols = x => { if(exportSign===null) return []; const c=signRows(x); const dis=c.filter(r=>r.result==='異議'); return [signStat(x), [...new Set(c.map(r=>r.manager).filter(Boolean))].join('、'), dis.map(r=>(r.task||'')+'：'+(r.reason||'')).join('；')]; };
+    const statOf = (x, part) => { if(exportSign===null || !x.arrive) return ''; const c=signRowsFor(x,part); if(!c.length) return '未簽核'; return c.some(r=>r.result==='異議') ? '有異議' : '已簽核'; };
+    const signCols = x => {
+      if(exportSign===null) return [];
+      const ps=siteParts(x), multi=ps.length>1;
+      const st = ps.map(pt=>statOf(x,pt));
+      const stat = !x.arrive ? '' : multi ? ps.map((pt,i)=>pt+'：'+st[i]).join('；') : st[0];
+      const all = ps.flatMap(pt=>signRowsFor(x,pt).map(r=>({r,pt})));
+      const dis = all.filter(o=>o.r.result==='異議');
+      return [stat, [...new Set(all.map(o=>o.r.manager).filter(Boolean))].join('、'), dis.map(o=>(multi?o.pt+' ':'')+(o.r.task||'')+'：'+(o.r.reason||'')).join('；')];
+    };
     const lg = x => exportLegs[x.date+'|'+x.driver+'|'+x.idx];
     const km = x => { if(!LEGS_URL){ if(!x.arrive || x.idx===1 || x.full) return 0; const v=fixedKm(x.driver,x.date,x.idx); return v===null?0:v; } const l=lg(x); return (l && l.state==='OK' && typeof l.km==='number') ? l.km : 0; };
     const legCols = x => { if(!LEGS_URL){ if(x.idx===1) return ['']; if(x.full) return ['全線(未設定)']; const v=fixedKm(x.driver,x.date,x.idx); return [v===null?'':v]; } const l=lg(x); if(x.idx===1) return ['','','','首站']; if(!l) return ['','','','無距離資料']; return l.state==='OK' ? [l.km,l.gmin,l.act,'OK'] : ['','',l.act,l.state||'無距離資料']; };
@@ -2509,13 +2518,16 @@
     const r6 = [['日期','司機','站序','站點','工作項目','原因','指派人']];
     D.tasks.filter(t=>t[7]==='不適用').forEach(t=>r6.push([t[0],t[3],t[4],t[5],t[6],t[9],t[10]]));
     if(exportSign!==null){
-      const vis = D.stops.filter(x=>x.arrive);
-      const agg = (keyFn, names) => names.map(n=>{ const v=vis.filter(x=>keyFn(x)===n); if(!v.length) return null; const sg=v.filter(x=>signStat(x)==='已簽核').length, di=v.filter(x=>signStat(x)==='有異議').length, un=v.length-sg-di; return [n,v.length,sg+di,un,Math.round((sg+di)/v.length*100),di]; }).filter(Boolean);
-      const rs=[['【依司機】','','','','',''],['司機','有到站站數','已簽核站數','未簽核站數','簽核率%','有異議站數'],...agg(x=>x.driver,[...new Set(vis.map(x=>x.driver))]),[],['【依站點】','','','','',''],['站點','有到站站數','已簽核站數','未簽核站數','簽核率%','有異議站數'],...agg(x=>x.site,[...new Set(vis.map(x=>x.site))]),[],['【異議明細】','','','','',''],['日期','司機','站點','簽核人','工作項目','異議原因']];
-      vis.forEach(x=>signRows(x).filter(r=>r.result==='異議').forEach(r=>rs.push([x.date,x.driver,r.store||x.site,r.manager||'',r.task||'',r.reason||''])));
-      const tv=vis.length, ts=vis.filter(x=>signStat(x)!=='未簽核').length;
-      rs.push([],['全部簽核率',tv?Math.round(ts/tv*100)+'%':'—','（已簽核含有異議；未簽核＝有到站但門市尚未簽核）']);
-      sheets.push(['簽核統計', rs, [20,12,12,12,10,12]]);
+      // 以「門市」為單位展開（合併站拆成各門市）
+      const vis = [];
+      D.stops.filter(x=>x.arrive).forEach(x=>siteParts(x).forEach(pt=>vis.push({x,store:pt||x.site,st:statOf(x,pt),rows:signRowsFor(x,pt)})));
+      const agg = (keyFn, names) => names.map(n=>{ const v=vis.filter(o=>keyFn(o)===n); if(!v.length) return null; const sg=v.filter(o=>o.st==='已簽核').length, di=v.filter(o=>o.st==='有異議').length, un=v.length-sg-di; return [n,v.length,sg+di,un,Math.round((sg+di)/v.length*100),di]; }).filter(Boolean);
+      const H=['','有到站（門市次）','已簽核','未簽核','簽核率%','有異議'];
+      const rs=[['【依司機】','','','','',''],['司機',...H.slice(1)],...agg(o=>o.x.driver,[...new Set(vis.map(o=>o.x.driver))]),[],['【依門市】（合併站已拆開，每間門市各自計算）','','','','',''],['門市',...H.slice(1)],...agg(o=>o.store,[...new Set(vis.map(o=>o.store))]),[],['【異議明細】','','','','',''],['日期','司機','門市','簽核人','工作項目','異議原因']];
+      vis.forEach(o=>o.rows.filter(r=>r.result==='異議').forEach(r=>rs.push([o.x.date,o.x.driver,o.store,r.manager||'',r.task||'',r.reason||''])));
+      const tv=vis.length, ts=vis.filter(o=>o.st!=='未簽核').length;
+      rs.push([],['全部簽核率',tv?Math.round(ts/tv*100)+'%':'—','（已簽核含有異議；未簽核＝有到站但該門市尚未簽核；合併站每間門市各算一次）']);
+      sheets.push(['簽核統計', rs, [24,16,12,12,10,12]]);
     }
     sheets.push(['不適用明細', r6, [11,10,6,20,16,24,12]]);
     // 工作項目明細
